@@ -1,9 +1,10 @@
-from typing import Final, NoReturn
+from typing import Final, NoReturn, assert_never
 
 from .models import (
     PROTOCOL_VERSION,
     ErrorCode,
     ErrorInfo,
+    ErrorResponse,
     InventoryPayload,
     InventoryResponse,
     ItemId,
@@ -26,16 +27,20 @@ MAX_ERROR_MESSAGE_LENGTH: Final = 512
 
 def validate_response(response: Response) -> None:
     _validate_metadata(response.protocol_version, response.generation_id)
-    if isinstance(response, SnapshotResponse):
-        _validate_snapshot(response.payload)
-        return
-    if isinstance(response, InventoryResponse):
-        _validate_inventory(response.payload)
-        return
-    if isinstance(response, StarResultResponse):
-        _validate_identifier(str(response.payload.item_id), "star-result.itemId")
-        return
-    _validate_error(response.error)
+    match response:
+        case SnapshotResponse(payload=payload):
+            _validate_snapshot(payload)
+            return
+        case InventoryResponse(payload=payload):
+            _validate_inventory(payload)
+            return
+        case StarResultResponse(payload=payload):
+            _validate_identifier(str(payload.item_id), "star-result.itemId")
+            return
+        case ErrorResponse(error=error):
+            _validate_error(error)
+            return
+    assert_never(response)
 
 
 def _validate_metadata(version: ProtocolVersion, generation_id: str) -> None:
@@ -65,8 +70,7 @@ def _validate_snapshot(payload: SnapshotPayload) -> None:
 
 
 def _validate_inventory(payload: InventoryPayload) -> None:
-    if payload.source is ItemSource.OMARCHY:
-        _fail(ErrorCode.INVALID_ENVELOPE, "inventory source is unsupported")
+    _validate_inventory_source(payload.source)
     _validate_nonnegative(payload.total, "inventory.total")
     if payload.total != len(payload.items):
         _fail(
@@ -75,6 +79,15 @@ def _validate_inventory(payload: InventoryPayload) -> None:
     _validate_items(payload.items)
     if any(item.source is not payload.source for item in payload.items):
         _fail(ErrorCode.INVALID_ENVELOPE, "inventory items must match inventory.source")
+
+
+def _validate_inventory_source(source: ItemSource) -> None:
+    match source:
+        case ItemSource.OMARCHY:
+            _fail(ErrorCode.INVALID_ENVELOPE, "inventory source is unsupported")
+        case ItemSource.ARCH | ItemSource.AUR | ItemSource.FLATPAK | ItemSource.MISE:
+            return
+    assert_never(source)
 
 
 def _validate_sources(sources: tuple[SourceHealth, ...]) -> None:

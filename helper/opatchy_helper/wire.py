@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
+from typing import assert_never
 
 from .json_value import JsonObject
 from .models import (
     ErrorCode,
     ErrorInfo,
+    ErrorResponse,
     InventoryPayload,
     InventoryResponse,
     NormalizedItem,
@@ -25,36 +27,59 @@ from .validation import validate_response
 
 def response_value(response: Response) -> JsonObject:
     validate_response(response)
-    if isinstance(response, SnapshotResponse):
-        return _envelope(
-            response.generated_at,
-            str(response.generation_id),
-            ResponseKind.SNAPSHOT,
-            _snapshot(response.payload),
-            int(response.protocol_version),
-        )
-    if isinstance(response, InventoryResponse):
-        return _envelope(
-            response.generated_at,
-            str(response.generation_id),
-            ResponseKind.INVENTORY,
-            _inventory(response.payload),
-            int(response.protocol_version),
-        )
-    if isinstance(response, StarResultResponse):
-        return _envelope(
-            response.generated_at,
-            str(response.generation_id),
-            ResponseKind.STAR_RESULT,
-            _star_result(response.payload),
-            int(response.protocol_version),
-        )
-    return _error_envelope(
-        response.generated_at,
-        str(response.generation_id),
-        response.error,
-        int(response.protocol_version),
-    )
+    match response:
+        case SnapshotResponse(
+            generated_at=generated_at,
+            generation_id=generation_id,
+            payload=payload,
+            protocol_version=protocol_version,
+        ):
+            return _envelope(
+                generated_at,
+                str(generation_id),
+                ResponseKind.SNAPSHOT,
+                _snapshot(payload),
+                int(protocol_version),
+            )
+        case InventoryResponse(
+            generated_at=generated_at,
+            generation_id=generation_id,
+            payload=payload,
+            protocol_version=protocol_version,
+        ):
+            return _envelope(
+                generated_at,
+                str(generation_id),
+                ResponseKind.INVENTORY,
+                _inventory(payload),
+                int(protocol_version),
+            )
+        case StarResultResponse(
+            generated_at=generated_at,
+            generation_id=generation_id,
+            payload=payload,
+            protocol_version=protocol_version,
+        ):
+            return _envelope(
+                generated_at,
+                str(generation_id),
+                ResponseKind.STAR_RESULT,
+                _star_result(payload),
+                int(protocol_version),
+            )
+        case ErrorResponse(
+            generated_at=generated_at,
+            generation_id=generation_id,
+            error=error,
+            protocol_version=protocol_version,
+        ):
+            return _error_envelope(
+                generated_at,
+                str(generation_id),
+                error,
+                int(protocol_version),
+            )
+    assert_never(response)
 
 
 def _envelope(

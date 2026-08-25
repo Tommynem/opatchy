@@ -2,6 +2,7 @@ import sys
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 from io import BytesIO
 from pathlib import Path
 from typing import Final
@@ -11,7 +12,7 @@ REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[2]
 HELPER_ROOT: Final = REPOSITORY_ROOT / "helper"
 sys.path.insert(0, str(HELPER_ROOT))
 
-from opatchy_helper import cli
+from opatchy_helper import cli, parser, validation, wire
 from opatchy_helper.json_value import decode_json
 from opatchy_helper.models import (
     ErrorCode,
@@ -31,6 +32,7 @@ from opatchy_helper.models import (
     ProtocolVersion,
     Provenance,
     Response,
+    ResponseKind,
     ScanState,
     SecurityFinding,
     SecurityFindingGroup,
@@ -46,6 +48,22 @@ from opatchy_helper.models import (
 from opatchy_helper.protocol import decode_response, encode_response, utc_now
 
 FIXED_TIME: Final = datetime(2026, 8, 25, 12, 34, 56, tzinfo=timezone.utc)
+
+
+class ExtendedResponseKind(StrEnum):
+    SNAPSHOT = ResponseKind.SNAPSHOT
+    INVENTORY = ResponseKind.INVENTORY
+    STAR_RESULT = ResponseKind.STAR_RESULT
+    ERROR = ResponseKind.ERROR
+    UNKNOWN = "unknown"
+
+
+class ExtendedItemSource(StrEnum):
+    OMARCHY = "alternate-omarchy"
+    ARCH = "alternate-arch"
+    AUR = "alternate-aur"
+    FLATPAK = "alternate-flatpak"
+    MISE = "alternate-mise"
 
 
 class CapturedStandardOutput:
@@ -189,6 +207,37 @@ class ProtocolBranchTests(unittest.TestCase):
         self.assert_decode_error(
             b'{"protocolVersion":1,"protocolVersion":1}', ErrorCode.MALFORMED_JSON
         )
+
+    def test_exhaustive_dispatch_asserts_for_extended_runtime_variants(self) -> None:
+        error_response = ErrorResponse(
+            FIXED_TIME,
+            GenerationId("generation-error"),
+            ErrorInfo(ErrorCode.CLI_USAGE, "message"),
+        )
+        unknown_kind = encode_response(error_response).replace(
+            b'"kind":"error"', b'"kind":"unknown"'
+        )
+
+        with (
+            patch.object(parser, "ResponseKind", ExtendedResponseKind),
+            self.assertRaises(AssertionError),
+        ):
+            _ = decode_response(unknown_kind)
+        with (
+            patch.object(validation, "ErrorResponse", SnapshotResponse),
+            self.assertRaises(AssertionError),
+        ):
+            validation.validate_response(error_response)
+        with (
+            patch.object(wire, "ErrorResponse", SnapshotResponse),
+            self.assertRaises(AssertionError),
+        ):
+            _ = wire.response_value(error_response)
+        with (
+            patch.object(validation, "ItemSource", ExtendedItemSource),
+            self.assertRaises(AssertionError),
+        ):
+            validation.validate_response(valid_inventory())
 
     def test_decoder_rejects_missing_fields_and_invalid_nested_shapes(self) -> None:
         inventory = encode_response(valid_inventory())
