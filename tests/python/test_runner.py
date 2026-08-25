@@ -483,6 +483,37 @@ def test_fetch_endpoint_rejects_exact_path_lookalike(
     assert isinstance(result, runner.EndpointRejected)
 
 
+def test_notify_registry_uses_fixed_opatchy_identity() -> None:
+    # Given: the immutable notification command specification.
+    spec = runner.COMMAND_SPECS[runner.CommandName.NOTIFY]
+
+    # When: its fixed base argv is inspected.
+    base_argv = spec.base_argv
+
+    # Then: Opatchy identity and normal urgency precede literal caller text.
+    assert base_argv == ("-a", "Opatchy", "-u", "normal")
+
+
+def test_timeout_kills_term_ignoring_same_group_descendant_after_leader_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: an exited leader and a same-group child that ignores SIGTERM and retains pipes.
+    sentinel = tmp_path / "term-ignored"
+    executable = _fake_command(
+        tmp_path,
+        f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', \"import pathlib, signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(0.4); pathlib.Path({str(sentinel)!r}).touch()\"])",
+    )
+    _patch_command(monkeypatch, executable, timeout_seconds=0.1)
+
+    # When: timeout cleanup signals the original process group.
+    result = runner.run_command(runner.CommandName.OMARCHY_UPDATE_AVAILABLE)
+
+    # Then: SIGKILL removes the ignoring child before its delayed side effect.
+    assert isinstance(result, runner.CommandTimedOut)
+    time.sleep(0.6)
+    assert not sentinel.exists()
+
+
 def test_timeout_kills_same_group_descendant_after_leader_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

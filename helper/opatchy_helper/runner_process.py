@@ -122,15 +122,24 @@ def _drain(
 
 
 def _stop_group(process: subprocess.Popen[bytes]) -> None:
+    group_id = process.pid
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(group_id, signal.SIGTERM)
     except ProcessLookupError:
-        return
-    try:
-        _ = process.wait(timeout=0.2)
-    except subprocess.TimeoutExpired:
+        pass
+    time.sleep(0.1)
+    if _group_exists(group_id):
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(group_id, signal.SIGKILL)
         except ProcessLookupError:
-            return
+            pass
+    if process.poll() is None:
         _ = process.wait()
+
+
+def _group_exists(group_id: int) -> bool:
+    try:
+        os.killpg(group_id, 0)
+    except ProcessLookupError:
+        return False
+    return True

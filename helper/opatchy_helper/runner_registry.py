@@ -124,7 +124,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         ),
         CommandName.NOTIFY: CommandSpec(
             Path("/usr/bin/notify-send"),
-            ("-a", "io.github.tomge.opatchy", "-u", "normal"),
+            ("-a", "Opatchy", "-u", "normal"),
             ArgumentPolicy.NOTIFICATION_TEXT,
             15,
             _DEFAULT_OUTPUT,
