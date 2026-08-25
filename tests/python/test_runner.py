@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import ssl
 import sys
 import time
@@ -49,12 +50,12 @@ def _patch_command(
     *,
     timeout_seconds: float = 1.0,
     output_limit: int = 1024,
-    allowed_arguments: tuple[tuple[str, ...], ...] = ((),),
+    argument_policy: runner.ArgumentPolicy = runner.ArgumentPolicy.NONE,
 ) -> None:
     spec = runner.CommandSpec(
         executable=executable,
         base_argv=(),
-        allowed_arguments=allowed_arguments,
+        argument_policy=argument_policy,
         timeout_seconds=timeout_seconds,
         stdout_limit=output_limit,
         stderr_limit=output_limit,
@@ -247,7 +248,7 @@ def test_fetch_endpoint_preserves_cache_when_response_is_oversized(
     spec = runner.EndpointSpec(
         url="https://security.archlinux.org/all.json",
         allowed_hosts=frozenset({"security.archlinux.org"}),
-        allowed_path_prefixes=("/all.json",),
+        allowed_paths=frozenset({"/all.json"}),
         redirect_limit=1,
         body_limit=2,
         timeout_seconds=1,
@@ -353,3 +354,150 @@ def test_fetch_endpoint_redacts_password_in_rejected_redirect(
     # Then: the typed diagnostic keeps no credential value.
     assert isinstance(result, runner.EndpointRejected)
     assert "shh" not in result.diagnostic
+
+
+def test_run_command_preserves_host_context_and_forces_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: host HOME/XDG values and a fake executable that prints its inherited boundary.
+    monkeypatch.setenv("HOME", "/tmp/opatchy-home")
+    monkeypatch.setenv("XDG_RUNTIME_DIR", "/tmp/opatchy-xdg")
+    executable = _fake_command(
+        tmp_path,
+        "import os; print('|'.join(os.environ[key] for key in ('HOME', 'XDG_RUNTIME_DIR', 'LC_ALL', 'LANG')))",
+    )
+    _patch_command(monkeypatch, executable)
+
+    # When: a closed no-argument command runs.
+    result = runner.run_command(runner.CommandName.OMARCHY_UPDATE_AVAILABLE)
+
+    # Then: host integration survives while locale is deterministic.
+    assert isinstance(result, runner.CommandSucceeded)
+    assert result.stdout == b"/tmp/opatchy-home|/tmp/opatchy-xdg|C|C\n"
+
+
+def test_dynamic_argument_policies_pass_hostile_literals_and_reject_invalid_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: fake vercmp and notify executables with their immutable dynamic policies.
+    executable = _fake_command(tmp_path, "import sys; print(repr(sys.argv[1:]))")
+    version = runner.CommandSpec(
+        executable, (), runner.ArgumentPolicy.VERSION_PAIR, 1, 1024, 1024
+    )
+    notify = runner.CommandSpec(
+        executable,
+        ("-a", "io.github.tomge.opatchy", "-u", "normal"),
+        runner.ArgumentPolicy.NOTIFICATION_TEXT,
+        1,
+        1024,
+        1024,
+    )
+    monkeypatch.setattr(
+        runner,
+        "COMMAND_SPECS",
+        MappingProxyType(
+            {runner.CommandName.VERCMP: version, runner.CommandName.NOTIFY: notify}
+        ),
+    )
+    sentinel = Path("/tmp/opatchy-injection-sentinel")
+    sentinel.unlink(missing_ok=True)
+
+    # When: shell-shaped strings are supplied as the required literal pairs.
+    compared = runner.run_command(
+        runner.CommandName.VERCMP, ("$(touch /tmp/opatchy-injection-sentinel)", "2")
+    )
+    notified = runner.run_command(
+        runner.CommandName.NOTIFY,
+        ("headline; $(touch /tmp/opatchy-injection-sentinel)", "body"),
+    )
+
+    # Then: literal argv succeeds, while NUL, oversize, and wrong arity are rejected.
+    assert isinstance(compared, runner.CommandSucceeded)
+    assert isinstance(notified, runner.CommandSucceeded)
+    assert not sentinel.exists()
+    assert isinstance(
+        runner.run_command(runner.CommandName.VERCMP, ("one",)), runner.CommandRejected
+    )
+    assert isinstance(
+        runner.run_command(runner.CommandName.NOTIFY, ("a\0b", "body")),
+        runner.CommandRejected,
+    )
+    assert isinstance(
+        runner.run_command(runner.CommandName.VERCMP, ("x" * 4097, "two")),
+        runner.CommandRejected,
+    )
+
+
+def test_endpoint_path_metadata_and_atomic_failure_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: a lookalike endpoint path, malformed validators, and an existing cached body.
+    cache = runner.EndpointCache(tmp_path / "body", tmp_path / "metadata")
+    _ = cache.body_path.write_bytes(b"old")
+    _ = cache.metadata_path.write_text("broken", encoding="utf-8")
+    seen: dict[str, str | None] = {}
+
+    def fake_open(
+        request: runner.HttpsRequest, timeout: float, context: ssl.SSLContext
+    ) -> FakeResponse:
+        del timeout, context
+        seen["etag"] = request.get_header("If-none-match")
+        return FakeResponse(200, {}, b"new")
+
+    def fail_replace(source: Path, target: Path) -> None:
+        del source, target
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(runner, "_open_https", fake_open)
+    monkeypatch.setattr(os, "replace", fail_replace)
+
+    # When: the named endpoint downloads through a failing atomic replacement.
+    result = runner.fetch_endpoint(runner.EndpointName.ARCH_SECURITY, cache)
+
+    # Then: no validators are sent, the old body survives, and no temporary body remains.
+    assert isinstance(result, runner.EndpointFailed)
+    assert seen["etag"] is None
+    assert cache.body_path.read_bytes() == b"old"
+    assert not list(tmp_path.glob("tmp*"))
+
+
+def test_fetch_endpoint_rejects_exact_path_lookalike(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: a named endpoint response redirects to a same-host path lookalike.
+    def fake_open(
+        request: runner.HttpsRequest, timeout: float, context: ssl.SSLContext
+    ) -> FakeResponse:
+        del request, timeout, context
+        return FakeResponse(302, {"Location": "/all.json.evil"})
+
+    monkeypatch.setattr(runner, "_open_https", fake_open)
+
+    # When: the named endpoint follows its manually validated redirect loop.
+    result = runner.fetch_endpoint(
+        runner.EndpointName.ARCH_SECURITY,
+        runner.EndpointCache(tmp_path / "body", tmp_path / "metadata"),
+    )
+
+    # Then: the lookalike fails the exact path policy.
+    assert isinstance(result, runner.EndpointRejected)
+
+
+def test_timeout_kills_same_group_descendant_after_leader_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: a leader exits after spawning a same-group child that retains its output pipe.
+    sentinel = tmp_path / "survived"
+    executable = _fake_command(
+        tmp_path,
+        f"import subprocess, sys; subprocess.Popen([sys.executable, '-c', \"import pathlib, time; time.sleep(0.4); pathlib.Path({str(sentinel)!r}).touch()\"])",
+    )
+    _patch_command(monkeypatch, executable, timeout_seconds=0.1)
+
+    # When: pipe retention reaches the runner timeout after the leader already exited.
+    result = runner.run_command(runner.CommandName.OMARCHY_UPDATE_AVAILABLE)
+
+    # Then: process-group cleanup kills the descendant before it can touch the sentinel.
+    assert isinstance(result, runner.CommandTimedOut)
+    time.sleep(0.6)
+    assert not sentinel.exists()

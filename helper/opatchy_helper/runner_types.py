@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum, unique
 from pathlib import Path
-from typing import Final
+from typing import Final, assert_never
 
 
 @unique
@@ -31,11 +31,18 @@ class EndpointName(StrEnum):
     CISA_KEV = "cisa-kev"
 
 
+@unique
+class ArgumentPolicy(StrEnum):
+    NONE = "none"
+    VERSION_PAIR = "version-pair"
+    NOTIFICATION_TEXT = "notification-text"
+
+
 @dataclass(frozen=True, slots=True)
 class CommandSpec:
     executable: Path
     base_argv: tuple[str, ...]
-    allowed_arguments: tuple[tuple[str, ...], ...]
+    argument_policy: ArgumentPolicy
     timeout_seconds: float
     stdout_limit: int
     stderr_limit: int
@@ -56,10 +63,16 @@ class CommandSpec:
 class EndpointSpec:
     url: str
     allowed_hosts: frozenset[str]
-    allowed_path_prefixes: tuple[str, ...]
+    allowed_paths: frozenset[str]
     redirect_limit: int
     body_limit: int
     timeout_seconds: float
+
+    def __post_init__(self) -> None:
+        if not self.allowed_hosts or not self.allowed_paths:
+            raise ValueError("endpoint policy must name hosts and paths")
+        if self.redirect_limit < 0 or self.body_limit <= 0 or self.timeout_seconds <= 0:
+            raise ValueError("endpoint limits must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,3 +183,14 @@ _TOKEN: Final[re.Pattern[str]] = re.compile(
 
 def redact_diagnostic(value: str) -> str:
     return _TOKEN.sub("<redacted>", value.replace(_HOME, "<home>"))[:512]
+
+
+def arguments_allowed(policy: ArgumentPolicy, arguments: tuple[str, ...]) -> bool:
+    match policy:
+        case ArgumentPolicy.NONE:
+            return not arguments
+        case ArgumentPolicy.VERSION_PAIR | ArgumentPolicy.NOTIFICATION_TEXT:
+            return len(arguments) == 2 and all(
+                "\0" not in argument and len(argument) <= 4096 for argument in arguments
+            )
+    assert_never(policy)

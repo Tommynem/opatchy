@@ -17,14 +17,20 @@ from .runner_types import (
     CommandSpec,
     CommandSucceeded,
     CommandTimedOut,
+    arguments_allowed,
     redact_diagnostic,
 )
 
 
 def run_spec(spec: CommandSpec, arguments: tuple[str, ...]) -> CommandResult:
-    if arguments not in spec.allowed_arguments:
+    if not arguments_allowed(spec.argument_policy, arguments):
         return CommandRejected("arguments are not permitted for this command")
-    environment: Mapping[str, str] = {"LC_ALL": "C", "PATH": "/usr/bin:/bin"}
+    environment: Mapping[str, str] = {
+        **os.environ,
+        "LC_ALL": "C",
+        "LANG": "C",
+        "PATH": "/usr/bin:/bin",
+    }
     try:
         process = subprocess.Popen(  # noqa: S603 - immutable closed CommandSpec registry only
             (str(spec.executable), *spec.base_argv, *arguments),
@@ -116,8 +122,6 @@ def _drain(
 
 
 def _stop_group(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:

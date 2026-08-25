@@ -4,7 +4,13 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
-from .runner_types import CommandName, CommandSpec, EndpointName, EndpointSpec
+from .runner_types import (
+    ArgumentPolicy,
+    CommandName,
+    CommandSpec,
+    EndpointName,
+    EndpointSpec,
+)
 
 _MIB: Final[int] = 1024 * 1024
 _DEFAULT_OUTPUT: Final[int] = 2 * _MIB
@@ -14,7 +20,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.OMARCHY_UPDATE_AVAILABLE: CommandSpec(
             Path("/usr/bin/omarchy-update-available"),
             (),
-            ((),),
+            ArgumentPolicy.NONE,
             15,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -22,7 +28,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.PACMAN_NATIVE: CommandSpec(
             Path("/usr/bin/pacman"),
             ("-Qn",),
-            ((),),
+            ArgumentPolicy.NONE,
             30,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -30,18 +36,23 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.CHECKUPDATES: CommandSpec(
             Path("/usr/bin/checkupdates"),
             ("--nocolor",),
-            ((),),
+            ArgumentPolicy.NONE,
             120,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
         ),
         CommandName.VERCMP: CommandSpec(
-            Path("/usr/bin/vercmp"), (), ((),), 15, _DEFAULT_OUTPUT, _DEFAULT_OUTPUT
+            Path("/usr/bin/vercmp"),
+            (),
+            ArgumentPolicy.VERSION_PAIR,
+            15,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
         ),
         CommandName.PACMAN_FOREIGN: CommandSpec(
             Path("/usr/bin/pacman"),
             ("-Qm",),
-            ((),),
+            ArgumentPolicy.NONE,
             30,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -49,7 +60,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.YAY_UPDATES: CommandSpec(
             Path("/usr/bin/yay"),
             ("-Qua", "--color", "never"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -57,7 +68,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.PARU_UPDATES: CommandSpec(
             Path("/usr/bin/paru"),
             ("-Qua", "--color", "never"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -65,7 +76,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.FLATPAK_USER_LIST: CommandSpec(
             Path("/usr/bin/flatpak"),
             ("--user", "list", "--columns=ref,application,version,origin"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -73,7 +84,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.FLATPAK_SYSTEM_LIST: CommandSpec(
             Path("/usr/bin/flatpak"),
             ("--system", "list", "--columns=ref,application,version,origin"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -81,7 +92,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.FLATPAK_USER_UPDATES: CommandSpec(
             Path("/usr/bin/flatpak"),
             ("--user", "remote-ls", "--updates"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -89,7 +100,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.FLATPAK_SYSTEM_UPDATES: CommandSpec(
             Path("/usr/bin/flatpak"),
             ("--system", "remote-ls", "--updates"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -97,7 +108,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.MISE_OUTDATED: CommandSpec(
             Path("/usr/bin/mise"),
             ("outdated", "--json"),
-            ((),),
+            ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -106,15 +117,15 @@ COMMAND_SPECS: Final = MappingProxyType(
         CommandName.ARCH_AUDIT: CommandSpec(
             Path("/usr/bin/arch-audit"),
             ("--json",),
-            ((),),
+            ArgumentPolicy.NONE,
             30,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
         ),
         CommandName.NOTIFY: CommandSpec(
             Path("/usr/bin/notify-send"),
-            ("-u", "normal"),
-            ((),),
+            ("-a", "io.github.tomge.opatchy", "-u", "normal"),
+            ArgumentPolicy.NOTIFICATION_TEXT,
             15,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
@@ -127,7 +138,7 @@ ENDPOINT_SPECS: Final = MappingProxyType(
         EndpointName.ARCH_SECURITY: EndpointSpec(
             "https://security.archlinux.org/all.json",
             frozenset({"security.archlinux.org"}),
-            ("/all.json",),
+            frozenset({"/all.json"}),
             3,
             25 * _MIB,
             20,
@@ -135,7 +146,9 @@ ENDPOINT_SPECS: Final = MappingProxyType(
         EndpointName.CISA_KEV: EndpointSpec(
             "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
             frozenset({"www.cisa.gov"}),
-            ("/sites/default/files/feeds/",),
+            frozenset(
+                {"/sites/default/files/feeds/known_exploited_vulnerabilities.json"}
+            ),
             3,
             10 * _MIB,
             20,

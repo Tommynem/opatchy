@@ -14,6 +14,7 @@ from typing import IO, Protocol, TypeAlias, override
 from .runner_process import run_spec
 from .runner_registry import COMMAND_SPECS, ENDPOINT_SPECS
 from .runner_types import (
+    ArgumentPolicy,
     CommandExited,
     CommandMissing,
     CommandName,
@@ -55,6 +56,7 @@ class HttpsResponse(Protocol):
 
 __all__ = [
     "COMMAND_SPECS",
+    "ArgumentPolicy",
     "ENDPOINT_SPECS",
     "CommandExited",
     "CommandMissing",
@@ -191,7 +193,7 @@ def _valid_url(url: str, spec: EndpointSpec) -> bool:
         and parts.username is None
         and parts.password is None
         and port in (None, 443)
-        and any(parts.path.startswith(prefix) for prefix in spec.allowed_path_prefixes)
+        and parts.path in spec.allowed_paths
     )
 
 
@@ -222,7 +224,7 @@ def _conditional_headers(cache: EndpointCache) -> dict[str, str]:
         etag, last_modified = cache.metadata_path.read_text(
             encoding="utf-8"
         ).splitlines()[:2]
-    except FileNotFoundError:
+    except FileNotFoundError, OSError, UnicodeError, ValueError:
         return {"User-Agent": "Opatchy/1"}
     return {
         "User-Agent": "Opatchy/1",
@@ -242,7 +244,15 @@ def _replace_cache(
 
 
 def _atomic_write(path: Path, body: bytes) -> None:
-    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
-        _ = temporary.write(body)
-        temporary_path = Path(temporary.name)
-    _ = os.replace(temporary_path, path)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            _ = temporary.write(body)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        _ = os.replace(temporary_path, path)
+    except OSError:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
