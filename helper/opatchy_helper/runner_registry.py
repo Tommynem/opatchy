@@ -91,7 +91,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         ),
         CommandName.FLATPAK_USER_UPDATES: CommandSpec(
             Path("/usr/bin/flatpak"),
-            ("--user", "remote-ls", "--updates"),
+            ("--user", "remote-ls", "--updates", "--columns=ref,version,origin"),
             ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
@@ -99,7 +99,7 @@ COMMAND_SPECS: Final = MappingProxyType(
         ),
         CommandName.FLATPAK_SYSTEM_UPDATES: CommandSpec(
             Path("/usr/bin/flatpak"),
-            ("--system", "remote-ls", "--updates"),
+            ("--system", "remote-ls", "--updates", "--columns=ref,version,origin"),
             ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
