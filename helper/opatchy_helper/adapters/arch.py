@@ -105,6 +105,8 @@ def collect_official_updates(command_runner: CommandRunner) -> ArchUpdatesResult
     match updates:
         case ArchDegraded():
             return updates
+        case ():
+            return ArchDegraded(ArchFailure.MALFORMED_ROW, "empty checkupdates output")
         case tuple():
             return _join_official_updates(inventory_by_name, updates)
 

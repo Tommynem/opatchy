@@ -61,6 +61,26 @@ def test_collect_official_updates_when_checkupdates_exits_two_returns_fresh_empt
     ]
 
 
+def test_collect_official_updates_when_checkupdates_succeeds_without_rows_degrades() -> (
+    None
+):
+    # Given: a native inventory and an impossible empty checkupdates success.
+    command_runner = RecordingRunner(
+        (
+            CommandSucceeded(b"linux 6.12.1-1\n", b""),
+            CommandSucceeded(b"", b""),
+        )
+    )
+
+    # When: official updates are collected.
+    result = collect_official_updates(command_runner)
+
+    # Then: empty success is invalid evidence, not a fresh empty update result.
+    assert result == ArchDegraded(
+        ArchFailure.MALFORMED_ROW, "empty checkupdates output"
+    )
+
+
 def test_collect_official_updates_when_rows_join_exact_inventory_and_filter_omarchy() -> (
     None
 ):
