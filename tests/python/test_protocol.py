@@ -140,7 +140,7 @@ class ProtocolCliTests(unittest.TestCase):
 
     def assert_decode_error(self, raw: bytes, code: ErrorCode) -> None:
         with self.assertRaises(ProtocolError) as raised:
-            decode_response(raw)
+            _ = decode_response(raw)
         self.assertEqual(raised.exception.error.code, code)
 
     def assert_encode_error(
@@ -149,7 +149,7 @@ class ProtocolCliTests(unittest.TestCase):
         code: ErrorCode,
     ) -> None:
         with self.assertRaises(ProtocolError) as raised:
-            encode_response(response)
+            _ = encode_response(response)
         self.assertEqual(raised.exception.error.code, code)
 
     def test_inventory_round_trip_is_byte_stable_and_keeps_hostile_label_inert(self) -> None:
@@ -186,13 +186,28 @@ class ProtocolCliTests(unittest.TestCase):
                 self.assertEqual(decode_response(encode_response(response)), response)
 
     def test_duplicate_item_ids_are_rejected_when_inventory_is_decoded(self) -> None:
+        item = b'{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchMode":"off","watchable":true}'
+        raw = encode_response(inventory_response()).replace(item, b",".join((item, item))).replace(b'"total":1', b'"total":2')
+
+        self.assert_decode_error(raw, ErrorCode.DUPLICATE_ITEM_ID)
+
+    def test_encoder_rejects_duplicate_inventory_item_ids(self) -> None:
         response = InventoryResponse(
             FIXED_TIME,
-            GenerationId("generation-duplicate"),
+            GenerationId("generation-duplicate-output"),
             InventoryPayload(ItemSource.ARCH, 2, (sample_item(), sample_item())),
         )
 
-        self.assert_decode_error(encode_response(response), ErrorCode.DUPLICATE_ITEM_ID)
+        self.assert_encode_error(response, ErrorCode.DUPLICATE_ITEM_ID)
+
+    def test_encoder_rejects_inventory_with_an_unsupported_source(self) -> None:
+        response = InventoryResponse(
+            FIXED_TIME,
+            GenerationId("generation-unsupported-output"),
+            InventoryPayload(ItemSource.OMARCHY, 1, (sample_item(),)),
+        )
+
+        self.assert_encode_error(response, ErrorCode.INVALID_ENVELOPE)
 
     def test_security_groups_must_attach_to_a_present_arch_item(self) -> None:
         response = snapshot_response()
@@ -222,7 +237,7 @@ class ProtocolCliTests(unittest.TestCase):
             response.protocol_version,
         )
 
-        self.assert_decode_error(encode_response(invalid_response), ErrorCode.INVALID_ENVELOPE)
+        self.assert_encode_error(invalid_response, ErrorCode.INVALID_ENVELOPE)
 
     def test_malformed_protocol_values_are_rejected_with_stable_codes(self) -> None:
         cases = (
@@ -269,4 +284,4 @@ class ProtocolCliTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

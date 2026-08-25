@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
-from typing import NoReturn, TypeAlias, assert_never
-
+from .json_value import JsonObject
 from .models import (
-    PROTOCOL_VERSION,
     ErrorCode,
     ErrorInfo,
     ErrorResponse,
@@ -11,7 +9,6 @@ from .models import (
     NormalizedItem,
     NotificationOutcome,
     ProtocolError,
-    ProtocolVersion,
     Response,
     ResponseKind,
     SecurityFinding,
@@ -23,27 +20,32 @@ from .models import (
     StarResultResponse,
     Summary,
 )
-
-JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-JsonObject: TypeAlias = dict[str, JsonValue]
+from .validation import validate_response
 
 
 def response_value(response: Response) -> JsonObject:
-    match response:
+    validate_response(response)
+    match response:  # noqa: MATCH_OK - basedpyright proves this closed union exhaustive
         case SnapshotResponse(generated_at, generation_id, payload, protocol_version):
-            return {"generatedAt": _timestamp(generated_at), "generationId": str(generation_id), "kind": ResponseKind.SNAPSHOT, "payload": _snapshot(payload), "protocolVersion": _version(protocol_version)}
+            return _envelope(generated_at, str(generation_id), ResponseKind.SNAPSHOT, _snapshot(payload), int(protocol_version))
         case InventoryResponse(generated_at, generation_id, payload, protocol_version):
-            return {"generatedAt": _timestamp(generated_at), "generationId": str(generation_id), "kind": ResponseKind.INVENTORY, "payload": _inventory(payload), "protocolVersion": _version(protocol_version)}
+            return _envelope(generated_at, str(generation_id), ResponseKind.INVENTORY, _inventory(payload), int(protocol_version))
         case StarResultResponse(generated_at, generation_id, payload, protocol_version):
-            return {"generatedAt": _timestamp(generated_at), "generationId": str(generation_id), "kind": ResponseKind.STAR_RESULT, "payload": _star_result(payload), "protocolVersion": _version(protocol_version)}
-        case ErrorResponse(generated_at, generation_id, error, protocol_version):
-            return {"error": _error(error), "generatedAt": _timestamp(generated_at), "generationId": str(generation_id), "kind": ResponseKind.ERROR, "protocolVersion": _version(protocol_version)}
-        case unreachable:
-            assert_never(unreachable)
+            return _envelope(generated_at, str(generation_id), ResponseKind.STAR_RESULT, _star_result(payload), int(protocol_version))
+        case ErrorResponse(generated_at, generation_id, error, protocol_version):  # pragma: no branch - final closed-union case exits
+            return _error_envelope(generated_at, str(generation_id), error, int(protocol_version))
+
+
+def _envelope(generated_at: datetime, generation_id: str, kind: ResponseKind, payload: JsonObject, version: int) -> JsonObject:
+    return {"generatedAt": _timestamp(generated_at), "generationId": generation_id, "kind": kind, "payload": payload, "protocolVersion": version}
+
+
+def _error_envelope(generated_at: datetime, generation_id: str, error: ErrorInfo, version: int) -> JsonObject:
+    return {"error": _error(error), "generatedAt": _timestamp(generated_at), "generationId": generation_id, "kind": ResponseKind.ERROR, "protocolVersion": version}
 
 
 def _snapshot(payload: SnapshotPayload) -> JsonObject:
-    return {"findings": [_finding_group(group) for group in payload.findings], "items": [_item(item) for item in payload.items], "notifications": [_notification(outcome) for outcome in payload.notifications], "scanState": payload.scan_state, "sources": [_source(source) for source in payload.sources], "summary": _summary(payload.summary)}
+    return {"findings": [_group(group) for group in payload.findings], "items": [_item(item) for item in payload.items], "notifications": [_notification(outcome) for outcome in payload.notifications], "scanState": payload.scan_state, "sources": [_source(source) for source in payload.sources], "summary": _summary(payload.summary)}
 
 
 def _inventory(payload: InventoryPayload) -> JsonObject:
@@ -66,12 +68,12 @@ def _item(item: NormalizedItem) -> JsonObject:
     return {"candidate": item.candidate, "id": str(item.item_id), "installed": item.installed, "label": item.label, "provenance": item.provenance, "source": item.source, "watchMode": item.watch_mode, "watchable": item.watchable}
 
 
+def _group(group: SecurityFindingGroup) -> JsonObject:
+    return {"findings": [_finding(finding) for finding in group.findings], "itemId": str(group.item_id)}
+
+
 def _finding(finding: SecurityFinding) -> JsonObject:
     return {"advisoryId": finding.advisory_id, "cveIds": list(finding.cve_ids), "fixedVersion": finding.fixed_version, "id": str(finding.finding_id), "itemId": str(finding.item_id), "knownExploited": finding.known_exploited, "provenance": finding.provenance, "severity": finding.severity}
-
-
-def _finding_group(group: SecurityFindingGroup) -> JsonObject:
-    return {"findings": [_finding(finding) for finding in group.findings], "itemId": str(group.item_id)}
 
 
 def _notification(outcome: NotificationOutcome) -> JsonObject:
@@ -84,19 +86,5 @@ def _error(error: ErrorInfo) -> JsonObject:
 
 def _timestamp(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() != timedelta():
-        _fail(ErrorCode.INVALID_TIMESTAMP, "timestamps must be UTC")
+        raise ProtocolError(ErrorInfo(ErrorCode.INVALID_TIMESTAMP, "timestamps must be UTC"))
     return value.isoformat(timespec="microseconds").replace("+00:00", "Z")
-
-
-def _version(value: ProtocolVersion) -> int:
-    if type(value) is not int:
-        _fail(ErrorCode.PROTOCOL_VERSION_INVALID, "protocolVersion must be an exact integer")
-    if value > int(PROTOCOL_VERSION):
-        _fail(ErrorCode.PROTOCOL_VERSION_FUTURE, "protocolVersion is newer than this helper")
-    if value != int(PROTOCOL_VERSION):
-        _fail(ErrorCode.PROTOCOL_VERSION_INVALID, "protocolVersion is unsupported")
-    return value
-
-
-def _fail(code: ErrorCode, message: str) -> NoReturn:
-    raise ProtocolError(ErrorInfo(code, message))

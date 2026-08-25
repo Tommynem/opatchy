@@ -12,12 +12,12 @@ EXIT_ERROR: Final = 2
 
 def main(arguments: Sequence[str]) -> int:
     response = _dispatch(tuple(arguments))
-    sys.stdout.buffer.write(encode_response(response))
+    _ = sys.stdout.buffer.write(encode_response(response))
     return EXIT_ERROR
 
 
 def _dispatch(arguments: tuple[str, ...]) -> ErrorResponse:
-    match arguments:
+    match arguments:  # noqa: MATCH_OK - untrusted CLI inputs require a fallback
         case ("snapshot",) | ("scan",) | ("scan", "--force"):
             return _error(ErrorCode.STATE_UNAVAILABLE, "validated snapshot storage is not available yet")
         case ("inventory", "--source", source, "--query", _, "--limit", limit, "--offset", offset):
@@ -29,7 +29,7 @@ def _dispatch(arguments: tuple[str, ...]) -> ErrorResponse:
 
 
 def _inventory_result(source: str, limit: str, offset: str) -> ErrorResponse:
-    match source:
+    match source:  # noqa: MATCH_OK - untrusted CLI inputs require a fallback
         case "arch" | "aur" | "flatpak" | "mise":
             return _inventory_pagination(limit, offset)
         case _:
@@ -47,7 +47,7 @@ def _inventory_pagination(limit: str, offset: str) -> ErrorResponse:
 def _star_result(item_id: str, mode: str) -> ErrorResponse:
     if not item_id or len(item_id) > 128:
         return _error(ErrorCode.CLI_USAGE, "item ID is invalid")
-    match mode:
+    match mode:  # noqa: MATCH_OK - untrusted CLI inputs require a fallback
         case WatchMode.OFF | WatchMode.TEMPORARY | WatchMode.PERMANENT:
             return _error(ErrorCode.STATE_UNAVAILABLE, "validated watch storage is not available yet")
         case _:

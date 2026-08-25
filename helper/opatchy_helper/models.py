@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum, unique
-from typing import Final, NewType, TypeAlias
+from typing import Final, NewType, TypeAlias, override
 
 
 ProtocolVersion = NewType("ProtocolVersion", int)
@@ -120,6 +120,7 @@ class ErrorInfo:
 class ProtocolError(Exception):
     error: ErrorInfo
 
+    @override
     def __str__(self) -> str:
         return f"{self.error.code}: {self.error.message}"
 
