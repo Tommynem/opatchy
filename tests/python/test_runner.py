@@ -514,6 +514,25 @@ def test_timeout_kills_term_ignoring_same_group_descendant_after_leader_exit(
     assert not sentinel.exists()
 
 
+def test_closed_pipe_sleeper_respects_command_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: a child that closes both inherited output pipes before it hangs.
+    executable = _fake_command(
+        tmp_path,
+        "import os, time; os.close(1); os.close(2); time.sleep(0.7)",
+    )
+    _patch_command(monkeypatch, executable, timeout_seconds=0.1)
+
+    # When: the runner observes pipe EOF while the process still runs.
+    started = time.monotonic()
+    result = runner.run_command(runner.CommandName.OMARCHY_UPDATE_AVAILABLE)
+
+    # Then: it applies timeout cleanup rather than waiting for the sleeper.
+    assert isinstance(result, runner.CommandTimedOut)
+    assert time.monotonic() - started < 0.5
+
+
 def test_timeout_kills_same_group_descendant_after_leader_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

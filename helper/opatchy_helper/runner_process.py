@@ -87,7 +87,15 @@ def _collect(process: subprocess.Popen[bytes], spec: CommandSpec) -> CommandResu
                     _stop_group(process)
                     _drain(pipes, stdout, stderr, spec, time.monotonic() + 0.2)
                     return CommandOutputExceeded(stream, bytes(stdout), bytes(stderr))
-        returncode = process.wait()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _stop_group(process)
+            return CommandTimedOut(bytes(stdout), bytes(stderr))
+        try:
+            returncode = process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            _stop_group(process)
+            return CommandTimedOut(bytes(stdout), bytes(stderr))
         if returncode == 0:
             return CommandSucceeded(bytes(stdout), bytes(stderr))
         return CommandExited(returncode, bytes(stdout), bytes(stderr))
@@ -134,7 +142,10 @@ def _stop_group(process: subprocess.Popen[bytes]) -> None:
         except ProcessLookupError:
             pass
     if process.poll() is None:
-        _ = process.wait()
+        try:
+            _ = process.wait(timeout=0.1)
+        except subprocess.TimeoutExpired:
+            return
 
 
 def _group_exists(group_id: int) -> bool:
