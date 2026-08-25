@@ -1,5 +1,5 @@
-import json
 from pathlib import Path
+import re
 import tempfile
 from typing import Final
 import unittest
@@ -34,13 +34,25 @@ PROHIBITED_ASSURANCE_PHRASES: Final = (
 
 class RepositoryContractTests(unittest.TestCase):
     def assert_manifest_identity(self, manifest_path: Path) -> None:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        schema_version = manifest["schemaVersion"]
-        self.assertIs(type(schema_version), int)
-        self.assertEqual(schema_version, 1)
-        self.assertEqual(manifest["id"], PLUGIN_ID)
-        self.assertEqual(manifest["name"], "Opatchy")
-        self.assertEqual(manifest["version"], VERSION)
+        manifest = manifest_path.read_text(encoding="utf-8")
+        schema_version = re.search(
+            r'"schemaVersion"\s*:\s*(true|false|-?[0-9]+)',
+            manifest,
+        )
+
+        self.assertIsNotNone(schema_version)
+        assert schema_version is not None
+        self.assertEqual(schema_version.group(1), "1")
+        for field, value in (
+            ("id", PLUGIN_ID),
+            ("name", "Opatchy"),
+            ("version", VERSION),
+        ):
+            with self.subTest(field=field):
+                self.assertRegex(
+                    manifest,
+                    rf'"{field}"\s*:\s*"{re.escape(value)}"',
+                )
 
     def test_repository_foundation_exists_when_checkout_is_inspected(self) -> None:
         missing_files = [
@@ -88,15 +100,8 @@ class RepositoryContractTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             manifest_path = Path(temporary_directory) / "manifest.json"
-            manifest_path.write_text(
-                json.dumps(
-                    {
-                        "schemaVersion": True,
-                        "id": PLUGIN_ID,
-                        "name": "Opatchy",
-                        "version": VERSION,
-                    }
-                ),
+            _ = manifest_path.write_text(
+                '{"schemaVersion": true, "id": "io.github.tomge.opatchy", "name": "Opatchy", "version": "0.1.0"}',
                 encoding="utf-8",
             )
 
@@ -105,4 +110,4 @@ class RepositoryContractTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

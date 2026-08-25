@@ -19,7 +19,11 @@ typeCheckingMode = "all"
 pythonVersion = "3.11"
 pythonPlatform = "All"
 include = ["."]
-exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist", "tests/contract"]
+exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
+executionEnvironments = [
+    { root = "helper", extraPaths = ["helper"] },
+    { root = "tests", extraPaths = [".", "helper"] },
+]
 reportMissingParameterType = "error"
 reportPrivateUsage = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
@@ -53,6 +57,8 @@ ignore = [
 "tests/tooling/test_validation_gates.py" = ["FLY002", "S603"]
 "tests/tooling/test_validation_cleanup.py" = ["FLY002", "S603"]
 "tests/tooling/test_qml_offscreen_capability.py" = ["S603"]
+"tests/tooling/test_runtime_smoke_protocol.py" = ["FLY002", "S603"]
+"tests/tooling/test_basedpyright_helper_imports.py" = ["S603", "S607"]
 "tests/fixtures/factories.py" = ["S603"]
 "helper/opatchy.py" = ["INP001"]
 "scripts/**/*.py" = ["INP001", "T201"]
