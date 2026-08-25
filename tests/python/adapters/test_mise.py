@@ -102,6 +102,7 @@ def test_collect_mise_updates_rejects_partial_or_wrongly_typed_records(
     [
         b'{"node": {"requested": "20", "current": "20.0.0", "latest": NaN}}',
         b'{"node": {"requested": "20", "current": "20.0.0", "latest": "20.1.0"}, "node": {"requested": "21", "current": "21.0.0", "latest": "21.1.0"}}',
+        b'{"\\uD800": {"requested": "20", "current": "20.0.0", "latest": "20.1.0"}}',
         b"{",
     ],
 )

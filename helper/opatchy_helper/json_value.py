@@ -52,6 +52,7 @@ def _normalize(value: JsonValue, depth: int) -> JsonValue:
     if type(value) is dict:
         normalized: JsonObject = {}
         for key, item in value.items():
+            _reject_surrogate(key)
             normalized[key] = _normalize(item, depth + 1)
         return normalized
     return value

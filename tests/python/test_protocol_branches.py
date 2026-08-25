@@ -175,6 +175,7 @@ class ProtocolBranchTests(unittest.TestCase):
             '"\\uD83D"',
             '"\\uDE00"',
             '"\\uD83D\\u0041"',
+            r'{"\uD800":"value"}',
             '"\\u123',
             '"unterminated',
             '"line\nbreak"',
