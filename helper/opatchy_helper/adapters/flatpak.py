@@ -19,6 +19,7 @@ from ..runner_types import (
 )
 from .flatpak_parser import (
     FlatpakInventoryRow,
+    FlatpakKind,
     FlatpakParseFailure,
     FlatpakUpdate,
     parse_inventory,
@@ -47,12 +48,13 @@ class FlatpakScopeStatus(StrEnum):
 class FlatpakRecord:
     scope: FlatpakScope
     ref: str
-    kind: str
+    kind: FlatpakKind
     application_id: str
     arch: str
     branch: str
     origin: str
     candidate_ref: str | None
+    candidate_origin: str | None
     item: NormalizedItem
 
 
@@ -72,7 +74,8 @@ class FlatpakResult:
 @dataclass(frozen=True, slots=True)
 class _ScopeCommands:
     scope: FlatpakScope
-    inventory: CommandName
+    apps: CommandName
+    runtimes: CommandName
     updates: CommandName
 
 
@@ -87,18 +90,26 @@ class _CommandFailure:
     diagnostic: str
 
 
+@dataclass(frozen=True, slots=True)
+class _InventorySuccess:
+    rows: tuple[FlatpakInventoryRow, ...]
+
+
 type FlatpakRunner = Callable[[CommandName], CommandResult]
 type _CommandOutcome = _CommandText | _CommandFailure
+type _InventoryOutcome = _InventorySuccess | _CommandFailure
 
 _SCOPES: Final[tuple[_ScopeCommands, _ScopeCommands]] = (
     _ScopeCommands(
         FlatpakScope.USER,
-        CommandName.FLATPAK_USER_LIST,
+        CommandName.FLATPAK_USER_APP_LIST,
+        CommandName.FLATPAK_USER_RUNTIME_LIST,
         CommandName.FLATPAK_USER_UPDATES,
     ),
     _ScopeCommands(
         FlatpakScope.SYSTEM,
-        CommandName.FLATPAK_SYSTEM_LIST,
+        CommandName.FLATPAK_SYSTEM_APP_LIST,
+        CommandName.FLATPAK_SYSTEM_RUNTIME_LIST,
         CommandName.FLATPAK_SYSTEM_UPDATES,
     ),
 )
@@ -106,73 +117,101 @@ _DIAGNOSTIC_LIMIT: Final[int] = 512
 
 
 def collect_flatpak(run: FlatpakRunner = run_command) -> FlatpakResult:
-    user_commands, system_commands = _SCOPES
-    return FlatpakResult(
-        (_collect_scope(user_commands, run), _collect_scope(system_commands, run))
-    )
+    user, system = _SCOPES
+    return FlatpakResult((_collect_scope(user, run), _collect_scope(system, run)))
 
 
 def _collect_scope(commands: _ScopeCommands, run: FlatpakRunner) -> FlatpakScopeResult:
-    inventory_command = _command_outcome(run(commands.inventory))
-    match inventory_command:
-        case _CommandFailure(status=status, diagnostic=diagnostic):
-            return FlatpakScopeResult(commands.scope, status, (), diagnostic)
+    apps = _inventory_outcome(run(commands.apps), FlatpakKind.APP)
+    runtimes = _inventory_outcome(run(commands.runtimes), FlatpakKind.RUNTIME)
+    match apps:
+        case _CommandFailure() as failure:
+            return _inventory_failure(commands.scope, failure, runtimes)
+        case _InventorySuccess(rows=app_rows):
+            match runtimes:
+                case _CommandFailure() as failure:
+                    return _inventory_failure(commands.scope, failure, apps)
+                case _InventorySuccess(rows=runtime_rows):
+                    records = _records(commands.scope, app_rows + runtime_rows)
+                    if not records:
+                        return FlatpakScopeResult(
+                            commands.scope, FlatpakScopeStatus.NOT_APPLICABLE, (), None
+                        )
+                    return _collect_updates(commands, records, run)
+            assert_never(runtimes)
+    assert_never(apps)
+
+
+def _inventory_outcome(result: CommandResult, kind: FlatpakKind) -> _InventoryOutcome:
+    outcome = _command_outcome(result)
+    match outcome:
+        case _CommandFailure():
+            return outcome
         case _CommandText(stdout=stdout):
-            return _collect_inventory(commands, stdout, run)
-    assert_never(inventory_command)
+            parsed = parse_inventory(stdout, kind)
+            match parsed:
+                case FlatpakParseFailure(diagnostic=diagnostic):
+                    return _CommandFailure(FlatpakScopeStatus.INVALID, diagnostic)
+                case tuple() as rows:
+                    return _InventorySuccess(rows)
+            assert_never(parsed)
+    assert_never(outcome)
 
 
-def _collect_inventory(
-    commands: _ScopeCommands, stdout: bytes, run: FlatpakRunner
+def _inventory_failure(
+    scope: FlatpakScope,
+    failure: _CommandFailure,
+    other: _InventoryOutcome,
 ) -> FlatpakScopeResult:
-    inventory = parse_inventory(stdout)
-    match inventory:
-        case FlatpakParseFailure(diagnostic=diagnostic):
+    match other:
+        case _CommandFailure():
+            return FlatpakScopeResult(scope, failure.status, (), failure.diagnostic)
+        case _InventorySuccess(rows=rows):
             return FlatpakScopeResult(
-                commands.scope, FlatpakScopeStatus.INVALID, (), diagnostic
+                scope, failure.status, _records(scope, rows), failure.diagnostic
             )
-        case ():
-            return FlatpakScopeResult(
-                commands.scope, FlatpakScopeStatus.NOT_APPLICABLE, (), None
-            )
-        case tuple() as inventory:
-            return _collect_updates(commands, _records(commands.scope, inventory), run)
-    assert_never(inventory)
+    assert_never(other)
 
 
 def _collect_updates(
-    commands: _ScopeCommands,
-    records: tuple[FlatpakRecord, ...],
-    run: FlatpakRunner,
+    commands: _ScopeCommands, records: tuple[FlatpakRecord, ...], run: FlatpakRunner
 ) -> FlatpakScopeResult:
-    updates_command = _command_outcome(run(commands.updates))
-    match updates_command:
+    outcome = _command_outcome(run(commands.updates))
+    match outcome:
         case _CommandFailure(status=status, diagnostic=diagnostic):
             return FlatpakScopeResult(commands.scope, status, records, diagnostic)
         case _CommandText(stdout=stdout):
-            return _join_updates(commands, records, stdout)
-    assert_never(updates_command)
+            parsed = parse_updates(stdout)
+            match parsed:
+                case FlatpakParseFailure(diagnostic=diagnostic):
+                    return FlatpakScopeResult(
+                        commands.scope, FlatpakScopeStatus.INVALID, records, diagnostic
+                    )
+                case tuple() as updates:
+                    return _reconcile_updates(commands.scope, records, updates)
+            assert_never(parsed)
+    assert_never(outcome)
 
 
-def _join_updates(
-    commands: _ScopeCommands, records: tuple[FlatpakRecord, ...], stdout: bytes
+def _reconcile_updates(
+    scope: FlatpakScope,
+    records: tuple[FlatpakRecord, ...],
+    updates: tuple[FlatpakUpdate, ...],
 ) -> FlatpakScopeResult:
-    updates = parse_updates(stdout)
-    match updates:
-        case FlatpakParseFailure(diagnostic=diagnostic):
+    record_refs = {record.ref for record in records}
+    for update in updates:
+        if update.ref not in record_refs:
             return FlatpakScopeResult(
-                commands.scope, FlatpakScopeStatus.INVALID, records, diagnostic
+                scope,
+                FlatpakScopeStatus.INVALID,
+                records,
+                f"Flatpak updates contains unmatched ref at row {update.row_number}",
             )
-        case tuple() as candidates:
-            candidates_by_ref = {candidate.ref: candidate for candidate in candidates}
-            joined = tuple(
-                _with_candidate(record, candidates_by_ref.get(record.ref))
-                for record in records
-            )
-            return FlatpakScopeResult(
-                commands.scope, FlatpakScopeStatus.OK, joined, None
-            )
-    assert_never(updates)
+    updates_by_ref = {update.ref: update for update in updates}
+    joined = tuple(
+        _with_candidate(record, updates_by_ref.get(record.ref)) for record in records
+    )
+    return FlatpakScopeResult(scope, FlatpakScopeStatus.OK, joined, None)
 
 
 def _command_outcome(result: CommandResult) -> _CommandOutcome:
@@ -181,7 +220,7 @@ def _command_outcome(result: CommandResult) -> _CommandOutcome:
             return _CommandText(stdout)
         case CommandMissing(diagnostic=diagnostic):
             return _CommandFailure(
-                FlatpakScopeStatus.MISSING_DEPENDENCY, _bound_diagnostic(diagnostic)
+                FlatpakScopeStatus.MISSING_DEPENDENCY, diagnostic[:_DIAGNOSTIC_LIMIT]
             )
         case CommandTimedOut():
             return _CommandFailure(
@@ -199,13 +238,13 @@ def _command_outcome(result: CommandResult) -> _CommandOutcome:
             )
         case CommandRejected(diagnostic=diagnostic):
             return _CommandFailure(
-                FlatpakScopeStatus.ERROR, _bound_diagnostic(diagnostic)
+                FlatpakScopeStatus.ERROR, diagnostic[:_DIAGNOSTIC_LIMIT]
             )
     assert_never(result)
 
 
 def _records(
-    scope: FlatpakScope, inventory: tuple[FlatpakInventoryRow, ...]
+    scope: FlatpakScope, rows: tuple[FlatpakInventoryRow, ...]
 ) -> tuple[FlatpakRecord, ...]:
     return tuple(
         FlatpakRecord(
@@ -216,6 +255,7 @@ def _records(
             row.arch,
             row.branch,
             row.origin,
+            None,
             None,
             NormalizedItem(
                 ItemId(f"flatpak:{scope}:{row.ref}"),
@@ -228,7 +268,7 @@ def _records(
                 Provenance.LIVE,
             ),
         )
-        for row in inventory
+        for row in rows
     )
 
 
@@ -237,14 +277,9 @@ def _with_candidate(
 ) -> FlatpakRecord:
     if candidate is None:
         return record
-    if candidate.version is None:
-        return replace(record, candidate_ref=candidate.ref)
     return replace(
         record,
         candidate_ref=candidate.ref,
+        candidate_origin=candidate.origin,
         item=replace(record.item, candidate=candidate.version),
     )
-
-
-def _bound_diagnostic(value: str) -> str:
-    return value[:_DIAGNOSTIC_LIMIT]

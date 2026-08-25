@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum, unique
+
+
+@unique
+class FlatpakKind(StrEnum):
+    APP = "app"
+    RUNTIME = "runtime"
 
 
 @dataclass(frozen=True, slots=True)
 class FlatpakInventoryRow:
     ref: str
-    kind: str
+    kind: FlatpakKind
     application_id: str
     arch: str
     branch: str
@@ -23,33 +30,33 @@ class FlatpakParseFailure:
 class FlatpakUpdate:
     ref: str
     version: str | None
+    origin: str
+    row_number: int
 
 
 type InventoryParseResult = tuple[FlatpakInventoryRow, ...] | FlatpakParseFailure
 type UpdatesParseResult = tuple[FlatpakUpdate, ...] | FlatpakParseFailure
 
 
-def parse_inventory(stdout: bytes) -> InventoryParseResult:
+def parse_inventory(stdout: bytes, kind: FlatpakKind) -> InventoryParseResult:
     try:
-        rows = stdout.decode("utf-8").splitlines()
+        decoded = stdout.decode("utf-8")
     except UnicodeDecodeError:
         return FlatpakParseFailure("Flatpak inventory output is not valid UTF-8")
-
     inventory: list[FlatpakInventoryRow] = []
     seen_refs: set[str] = set()
-    for row_number, row in enumerate(rows, start=1):
+    for row_number, row in enumerate(decoded.splitlines(), start=1):
         columns = row.split("\t")
-        if len(columns) != 4:
+        if len(columns) != 5:
             return FlatpakParseFailure(
-                f"Flatpak inventory row {row_number} has {len(columns)} columns; expected 4"
+                f"Flatpak inventory row {row_number} has {len(columns)} columns; expected 5"
             )
-        ref, _application, installed, origin = columns
-        parsed_ref = _parse_ref(ref)
-        if parsed_ref is None:
+        application_id, arch, branch, installed, origin = columns
+        if not all(_valid_component(value) for value in (application_id, arch, branch)):
             return FlatpakParseFailure(
-                f"Flatpak inventory row {row_number} has an invalid ref"
+                f"Flatpak inventory row {row_number} has an invalid component"
             )
-        kind, application_id, arch, branch = parsed_ref
+        ref = f"{kind}/{application_id}/{arch}/{branch}"
         if ref in seen_refs:
             return FlatpakParseFailure(
                 f"Flatpak inventory contains duplicate ref at row {row_number}"
@@ -65,31 +72,39 @@ def parse_inventory(stdout: bytes) -> InventoryParseResult:
 
 def parse_updates(stdout: bytes) -> UpdatesParseResult:
     try:
-        rows = stdout.decode("utf-8").splitlines()
+        decoded = stdout.decode("utf-8")
     except UnicodeDecodeError:
         return FlatpakParseFailure("Flatpak updates output is not valid UTF-8")
-
     updates: list[FlatpakUpdate] = []
-    for row_number, row in enumerate(rows, start=1):
+    seen_refs: set[str] = set()
+    for row_number, row in enumerate(decoded.splitlines(), start=1):
         columns = row.split("\t")
         if len(columns) != 3:
             return FlatpakParseFailure(
                 f"Flatpak updates row {row_number} has {len(columns)} columns; expected 3"
             )
-        ref, version, _origin = columns
-        if _parse_ref(ref) is None:
+        ref, version, origin = columns
+        if not _valid_ref(ref):
             return FlatpakParseFailure(
                 f"Flatpak updates row {row_number} has an invalid ref"
             )
-        updates.append(FlatpakUpdate(ref, version or None))
+        if ref in seen_refs:
+            return FlatpakParseFailure(
+                f"Flatpak updates contains duplicate ref at row {row_number}"
+            )
+        seen_refs.add(ref)
+        updates.append(FlatpakUpdate(ref, version or None, origin, row_number))
     return tuple(updates)
 
 
-def _parse_ref(ref: str) -> tuple[str, str, str, str] | None:
+def _valid_ref(ref: str) -> bool:
     parts = ref.split("/")
-    if len(parts) != 4 or any(not part or not part.isprintable() for part in parts):
-        return None
-    kind, application_id, arch, branch = parts
-    if kind not in {"app", "runtime"}:
-        return None
-    return kind, application_id, arch, branch
+    return (
+        len(parts) == 4
+        and parts[0] in FlatpakKind
+        and all(_valid_component(part) for part in parts)
+    )
+
+
+def _valid_component(value: str) -> bool:
+    return bool(value) and value.isprintable() and "/" not in value

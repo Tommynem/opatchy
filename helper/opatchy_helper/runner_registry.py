@@ -73,17 +73,53 @@ COMMAND_SPECS: Final = MappingProxyType(
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
         ),
-        CommandName.FLATPAK_USER_LIST: CommandSpec(
+        CommandName.FLATPAK_USER_APP_LIST: CommandSpec(
             Path("/usr/bin/flatpak"),
-            ("--user", "list", "--columns=ref,application,version,origin"),
+            (
+                "--user",
+                "list",
+                "--app",
+                "--columns=application,arch,branch,version,origin",
+            ),
             ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
             _DEFAULT_OUTPUT,
         ),
-        CommandName.FLATPAK_SYSTEM_LIST: CommandSpec(
+        CommandName.FLATPAK_USER_RUNTIME_LIST: CommandSpec(
             Path("/usr/bin/flatpak"),
-            ("--system", "list", "--columns=ref,application,version,origin"),
+            (
+                "--user",
+                "list",
+                "--runtime",
+                "--columns=application,arch,branch,version,origin",
+            ),
+            ArgumentPolicy.NONE,
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.FLATPAK_SYSTEM_APP_LIST: CommandSpec(
+            Path("/usr/bin/flatpak"),
+            (
+                "--system",
+                "list",
+                "--app",
+                "--columns=application,arch,branch,version,origin",
+            ),
+            ArgumentPolicy.NONE,
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.FLATPAK_SYSTEM_RUNTIME_LIST: CommandSpec(
+            Path("/usr/bin/flatpak"),
+            (
+                "--system",
+                "list",
+                "--runtime",
+                "--columns=application,arch,branch,version,origin",
+            ),
             ArgumentPolicy.NONE,
             60,
             _DEFAULT_OUTPUT,
