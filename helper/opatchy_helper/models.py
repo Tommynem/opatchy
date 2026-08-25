@@ -3,7 +3,6 @@ from datetime import datetime
 from enum import StrEnum, unique
 from typing import Final, NewType, TypeAlias, override
 
-
 ProtocolVersion = NewType("ProtocolVersion", int)
 GenerationId = NewType("GenerationId", str)
 ItemId = NewType("ItemId", str)
@@ -234,4 +233,6 @@ class ErrorResponse:
     protocol_version: ProtocolVersion = PROTOCOL_VERSION
 
 
-Response: TypeAlias = SnapshotResponse | InventoryResponse | StarResultResponse | ErrorResponse
+Response: TypeAlias = (
+    SnapshotResponse | InventoryResponse | StarResultResponse | ErrorResponse
+)

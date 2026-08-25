@@ -1,12 +1,10 @@
 from datetime import datetime, timezone
-
 from typing import Final, NoReturn
 
 from .json_value import decode_json
 from .models import ErrorCode, ErrorInfo, ProtocolError, Response
 from .parser import parse_response
 from .wire import response_value
-
 
 MAX_PROTOCOL_BYTES: Final = 5 * 1024 * 1024
 
@@ -43,12 +41,15 @@ def utc_now() -> datetime:
 def _encode_json(response: Response) -> bytes:
     import json
 
-    return json.dumps(
-        response_value(response),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8") + b"\n"
+    return (
+        json.dumps(
+            response_value(response),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        + b"\n"
+    )
 
 
 def _fail(code: ErrorCode, message: str) -> NoReturn:

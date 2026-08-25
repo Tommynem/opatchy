@@ -1,12 +1,11 @@
 import os
-from datetime import datetime, timezone
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from typing import Final
 import unittest
-
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Final
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[2]
 HELPER_ENTRYPOINT: Final = REPOSITORY_ROOT / "helper" / "opatchy.py"
@@ -40,11 +39,17 @@ from opatchy_helper.models import (
     Summary,
     WatchMode,
 )
-from opatchy_helper.protocol import MAX_PROTOCOL_BYTES, ProtocolError, decode_response, encode_response
-
+from opatchy_helper.protocol import (
+    MAX_PROTOCOL_BYTES,
+    ProtocolError,
+    decode_response,
+    encode_response,
+)
 
 FIXED_TIME: Final = datetime(2026, 8, 25, 12, 34, 56, tzinfo=timezone.utc)
-HOSTILE_LABEL: Final = "$(touch /tmp/opatchy-injection-sentinel) https://example.invalid"
+HOSTILE_LABEL: Final = (
+    "$(touch /tmp/opatchy-injection-sentinel) https://example.invalid"
+)
 
 
 def sample_item(item_id: str = "arch:demo") -> NormalizedItem:
@@ -123,7 +128,9 @@ class ProtocolCliTests(unittest.TestCase):
         result = self.run_helper("snapshot")
 
         self.assertEqual(result.returncode, 2)
-        self.assertTrue(result.stdout.startswith('{"error":{"code":"STATE_UNAVAILABLE"'))
+        self.assertTrue(
+            result.stdout.startswith('{"error":{"code":"STATE_UNAVAILABLE"')
+        )
         self.assertTrue(result.stdout.endswith("\n"))
         self.assertEqual(result.stdout.count("\n"), 1)
         self.assertEqual(result.stderr, "")
@@ -145,14 +152,19 @@ class ProtocolCliTests(unittest.TestCase):
 
     def assert_encode_error(
         self,
-        response: SnapshotResponse | InventoryResponse | StarResultResponse | ErrorResponse,
+        response: SnapshotResponse
+        | InventoryResponse
+        | StarResultResponse
+        | ErrorResponse,
         code: ErrorCode,
     ) -> None:
         with self.assertRaises(ProtocolError) as raised:
             _ = encode_response(response)
         self.assertEqual(raised.exception.error.code, code)
 
-    def test_inventory_round_trip_is_byte_stable_and_keeps_hostile_label_inert(self) -> None:
+    def test_inventory_round_trip_is_byte_stable_and_keeps_hostile_label_inert(
+        self,
+    ) -> None:
         sentinel = Path("/tmp/opatchy-injection-sentinel")
         sentinel.unlink(missing_ok=True)
 
@@ -177,7 +189,9 @@ class ProtocolCliTests(unittest.TestCase):
             ErrorResponse(
                 FIXED_TIME,
                 GenerationId("generation-error"),
-                ErrorInfo(ErrorCode.CLI_USAGE, "unsupported helper command or arguments"),
+                ErrorInfo(
+                    ErrorCode.CLI_USAGE, "unsupported helper command or arguments"
+                ),
             ),
         )
 
@@ -187,7 +201,11 @@ class ProtocolCliTests(unittest.TestCase):
 
     def test_duplicate_item_ids_are_rejected_when_inventory_is_decoded(self) -> None:
         item = b'{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchMode":"off","watchable":true}'
-        raw = encode_response(inventory_response()).replace(item, b",".join((item, item))).replace(b'"total":1', b'"total":2')
+        raw = (
+            encode_response(inventory_response())
+            .replace(item, b",".join((item, item)))
+            .replace(b'"total":1', b'"total":2')
+        )
 
         self.assert_decode_error(raw, ErrorCode.DUPLICATE_ITEM_ID)
 
@@ -246,7 +264,10 @@ class ProtocolCliTests(unittest.TestCase):
             (b'{"protocolVersion":null}', ErrorCode.PROTOCOL_VERSION_INVALID),
             (b'{"protocolVersion":true}', ErrorCode.PROTOCOL_VERSION_INVALID),
             (b'{"protocolVersion":2}', ErrorCode.PROTOCOL_VERSION_FUTURE),
-            (b'{"generatedAt":"2026-08-25 12:34:56Z","protocolVersion":1}', ErrorCode.INVALID_TIMESTAMP),
+            (
+                b'{"generatedAt":"2026-08-25 12:34:56Z","protocolVersion":1}',
+                ErrorCode.INVALID_TIMESTAMP,
+            ),
             (b'{"extra":0}', ErrorCode.UNKNOWN_FIELD),
             (
                 b'{"generatedAt":"2026-08-25T12:34:56.000000Z","generationId":"generation-0001","kind":"unexpected","protocolVersion":1}',
@@ -273,10 +294,23 @@ class ProtocolCliTests(unittest.TestCase):
             InventoryPayload(ItemSource.ARCH, 1, (sample_item(),)),
             ProtocolVersion(2),
         )
-        oversized_response = ErrorResponse(
+        oversized_items = tuple(
+            NormalizedItem(
+                ItemId(f"arch:{index}"),
+                ItemSource.ARCH,
+                "x" * 128,
+                "1.0",
+                "1.1",
+                WatchMode.OFF,
+                True,
+                Provenance.LIVE,
+            )
+            for index in range(25_000)
+        )
+        oversized_response = InventoryResponse(
             FIXED_TIME,
             GenerationId("generation-large"),
-            ErrorInfo(ErrorCode.CLI_USAGE, "x" * MAX_PROTOCOL_BYTES),
+            InventoryPayload(ItemSource.ARCH, len(oversized_items), oversized_items),
         )
 
         self.assert_encode_error(future_response, ErrorCode.PROTOCOL_VERSION_FUTURE)
