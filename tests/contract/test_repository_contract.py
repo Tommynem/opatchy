@@ -1,7 +1,7 @@
+import json
 from pathlib import Path
-import re
 import tempfile
-from typing import Final
+from typing import Final, TypeAlias
 import unittest
 
 
@@ -30,29 +30,38 @@ PROHIBITED_ASSURANCE_PHRASES: Final = (
     "not exploitable",
     "fully protected",
 )
+JsonValue: TypeAlias = (
+    bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"] | None
+)
+JsonObject: TypeAlias = dict[str, JsonValue]
+
+
+class ManifestObjectCapture:
+    def __init__(self) -> None:
+        self.manifest: JsonObject | None = None
+
+    def capture(self, pairs: list[tuple[str, JsonValue]]) -> JsonObject:
+        manifest = dict(pairs)
+        self.manifest = manifest
+        return manifest
 
 
 class RepositoryContractTests(unittest.TestCase):
     def assert_manifest_identity(self, manifest_path: Path) -> None:
-        manifest = manifest_path.read_text(encoding="utf-8")
-        schema_version = re.search(
-            r'"schemaVersion"\s*:\s*(true|false|-?[0-9]+)',
-            manifest,
+        capture = ManifestObjectCapture()
+        json.loads(
+            manifest_path.read_text(encoding="utf-8"),
+            object_pairs_hook=capture.capture,
         )
-
-        self.assertIsNotNone(schema_version)
-        assert schema_version is not None
-        self.assertEqual(schema_version.group(1), "1")
-        for field, value in (
-            ("id", PLUGIN_ID),
-            ("name", "Opatchy"),
-            ("version", VERSION),
-        ):
-            with self.subTest(field=field):
-                self.assertRegex(
-                    manifest,
-                    rf'"{field}"\s*:\s*"{re.escape(value)}"',
-                )
+        self.assertIsNotNone(capture.manifest)
+        assert capture.manifest is not None
+        schema_version = capture.manifest["schemaVersion"]
+        self.assertIs(type(schema_version), int)
+        assert type(schema_version) is int
+        self.assertEqual(schema_version, 1)
+        self.assertEqual(capture.manifest["id"], PLUGIN_ID)
+        self.assertEqual(capture.manifest["name"], "Opatchy")
+        self.assertEqual(capture.manifest["version"], VERSION)
 
     def test_repository_foundation_exists_when_checkout_is_inspected(self) -> None:
         missing_files = [
@@ -106,6 +115,19 @@ class RepositoryContractTests(unittest.TestCase):
             )
 
             with self.assertRaises(AssertionError):
+                self.assert_manifest_identity(manifest_path)
+
+    def test_manifest_identity_rejects_malformed_json_with_identity_like_text(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            manifest_path = Path(temporary_directory) / "manifest.json"
+            _ = manifest_path.write_text(
+                '{"schemaVersion": 1, "id": "io.github.tomge.opatchy", "name": "Opatchy", "version": "0.1.0"} trailing text',
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(json.JSONDecodeError):
                 self.assert_manifest_identity(manifest_path)
 
 
