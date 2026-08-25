@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+from pathlib import Path
+from types import MappingProxyType
+from typing import Final
+
+from .runner_types import CommandName, CommandSpec, EndpointName, EndpointSpec
+
+_MIB: Final[int] = 1024 * 1024
+_DEFAULT_OUTPUT: Final[int] = 2 * _MIB
+
+COMMAND_SPECS: Final = MappingProxyType(
+    {
+        CommandName.OMARCHY_UPDATE_AVAILABLE: CommandSpec(
+            Path("/usr/bin/omarchy-update-available"),
+            (),
+            ((),),
+            15,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.PACMAN_NATIVE: CommandSpec(
+            Path("/usr/bin/pacman"),
+            ("-Qn",),
+            ((),),
+            30,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.CHECKUPDATES: CommandSpec(
+            Path("/usr/bin/checkupdates"),
+            ("--nocolor",),
+            ((),),
+            120,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.VERCMP: CommandSpec(
+            Path("/usr/bin/vercmp"), (), ((),), 15, _DEFAULT_OUTPUT, _DEFAULT_OUTPUT
+        ),
+        CommandName.PACMAN_FOREIGN: CommandSpec(
+            Path("/usr/bin/pacman"),
+            ("-Qm",),
+            ((),),
+            30,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.YAY_UPDATES: CommandSpec(
+            Path("/usr/bin/yay"),
+            ("-Qua", "--color", "never"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.PARU_UPDATES: CommandSpec(
+            Path("/usr/bin/paru"),
+            ("-Qua", "--color", "never"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.FLATPAK_USER_LIST: CommandSpec(
+            Path("/usr/bin/flatpak"),
+            ("--user", "list", "--columns=ref,application,version,origin"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.FLATPAK_SYSTEM_LIST: CommandSpec(
+            Path("/usr/bin/flatpak"),
+            ("--system", "list", "--columns=ref,application,version,origin"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.FLATPAK_USER_UPDATES: CommandSpec(
+            Path("/usr/bin/flatpak"),
+            ("--user", "remote-ls", "--updates"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.FLATPAK_SYSTEM_UPDATES: CommandSpec(
+            Path("/usr/bin/flatpak"),
+            ("--system", "remote-ls", "--updates"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.MISE_OUTDATED: CommandSpec(
+            Path("/usr/bin/mise"),
+            ("outdated", "--json"),
+            ((),),
+            60,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+            Path.home(),
+        ),
+        CommandName.ARCH_AUDIT: CommandSpec(
+            Path("/usr/bin/arch-audit"),
+            ("--json",),
+            ((),),
+            30,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+        CommandName.NOTIFY: CommandSpec(
+            Path("/usr/bin/notify-send"),
+            ("-u", "normal"),
+            ((),),
+            15,
+            _DEFAULT_OUTPUT,
+            _DEFAULT_OUTPUT,
+        ),
+    }
+)
+
+ENDPOINT_SPECS: Final = MappingProxyType(
+    {
+        EndpointName.ARCH_SECURITY: EndpointSpec(
+            "https://security.archlinux.org/all.json",
+            frozenset({"security.archlinux.org"}),
+            ("/all.json",),
+            3,
+            25 * _MIB,
+            20,
+        ),
+        EndpointName.CISA_KEV: EndpointSpec(
+            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+            frozenset({"www.cisa.gov"}),
+            ("/sites/default/files/feeds/",),
+            3,
+            10 * _MIB,
+            20,
+        ),
+    }
+)
