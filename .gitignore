@@ -1,0 +1,10 @@
+# Python tooling and bytecode
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local execution evidence
+.omo/evidence/
