@@ -29,7 +29,7 @@ OMARCHY_DUPLICATE_FILTER: Final[frozenset[str]] = frozenset({"omarchy", "omarchy
 _UP_TO_DATE: Final[bytes] = b"Omarchy is up to date\n"
 _DIAGNOSTIC_BYTES: Final[int] = 512
 _PACKAGE_ROW: Final[re.Pattern[str]] = re.compile(
-    r"^(?P<package>omarchy(?:-dev)?) (?P<installed>[!-~]+) (?P<candidate>[!-~]+)$"
+    r"^(?P<package>omarchy(?:-dev)?) (?P<installed>[!-~]+) -> (?P<candidate>[!-~]+)$"
 )
 _DEVELOPMENT_ROW: Final[re.Pattern[str]] = re.compile(
     r"^omarchy-dev-checkout (?P<behind>[1-9][0-9]*) new "

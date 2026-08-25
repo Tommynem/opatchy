@@ -97,7 +97,7 @@ def test_collect_omarchy_availability_returns_fresh_empty_for_exact_healthy_exit
 
 def test_collect_omarchy_availability_normalizes_package_update() -> None:
     # Given: the package row emitted by the installed command source.
-    outcome = CommandSucceeded(b"omarchy 4.0.0-1 4.0.1-1\n", b"")
+    outcome = CommandSucceeded(b"omarchy 4.0.0-1 -> 4.0.1-1\n", b"")
 
     # When: Omarchy availability is collected.
     result = _collect(outcome)
@@ -108,6 +108,35 @@ def test_collect_omarchy_availability_normalizes_package_update() -> None:
         (_package("omarchy", "4.0.0-1", "4.0.1-1"),),
         None,
     )
+
+
+def test_collect_omarchy_availability_preserves_opaque_package_versions() -> None:
+    # Given: a valid checkupdates row with opaque Arch version strings.
+    outcome = CommandSucceeded(
+        b"omarchy 1:4.0.0.r7.gabcdef-2 -> 2026.08+git.r9.gfedcba-1\n", b""
+    )
+
+    # When: Omarchy availability is collected.
+    result = _collect(outcome)
+
+    # Then: version tokens remain unchanged data rather than parsed semantics.
+    assert result == OmarchyAvailability(
+        SourceStatus.OK,
+        (_package("omarchy", "1:4.0.0.r7.gabcdef-2", "2026.08+git.r9.gfedcba-1"),),
+        None,
+    )
+
+
+def test_collect_omarchy_availability_rejects_package_row_without_arrow() -> None:
+    # Given: the obsolete package row shape without checkupdates' literal arrow.
+    outcome = CommandSucceeded(b"omarchy 4.0.0-1 4.0.1-1\n", b"")
+
+    # When: Omarchy availability is collected.
+    result = _collect(outcome)
+
+    # Then: unproven whitespace-only syntax cannot create an update item.
+    assert result.status is SourceStatus.INVALID
+    assert result.items == ()
 
 
 def test_collect_omarchy_availability_marks_development_checkout_non_watchable() -> (
@@ -132,7 +161,7 @@ def test_collect_omarchy_availability_marks_development_checkout_non_watchable()
 def test_collect_omarchy_availability_normalizes_both_proven_row_types() -> None:
     # Given: one checkout row and one omarchy-dev package row.
     outcome = CommandSucceeded(
-        b"omarchy-dev-checkout 1 new commit on origin/main\nomarchy-dev 4.0.0-1 4.0.1-1\n",
+        b"omarchy-dev-checkout 1 new commit on origin/main\nomarchy-dev 4.0.0-1 -> 4.0.1-1\n",
         b"",
     )
 
@@ -179,7 +208,7 @@ def test_collect_omarchy_availability_reports_typed_runner_failures(
 
 def test_collect_omarchy_availability_rejects_malformed_row() -> None:
     # Given: an output row with an unproven fourth field.
-    outcome = CommandSucceeded(b"omarchy 4.0.0-1 4.0.1-1 unexpected\n", b"")
+    outcome = CommandSucceeded(b"omarchy 4.0.0-1 -> 4.0.1-1 unexpected\n", b"")
 
     # When: Omarchy availability is collected.
     result = _collect(outcome)
@@ -192,7 +221,7 @@ def test_collect_omarchy_availability_rejects_malformed_row() -> None:
 def test_collect_omarchy_availability_rejects_duplicate_package_row() -> None:
     # Given: the same package appears twice in command output.
     outcome = CommandSucceeded(
-        b"omarchy 4.0.0-1 4.0.1-1\nomarchy 4.0.0-1 4.0.1-1\n",
+        b"omarchy 4.0.0-1 -> 4.0.1-1\nomarchy 4.0.0-1 -> 4.0.1-1\n",
         b"",
     )
 
@@ -201,6 +230,42 @@ def test_collect_omarchy_availability_rejects_duplicate_package_row() -> None:
 
     # Then: it fails closed rather than silently merging duplicate state.
     assert result.status is SourceStatus.INVALID
+    assert result.items == ()
+
+
+def test_collect_omarchy_availability_rejects_successful_empty_output() -> None:
+    # Given: a nominal success with no update rows.
+    outcome = CommandSucceeded(b"", b"")
+
+    # When: Omarchy availability is collected.
+    result = _collect(outcome)
+
+    # Then: missing evidence cannot become a healthy empty result.
+    assert result.status is SourceStatus.INVALID
+    assert result.items == ()
+
+
+def test_collect_omarchy_availability_rejects_healthy_stdout_with_stderr() -> None:
+    # Given: the healthy stdout is accompanied by unexpected stderr evidence.
+    outcome = CommandExited(1, b"Omarchy is up to date\n", b"warning\n")
+
+    # When: Omarchy availability is collected.
+    result = _collect(outcome)
+
+    # Then: the exact healthy contract is not satisfied.
+    assert result.status is SourceStatus.ERROR
+    assert result.items == ()
+
+
+def test_collect_omarchy_availability_rejects_healthy_stdout_with_extra_text() -> None:
+    # Given: an exit-one stdout that extends the exact healthy message.
+    outcome = CommandExited(1, b"Omarchy is up to date\nextra\n", b"")
+
+    # When: Omarchy availability is collected.
+    result = _collect(outcome)
+
+    # Then: a prefix match cannot be mistaken for fresh empty evidence.
+    assert result.status is SourceStatus.ERROR
     assert result.items == ()
 
 
