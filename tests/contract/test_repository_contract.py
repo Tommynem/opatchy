@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import tempfile
 from typing import Final
 import unittest
 
@@ -32,6 +33,15 @@ PROHIBITED_ASSURANCE_PHRASES: Final = (
 
 
 class RepositoryContractTests(unittest.TestCase):
+    def assert_manifest_identity(self, manifest_path: Path) -> None:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        schema_version = manifest["schemaVersion"]
+        self.assertIs(type(schema_version), int)
+        self.assertEqual(schema_version, 1)
+        self.assertEqual(manifest["id"], PLUGIN_ID)
+        self.assertEqual(manifest["name"], "Opatchy")
+        self.assertEqual(manifest["version"], VERSION)
+
     def test_repository_foundation_exists_when_checkout_is_inspected(self) -> None:
         missing_files = [
             path for path in REQUIRED_FILES if not (REPOSITORY_ROOT / path).is_file()
@@ -71,11 +81,27 @@ class RepositoryContractTests(unittest.TestCase):
         manifest_path = REPOSITORY_ROOT / "manifest.json"
 
         if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schemaVersion"], 1)
-            self.assertEqual(manifest["id"], PLUGIN_ID)
-            self.assertEqual(manifest["name"], "Opatchy")
-            self.assertEqual(manifest["version"], VERSION)
+            self.assert_manifest_identity(manifest_path)
+
+    def test_manifest_identity_rejects_boolean_schema_when_manifest_is_present(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            manifest_path = Path(temporary_directory) / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": True,
+                        "id": PLUGIN_ID,
+                        "name": "Opatchy",
+                        "version": VERSION,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(AssertionError):
+                self.assert_manifest_identity(manifest_path)
 
 
 if __name__ == "__main__":
