@@ -1,0 +1,82 @@
+[project]
+name = "opatchy"
+version = "0.1.0"
+description = "Read-mostly update and security-intelligence plugin for Omarchy"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.36.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.1",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "all"
+pythonVersion = "3.11"
+pythonPlatform = "All"
+include = ["."]
+exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist", "tests/contract"]
+reportMissingParameterType = "error"
+reportPrivateUsage = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnusedCallResult = "warning"
+reportUnusedVariable = "error"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",
+    "CPY001",
+    "D203",
+    "D213",
+    "FBT001",
+    "FBT002",
+    "FIX002",
+    "ISC001",
+    "TD002",
+    "TD003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D", "INP001", "PLR2004", "S101", "SLF001"]
+"tests/contract/*.py" = ["E501", "I001", "PT009", "PT027"]
+"tests/tooling/test_validation_exit_status.py" = ["S603"]
+"tests/tooling/test_validation_gates.py" = ["FLY002", "S603"]
+"tests/tooling/test_validation_cleanup.py" = ["FLY002", "S603"]
+"tests/tooling/test_qml_offscreen_capability.py" = ["S603"]
+"tests/fixtures/factories.py" = ["S603"]
+"helper/opatchy.py" = ["INP001"]
+"scripts/**/*.py" = ["INP001", "T201"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["helper/opatchy_helper"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
