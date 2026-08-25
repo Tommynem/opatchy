@@ -87,7 +87,9 @@ def test_collect_flatpak_reconstructs_native_app_and_runtime_refs_per_scope() ->
     )
     assert user.records[0].candidate_ref == "app/com.example.App/x86_64/stable"
     assert user.records[0].candidate_origin == "flathub"
+    assert user.records[0].item.watchable is True
     assert user.records[1].item.candidate is None
+    assert user.records[1].item.watchable is True
     assert (
         system.records[0].item.item_id
         == "flatpak:system:app/com.example.App/x86_64/stable"

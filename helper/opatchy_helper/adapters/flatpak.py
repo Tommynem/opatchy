@@ -264,7 +264,7 @@ def _records(
                 row.installed,
                 None,
                 WatchMode.OFF,
-                False,
+                True,
                 Provenance.LIVE,
             ),
         )
