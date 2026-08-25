@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.tomge.opatchy",
+  "name": "Opatchy",
+  "version": "0.1.0",
+  "author": "Tomge",
+  "license": "MIT",
+  "description": "Read-mostly update and security intelligence for Omarchy.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Opatchy",
+    "description": "Update and security intelligence status.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 21600,
+      "notifyPermanent": true,
+      "notifySecurity": true,
+      "securityMinimumSeverity": "high",
+      "enableCisaKev": true,
+      "lastSelectedTab": "Security"
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 900,
+        "max": 86400,
+        "step": 900,
+        "defaultValue": 21600
+      },
+      {
+        "key": "notifyPermanent",
+        "type": "boolean",
+        "label": "Notify for permanent watches",
+        "defaultValue": true
+      },
+      {
+        "key": "notifySecurity",
+        "type": "boolean",
+        "label": "Notify for security findings",
+        "defaultValue": true
+      },
+      {
+        "key": "securityMinimumSeverity",
+        "type": "enum",
+        "label": "Minimum security severity",
+        "options": [
+          "high",
+          "critical"
+        ],
+        "defaultValue": "high"
+      },
+      {
+        "key": "enableCisaKev",
+        "type": "boolean",
+        "label": "Include CISA KEV priority",
+        "defaultValue": true
+      },
+      {
+        "key": "lastSelectedTab",
+        "type": "enum",
+        "label": "Last selected tab",
+        "options": [
+          "Security",
+          "Omarchy",
+          "System",
+          "AUR",
+          "Flatpak",
+          "mise"
+        ],
+        "defaultValue": "Security"
+      }
+    ]
+  }
+}
