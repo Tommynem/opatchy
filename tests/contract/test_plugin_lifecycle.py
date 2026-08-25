@@ -13,6 +13,7 @@ PLUGIN_ID: Final = "io.github.tomge.opatchy"
 REQUIRED_PRODUCT_FILES: Final = (
     "manifest.json",
     "Service.qml",
+    "LifecycleState.qml",
     "BarWidget.qml",
     "Panel.qml",
 )
@@ -141,6 +142,7 @@ class PluginLifecycleContractTests(unittest.TestCase):
     def test_qml_facades_use_one_injected_service_and_visible_unavailable_state(self) -> None:
         self.require_product_files()
         service_source = (REPOSITORY_ROOT / "Service.qml").read_text(encoding="utf-8")
+        lifecycle_source = (REPOSITORY_ROOT / "LifecycleState.qml").read_text(encoding="utf-8")
         widget_source = (REPOSITORY_ROOT / "BarWidget.qml").read_text(encoding="utf-8")
         panel_source = (REPOSITORY_ROOT / "Panel.qml").read_text(encoding="utf-8")
 
@@ -149,11 +151,14 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.assertIn("manifest.__sourceDir", service_source)
         self.assertNotIn("Timer {", service_source)
         self.assertNotIn("Process {", service_source)
+        self.assertIn("QtObject {", lifecycle_source)
+        self.assertIn('typeof shell.serviceFor === "function"', lifecycle_source)
+        self.assertIn("Service unavailable", lifecycle_source)
         self.assertIn("BarWidget {", widget_source)
-        self.assertIn("shell.serviceFor(manifest.id)", widget_source)
-        self.assertIn("shell.serviceFor(manifest.id)", panel_source)
-        self.assertIn("Service unavailable", widget_source)
-        self.assertIn("Service unavailable", panel_source)
+        self.assertIn("LifecycleState {", widget_source)
+        self.assertIn("LifecycleState {", panel_source)
+        self.assertIn("lifecycleState.service", widget_source)
+        self.assertIn("lifecycleState.service", panel_source)
         self.assertNotIn("Qt.createComponent", widget_source + panel_source)
         self.assertNotIn("Process {", widget_source + panel_source)
         self.assertNotIn("Timer {", widget_source + panel_source)

@@ -12,10 +12,16 @@ BarWidget {
   readonly property string sourceDir: manifest && typeof manifest.__sourceDir === "string"
     ? manifest.__sourceDir
     : ""
-  readonly property var service: shell && manifest ? shell.serviceFor(manifest.id) : null
-  readonly property bool serviceAvailable: service !== null
-  readonly property string statusText: serviceAvailable ? "Opatchy" : "Service unavailable"
+  readonly property var service: lifecycleState.service
+  readonly property bool serviceAvailable: lifecycleState.serviceAvailable
+  readonly property string statusText: lifecycleState.statusText
   readonly property var panel: panelLoader.item
+
+  LifecycleState {
+    id: lifecycleState
+    shell: root.shell
+    manifest: root.manifest
+  }
 
   function injectPanel() {
     if (!panel) return

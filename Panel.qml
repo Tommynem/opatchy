@@ -10,9 +10,15 @@ Panel {
   property var manifest: null
   property var anchorItem: null
   property var hostWidget: null
-  readonly property var service: shell && manifest ? shell.serviceFor(manifest.id) : null
-  readonly property bool serviceAvailable: service !== null
-  readonly property string statusText: serviceAvailable ? "Opatchy" : "Service unavailable"
+  readonly property var service: lifecycleState.service
+  readonly property bool serviceAvailable: lifecycleState.serviceAvailable
+  readonly property string statusText: lifecycleState.statusText
+
+  LifecycleState {
+    id: lifecycleState
+    shell: root.shell
+    manifest: root.manifest
+  }
 
   KeyboardPanel {
     id: panel
