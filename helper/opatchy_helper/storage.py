@@ -11,7 +11,7 @@ from typing import BinaryIO, Final, Protocol, TypeAlias, final
 from .json_value import decode_json
 from .models import InventoryResponse, ItemSource, ProtocolError, SnapshotResponse
 from .protocol import decode_response, encode_response
-from .storage_state import decode_state, encode_state, prune_ledger
+from .storage_state import decode_state, encode_state, prune_ledger, validate_state
 from .storage_types import (
     FeedName,
     LedgerEntry,
@@ -92,13 +92,14 @@ class Storage:
             return self._load_state_locked()
 
     def save_state(self, state: PersistentState) -> None:
+        validate_state(state)
         with self._state_lock():
-            _ = self._load_state_locked()
+            _ = self._load_state_locked(persist_pruning=False)
             self._write_state_locked(state)
 
     def update_state(self, mutation: StateMutation) -> StateLoad:
         with self._state_lock():
-            loaded = self._load_state_locked()
+            loaded = self._load_state_locked(persist_pruning=False)
             updated = mutation(loaded.state)
             self._write_state_locked(updated)
             return StateLoad(updated, loaded.warning)
@@ -168,14 +169,14 @@ class Storage:
             finally:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
-    def _load_state_locked(self) -> StateLoad:
+    def _load_state_locked(self, *, persist_pruning: bool = True) -> StateLoad:
         if not self._state_path.exists():
             return StateLoad(PersistentState.empty(), None)
         raw = self._state_path.read_bytes()
         try:
             decoded = decode_state(raw)
             pruned = prune_ledger(decoded, self._clock())
-            if pruned != decoded:
+            if persist_pruning and pruned != decoded:
                 self._write_state_locked(pruned)
             return StateLoad(pruned, None)
         except ProtocolError, StateCorruptError:

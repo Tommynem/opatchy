@@ -25,6 +25,7 @@ from opatchy_helper.models import (
     NotificationFingerprint,
     NotificationStatus,
     Provenance,
+    SourceName,
     WatchMode,
 )
 from opatchy_helper.protocol import encode_response
@@ -39,6 +40,7 @@ from opatchy_helper.storage import (
     StorageWarning,
     WatchRecord,
 )
+from opatchy_helper.storage_types import SourceMetadata, StateCorruptError
 
 NOW: Final = datetime(2026, 8, 25, 12, tzinfo=timezone.utc)
 
@@ -105,6 +107,36 @@ def inventory() -> InventoryResponse:
         NOW,
         GenerationId("generation-inventory"),
         InventoryPayload(ItemSource.ARCH, 1, (item,)),
+    )
+
+
+def duplicate_states() -> tuple[PersistentState, ...]:
+    duplicate_ledger = (
+        LedgerEntry(
+            NotificationFingerprint("notice"), NotificationStatus.DELIVERED, NOW
+        ),
+        LedgerEntry(
+            NotificationFingerprint("notice"), NotificationStatus.SUPPRESSED, NOW
+        ),
+    )
+    duplicate_sources = (
+        SourceMetadata(SourceName.ARCH, NOW, None),
+        SourceMetadata(SourceName.ARCH, None, NOW),
+    )
+    return (
+        PersistentState((watch(), watch()), (), ()),
+        PersistentState((), duplicate_ledger, ()),
+        PersistentState((), (), duplicate_sources),
+    )
+
+
+def unpruned_state_bytes() -> bytes:
+    entries = ",".join(
+        f'{{"fingerprint":"notice-{index}","recordedAt":"2026-08-24T12:00:00.000000Z","status":"delivered"}}'
+        for index in range(5_001)
+    )
+    return (
+        f'{{"ledger":[{entries}],"schemaVersion":1,"sources":[],"watches":[]}}'.encode()
     )
 
 
@@ -192,6 +224,72 @@ def test_atomic_state_failure_preserves_last_good_bytes(
         failing.save_state(PersistentState((watch(),), (), ()))
 
     assert healthy.state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("invalid_state", duplicate_states())
+def test_duplicate_caller_state_is_rejected_before_empty_target_write(
+    storage: Storage, invalid_state: PersistentState
+) -> None:
+    with pytest.raises(StateCorruptError):
+        storage.save_state(invalid_state)
+
+    assert not storage.state_path.exists()
+
+
+@pytest.mark.parametrize("invalid_state", duplicate_states())
+def test_duplicate_caller_save_preserves_last_good_state(
+    storage: Storage, invalid_state: PersistentState
+) -> None:
+    storage.save_state(PersistentState.empty())
+    before = storage.state_path.read_bytes()
+
+    with pytest.raises(StateCorruptError):
+        storage.save_state(invalid_state)
+
+    assert storage.state_path.read_bytes() == before
+    assert storage.load_state().warning is None
+
+
+@pytest.mark.parametrize("invalid_state", duplicate_states())
+def test_duplicate_update_cannot_replace_last_good_state(
+    storage: Storage, invalid_state: PersistentState
+) -> None:
+    storage.save_state(PersistentState.empty())
+    before = storage.state_path.read_bytes()
+
+    with pytest.raises(StateCorruptError):
+        _ = storage.update_state(lambda _: invalid_state)
+
+    assert storage.state_path.read_bytes() == before
+    assert storage.load_state().warning is None
+
+
+@pytest.mark.parametrize("invalid_state", duplicate_states())
+def test_duplicate_update_preserves_unpruned_last_good_bytes(
+    storage: Storage, invalid_state: PersistentState
+) -> None:
+    before = unpruned_state_bytes()
+    storage.state_path.parent.mkdir(parents=True)
+    _ = storage.state_path.write_bytes(before)
+
+    with pytest.raises(StateCorruptError):
+        _ = storage.update_state(lambda _: invalid_state)
+
+    assert storage.state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("invalid_state", duplicate_states())
+def test_duplicate_save_preserves_unpruned_last_good_bytes(
+    storage: Storage, invalid_state: PersistentState
+) -> None:
+    before = unpruned_state_bytes()
+    storage.state_path.parent.mkdir(parents=True)
+    _ = storage.state_path.write_bytes(before)
+
+    with pytest.raises(StateCorruptError):
+        storage.save_state(invalid_state)
+
+    assert storage.state_path.read_bytes() == before
 
 
 def test_v0_state_migrates_deterministically_to_v1(storage: Storage) -> None:

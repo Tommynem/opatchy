@@ -26,6 +26,7 @@ MAX_INACTIVE_LEDGER_AGE: Final = timedelta(days=180)
 
 
 def encode_state(state: PersistentState, now: datetime) -> bytes:
+    validate_state(state)
     normalized = prune_ledger(state, now)
     value: JsonObject = {
         "schemaVersion": STATE_SCHEMA_VERSION,
@@ -55,6 +56,20 @@ def decode_state(raw: bytes) -> PersistentState:
     if version != STATE_SCHEMA_VERSION:
         _corrupt("state.schemaVersion is unsupported")
     return _parse_v1(document)
+
+
+def validate_state(state: PersistentState) -> None:
+    _unique(
+        (str(watch.item_id) for watch in state.watches), "state has duplicate watches"
+    )
+    _unique(
+        (str(entry.fingerprint) for entry in state.ledger),
+        "state has duplicate ledger entries",
+    )
+    _unique(
+        (str(source.source) for source in state.sources),
+        "state has duplicate source metadata",
+    )
 
 
 def prune_ledger(state: PersistentState, now: datetime) -> PersistentState:
