@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum, unique
-from typing import Final
 
+from opatchy_helper.adapters.omarchy import OMARCHY_DUPLICATE_FILTER
 from opatchy_helper.models import (
     ItemId,
     ItemSource,
@@ -22,8 +22,6 @@ from opatchy_helper.runner_types import (
     CommandSucceeded,
     CommandTimedOut,
 )
-
-OMARCHY_PACKAGE_NAMES: Final[frozenset[str]] = frozenset({"omarchy", "omarchy-dev"})
 
 
 @unique
@@ -202,7 +200,7 @@ def _join_official_updates(
     for update in updates:
         if update.name not in inventory_by_name:
             return ArchDegraded(ArchFailure.MISSING_NATIVE_PACKAGE, update.name)
-        if update.name not in OMARCHY_PACKAGE_NAMES:
+        if update.name not in OMARCHY_DUPLICATE_FILTER:
             items.append(
                 NormalizedItem(
                     ItemId(f"arch:{update.name}"),
