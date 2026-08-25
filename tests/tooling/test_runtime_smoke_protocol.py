@@ -9,7 +9,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 def write_runtime_helper(repository: TemporaryRepository, source: str) -> None:
     helper_directory = repository.path("helper")
-    helper_directory.mkdir()
+    helper_directory.mkdir(exist_ok=True)
     (repository.root / ".venv").symlink_to(
         REPOSITORY_ROOT / ".venv",
         target_is_directory=True,

@@ -27,7 +27,7 @@ def write_fake_runner(path: Path, label: str) -> None:
 
 def prepare_qml_test(repository_root: Path) -> tuple[Path, Path]:
     qml_directory = repository_root / "tests/qml"
-    qml_directory.mkdir()
+    qml_directory.mkdir(exist_ok=True)
     _ = (qml_directory / "tst_fixture.qml").write_text(
         "\n".join(
             (
@@ -55,7 +55,7 @@ def prepare_qml_test(repository_root: Path) -> tuple[Path, Path]:
 def test_offscreen_qml_gate_fails_when_its_required_runner_is_unavailable() -> None:
     with temporary_repository(REPOSITORY_ROOT) as repository:
         qml_directory = repository.path("tests/qml")
-        qml_directory.mkdir()
+        qml_directory.mkdir(exist_ok=True)
         _ = (qml_directory / "Fixture.qml").write_text("Item {}\n")
         fake_bin = repository.path("fake-bin")
         fake_bin.mkdir()

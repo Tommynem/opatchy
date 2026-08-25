@@ -24,7 +24,7 @@ def decode_json(text: str) -> JsonValue:
             ),
             0,
         )
-    except (json.JSONDecodeError, RecursionError):
+    except json.JSONDecodeError, RecursionError:
         _fail(ErrorCode.MALFORMED_JSON, "input is not valid JSON")
 
 

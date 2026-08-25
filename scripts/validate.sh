@@ -2,10 +2,19 @@
 set -euo pipefail
 
 readonly repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly virtual_environment="${repository_root}/.venv"
 temporary_root=""
 state_root=""
 cache_root=""
+hidden_virtual_environment=""
 declare -a child_process_groups=()
+
+restore_virtual_environment() {
+    if [[ -n "${hidden_virtual_environment}" ]] && [[ -e "${hidden_virtual_environment}" ]]; then
+        mv "${hidden_virtual_environment}" "${virtual_environment}"
+        hidden_virtual_environment=""
+    fi
+}
 
 cleanup() {
     local status="$?"
@@ -14,6 +23,7 @@ cleanup() {
     for process_group in "${child_process_groups[@]}"; do
         kill -TERM -- "-${process_group}" 2>/dev/null || true
     done
+    restore_virtual_environment
     if [[ -n "${temporary_root}" ]]; then
         rm -rf "${temporary_root}"
     fi
@@ -77,7 +87,12 @@ run_manifest_validation() {
     fi
 
     require_command omarchy
+    if [[ -e "${virtual_environment}" ]]; then
+        hidden_virtual_environment="${temporary_root}/.venv"
+        mv "${virtual_environment}" "${hidden_virtual_environment}"
+    fi
     run_gate manifest omarchy plugin validate .
+    restore_virtual_environment
 }
 
 trap cleanup EXIT

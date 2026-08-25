@@ -22,7 +22,9 @@ REQUIRED_PRODUCT_FILES: Final = (
 class PluginLifecycleContractTests(unittest.TestCase):
     def require_product_files(self) -> None:
         missing_files = [
-            name for name in REQUIRED_PRODUCT_FILES if not (REPOSITORY_ROOT / name).is_file()
+            name
+            for name in REQUIRED_PRODUCT_FILES
+            if not (REPOSITORY_ROOT / name).is_file()
         ]
         self.assertEqual(missing_files, [])
 
@@ -72,7 +74,9 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.assertEqual(schema["refreshIntervalSec"]["type"], "integer")
         self.assertEqual(schema["refreshIntervalSec"]["min"], 900)
         self.assertEqual(schema["refreshIntervalSec"]["max"], 86400)
-        self.assertEqual(schema["securityMinimumSeverity"]["options"], ["high", "critical"])
+        self.assertEqual(
+            schema["securityMinimumSeverity"]["options"], ["high", "critical"]
+        )
         self.assertEqual(
             schema["lastSelectedTab"]["options"],
             ["Security", "Omarchy", "System", "AUR", "Flatpak", "mise"],
@@ -86,7 +90,10 @@ class PluginLifecycleContractTests(unittest.TestCase):
         for entry_point in unsafe_entry_points:
             with self.subTest(entry_point=entry_point):
                 manifest = base_manifest | {
-                    "entryPoints": {"service": entry_point, "barWidget": "BarWidget.qml"}
+                    "entryPoints": {
+                        "service": entry_point,
+                        "barWidget": "BarWidget.qml",
+                    }
                 }
                 self.assertFalse(self.is_safe_manifest(manifest))
 
@@ -103,16 +110,36 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.require_product_files()
         with tempfile.TemporaryDirectory() as temporary_directory:
             fixture_root = Path(temporary_directory) / "plugin"
-            shutil.copytree(REPOSITORY_ROOT, fixture_root, ignore=shutil.ignore_patterns(".git"))
+            shutil.copytree(
+                REPOSITORY_ROOT, fixture_root, ignore=shutil.ignore_patterns(".git")
+            )
 
             cases = (
-                ("traversal", {"entryPoints": {"service": "../Service.qml", "barWidget": "BarWidget.qml"}}),
-                ("absolute", {"entryPoints": {"service": "/tmp/Service.qml", "barWidget": "BarWidget.qml"}}),
+                (
+                    "traversal",
+                    {
+                        "entryPoints": {
+                            "service": "../Service.qml",
+                            "barWidget": "BarWidget.qml",
+                        }
+                    },
+                ),
+                (
+                    "absolute",
+                    {
+                        "entryPoints": {
+                            "service": "/tmp/Service.qml",
+                            "barWidget": "BarWidget.qml",
+                        }
+                    },
+                ),
                 ("schema", {"schemaVersion": 2}),
                 ("boolean-schema", {"schemaVersion": True}),
                 ("reserved-id", {"id": "omarchy.opatchy"}),
             )
-            original = json.loads((fixture_root / "manifest.json").read_text(encoding="utf-8"))
+            original = json.loads(
+                (fixture_root / "manifest.json").read_text(encoding="utf-8")
+            )
 
             for name, changes in cases:
                 with self.subTest(name=name):
@@ -126,9 +153,13 @@ class PluginLifecycleContractTests(unittest.TestCase):
                         text=True,
                         capture_output=True,
                     )
-                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertNotEqual(
+                        result.returncode, 0, result.stdout + result.stderr
+                    )
 
-            (fixture_root / "manifest.json").write_text(json.dumps(original), encoding="utf-8")
+            (fixture_root / "manifest.json").write_text(
+                json.dumps(original), encoding="utf-8"
+            )
             (fixture_root / "linked.qml").symlink_to(fixture_root / "Service.qml")
             result = subprocess.run(
                 ["omarchy", "plugin", "validate", "."],
@@ -139,10 +170,14 @@ class PluginLifecycleContractTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_qml_facades_use_one_injected_service_and_visible_unavailable_state(self) -> None:
+    def test_qml_facades_use_one_injected_service_and_visible_unavailable_state(
+        self,
+    ) -> None:
         self.require_product_files()
         service_source = (REPOSITORY_ROOT / "Service.qml").read_text(encoding="utf-8")
-        lifecycle_source = (REPOSITORY_ROOT / "LifecycleState.qml").read_text(encoding="utf-8")
+        lifecycle_source = (REPOSITORY_ROOT / "LifecycleState.qml").read_text(
+            encoding="utf-8"
+        )
         widget_source = (REPOSITORY_ROOT / "BarWidget.qml").read_text(encoding="utf-8")
         panel_source = (REPOSITORY_ROOT / "Panel.qml").read_text(encoding="utf-8")
 
@@ -166,7 +201,10 @@ class PluginLifecycleContractTests(unittest.TestCase):
     def is_safe_manifest(self, manifest: dict[str, object] | list[object]) -> bool:
         if not isinstance(manifest, dict):
             return False
-        if type(manifest.get("schemaVersion")) is not int or manifest["schemaVersion"] != 1:
+        if (
+            type(manifest.get("schemaVersion")) is not int
+            or manifest["schemaVersion"] != 1
+        ):
             return False
         plugin_id = manifest.get("id")
         if not isinstance(plugin_id, str) or plugin_id.startswith("omarchy."):

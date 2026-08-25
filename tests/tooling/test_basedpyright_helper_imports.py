@@ -8,12 +8,12 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def write_helper_package(repository: TemporaryRepository) -> None:
-    package_directory = repository.path("helper/opatchy_helper")
-    package_directory.mkdir(parents=True)
+    package_directory = repository.path("helper/typecheck_fixture_package")
+    package_directory.mkdir(parents=True, exist_ok=True)
     _ = (package_directory / "__init__.py").write_text("")
     _ = (package_directory / "cli.py").write_text("def main() -> int:\n    return 2\n")
-    _ = repository.path("helper/opatchy.py").write_text(
-        "from opatchy_helper.cli import main\n\nraise SystemExit(main())\n"
+    _ = repository.path("helper/typecheck_fixture_entrypoint.py").write_text(
+        "from typecheck_fixture_package.cli import main\n\nraise SystemExit(main())\n"
     )
 
 
