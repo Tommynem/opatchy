@@ -53,6 +53,30 @@ def test_inventory_reads_valid_cache_and_adds_missing_permanent_id(
     )
 
 
+def test_inventory_places_missing_permanent_watch_on_first_page(tmp_path: Path) -> None:
+    # Given: more alphabetically earlier cached rows than the first page can hold.
+    store = storage(tmp_path)
+    write_inventory(
+        store,
+        ItemSource.ARCH,
+        *(item(f"arch:a{index:03}", ItemSource.ARCH, f"a{index:03}") for index in range(101)),
+    )
+    store.save_state(
+        PersistentState(
+            (WatchRecord(ItemId("arch:zmissing"), WatchMode.PERMANENT, None, None, False),), (), ()
+        )
+    )
+
+    # When: the bounded first empty-query page is requested.
+    result = cli_operations.inventory_response(
+        store, InventoryCommand(ItemSource.ARCH, "", 100, 0)
+    )
+
+    # Then: the durable missing watch precedes all unwatched rows before slicing.
+    assert result.payload.total == 102
+    assert result.payload.items[0].item_id == ItemId("arch:zmissing")
+
+
 def test_snapshot_uses_only_validated_cached_response_or_reports_unavailable(
     tmp_path: Path,
 ) -> None:
