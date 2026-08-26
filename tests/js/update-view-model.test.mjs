@@ -130,6 +130,33 @@ test("builds only eligible fixed footer actions, including independently scoped 
   assert.equal(model.footerActions(snapshot([], {}), "AUR", { canOpenOmarchyUpdate: true })[0].enabled, false);
 });
 
+test("disables footer actions when the visible source is not current even if another source has an update", () => {
+  const model = loadModel();
+  const document = snapshot([
+    item("arch:system", "arch", "system"),
+    item("aur:package", "aur", "package"),
+    item("flatpak:user:app", "flatpak", "user app"),
+  ], {
+    payload: {
+      sources: [source("omarchy"), source("arch", { status: "stale", provenance: "cache" }), source("aur"), source("flatpak", {
+        scopes: [
+          { scope: "user", status: "stale", provenance: "cache" },
+          { scope: "system", status: "ok", provenance: "live" },
+        ],
+      }), source("mise")],
+      items: [
+        item("arch:system", "arch", "system"),
+        item("aur:package", "aur", "package"),
+        item("flatpak:user:app", "flatpak", "user app"),
+      ],
+    },
+  });
+
+  assert.equal(model.footerActions(document, "System", { canOpenOmarchyUpdate: true })[0].enabled, false);
+  assert.equal(model.footerActions(document, "AUR", { canOpenOmarchyUpdate: true })[0].enabled, true);
+  assert.equal(model.footerActions(document, "Flatpak", { canOpenFlatpakUserUpdate: true, canOpenFlatpakSystemUpdate: true })[0].enabled, false);
+});
+
 test("renders source content through plain text and dispatches only fixed service actions", () => {
   const source = readFileSync(resolve(repositoryRoot, "qml/components/SourceContent.qml"), "utf8");
   const row = readFileSync(resolve(repositoryRoot, "qml/components/UpdateRow.qml"), "utf8");

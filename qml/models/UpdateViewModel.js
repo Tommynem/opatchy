@@ -47,15 +47,16 @@ function acceptInventory(current, received, source, generationId) {
 
 function footerActions(snapshot, tab, capabilities) {
   var items = snapshot && snapshot.payload && Array.isArray(snapshot.payload.items) ? snapshot.payload.items : []
+  var sources = snapshot && snapshot.payload && Array.isArray(snapshot.payload.sources) ? snapshot.payload.sources : []
   if (tab === "Flatpak") {
     return [
-      action("flatpak-user", "Open update terminal (user)", hasFlatpakUpdate(items, "user") && capabilities.canOpenFlatpakUserUpdate === true),
-      action("flatpak-system", "Open update terminal (system)", hasFlatpakUpdate(items, "system") && capabilities.canOpenFlatpakSystemUpdate === true),
+      action("flatpak-user", "Open update terminal (user)", hasFlatpakUpdate(items, sources, "user") && capabilities.canOpenFlatpakUserUpdate === true),
+      action("flatpak-system", "Open update terminal (system)", hasFlatpakUpdate(items, sources, "system") && capabilities.canOpenFlatpakSystemUpdate === true),
     ]
   }
   var source = sourceForTab(tab)
   if (source === null) return []
-  return [action("omarchy", "Open update terminal", hasUpdate(items, source) && capabilities.canOpenOmarchyUpdate === true)]
+  return [action("omarchy", "Open update terminal", hasUpdate(items, sources, source) && capabilities.canOpenOmarchyUpdate === true)]
 }
 
 function sourceForTab(tab) {
@@ -117,8 +118,13 @@ function validItem(value) {
     && typeof value.watchMode === "string"
 }
 function validCount(value) { return typeof value === "number" && isFinite(value) && value >= 0 && Math.floor(value) === value }
-function hasUpdate(items, source) { return items.some(function(item) { return validItem(item) && item.source === source && typeof item.candidate === "string" && item.candidate.length > 0 }) }
-function hasFlatpakUpdate(items, scope) { return items.some(function(item) { return validItem(item) && item.source === "flatpak" && item.id.indexOf("flatpak:" + scope + ":") === 0 && typeof item.candidate === "string" && item.candidate.length > 0 }) }
+function hasUpdate(items, sources, source) { return currentSource(sources, source) && items.some(function(item) { return validItem(item) && item.source === source && typeof item.candidate === "string" && item.candidate.length > 0 }) }
+function hasFlatpakUpdate(items, sources, scope) { return currentSource(sources, "flatpak") && currentScope(sources, scope) && items.some(function(item) { return validItem(item) && item.source === "flatpak" && item.id.indexOf("flatpak:" + scope + ":") === 0 && typeof item.candidate === "string" && item.candidate.length > 0 }) }
+function currentSource(sources, source) { return sources.some(function(value) { return value && value.source === source && value.status === "ok" && value.provenance === "live" }) }
+function currentScope(sources, scope) {
+  var flatpak = sources.filter(function(value) { return value && value.source === "flatpak" })[0]
+  return flatpak && Array.isArray(flatpak.scopes) && flatpak.scopes.some(function(value) { return value && value.scope === scope && value.status === "ok" && value.provenance === "live" })
+}
 function action(kind, text, enabled) { return { kind: kind, text: text, enabled: enabled } }
 function countText(value) { return value === 0 ? "No cached packages match this query." : value === 1 ? "1 cached result." : value + " cached results." }
 function healthText(status) {
