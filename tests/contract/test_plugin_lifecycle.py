@@ -184,6 +184,12 @@ class PluginLifecycleContractTests(unittest.TestCase):
         )
         widget_source = (REPOSITORY_ROOT / "BarWidget.qml").read_text(encoding="utf-8")
         panel_source = (REPOSITORY_ROOT / "Panel.qml").read_text(encoding="utf-8")
+        shell_state_source = (
+            REPOSITORY_ROOT / "qml/components/PanelShellState.qml"
+        ).read_text(encoding="utf-8")
+        shell_layout_source = (
+            REPOSITORY_ROOT / "qml/components/PanelShellLayout.qml"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("Item {", service_source)
         self.assertIn("property var manifest: null", service_source)
@@ -201,6 +207,20 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.assertIn("LifecycleState {", panel_source)
         self.assertIn("lifecycleState.service", widget_source)
         self.assertIn("lifecycleState.service", panel_source)
+        self.assertIn("panel.settings = root.settings", widget_source)
+        self.assertIn("panel.injectedService = root.service", widget_source)
+        self.assertIn("panelState.loaderRequested", widget_source)
+        self.assertIn("Loader.Error", widget_source)
+        self.assertIn("function closeForPopoutSwitch()", widget_source)
+        self.assertIn("function toggle()", widget_source)
+        self.assertIn("KeyboardPanel", panel_source)
+        self.assertIn("PanelKeyCatcher", panel_source)
+        self.assertIn("function close()", panel_source)
+        self.assertIn("controller.hide()", panel_source)
+        self.assertIn("panelState.returnFocus", panel_source)
+        self.assertNotIn("IpcHandler", widget_source + panel_source)
+        self.assertNotIn("Process {", shell_state_source + shell_layout_source)
+        self.assertNotIn("Timer {", shell_state_source + shell_layout_source)
         self.assertNotIn("Qt.createComponent", widget_source + panel_source)
         self.assertNotIn("Process {", widget_source + panel_source)
         self.assertNotIn("Timer {", widget_source + panel_source)
