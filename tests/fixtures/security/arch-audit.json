@@ -1,0 +1,20 @@
+[
+  {
+    "name": "ASA-2026-0001",
+    "packages": ["linux", "aur-collision"],
+    "status": "Vulnerable",
+    "type": "security",
+    "severity": "High",
+    "fixed": "1:6.12.3-1",
+    "issues": ["CVE-2026-0001"]
+  },
+  {
+    "name": "ASA-2026-0002",
+    "packages": ["openssl"],
+    "status": "Testing",
+    "type": "security",
+    "severity": "Critical",
+    "fixed": null,
+    "issues": ["CVE-2026-0002", "not-a-cve"]
+  }
+]

@@ -62,6 +62,11 @@ class ForeignInventory:
 
 
 @dataclass(frozen=True, slots=True)
+class OfficialInventory:
+    records: tuple[PackageRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class VersionComparison:
     sign: int
 
@@ -75,22 +80,18 @@ class ArchDegraded:
 type CommandRunner = Callable[[CommandName, tuple[str, ...]], CommandResult]
 type ArchUpdatesResult = ArchUpdates | ArchDegraded
 type ForeignInventoryResult = ForeignInventory | ArchDegraded
+type OfficialInventoryResult = OfficialInventory | ArchDegraded
 type VersionComparisonResult = VersionComparison | ArchDegraded
 
 
 def collect_official_updates(command_runner: CommandRunner) -> ArchUpdatesResult:
     """Collect native Arch updates joined to the official local inventory."""
-    inventory_result = command_runner(CommandName.PACMAN_NATIVE, ())
+    inventory_result = collect_official_inventory(command_runner)
     match inventory_result:
-        case CommandSucceeded(stdout=stdout):
-            inventory = _parse_package_rows(stdout)
-        case _:
-            return _command_degraded(inventory_result, "pacman -Qn")
-    match inventory:
+        case OfficialInventory(records=records):
+            inventory_by_name = {record.name: record for record in records}
         case ArchDegraded():
-            return inventory
-        case tuple():
-            inventory_by_name = {record.name: record for record in inventory}
+            return inventory_result
 
     updates_result = command_runner(CommandName.CHECKUPDATES, ())
     match updates_result:
@@ -107,6 +108,23 @@ def collect_official_updates(command_runner: CommandRunner) -> ArchUpdatesResult
             return ArchDegraded(ArchFailure.MALFORMED_ROW, "empty checkupdates output")
         case tuple():
             return _join_official_updates(inventory_by_name, updates)
+
+
+def collect_official_inventory(
+    command_runner: CommandRunner,
+) -> OfficialInventoryResult:
+    """Collect fresh official pacman inventory without invoking checkupdates."""
+    result = command_runner(CommandName.PACMAN_NATIVE, ())
+    match result:
+        case CommandSucceeded(stdout=stdout):
+            records = _parse_package_rows(stdout)
+        case _:
+            return _command_degraded(result, "pacman -Qn")
+    match records:
+        case ArchDegraded():
+            return records
+        case tuple():
+            return OfficialInventory(records)
 
 
 def collect_foreign_inventory(command_runner: CommandRunner) -> ForeignInventoryResult:

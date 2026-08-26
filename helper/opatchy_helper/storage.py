@@ -8,9 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Final, Protocol, TypeAlias, final
 
-from .json_value import decode_json
 from .models import InventoryResponse, ItemSource, ProtocolError, SnapshotResponse
 from .protocol import decode_response, encode_response
+from .runner_types import EndpointCache
+from .storage_feeds import (
+    read_last_good_feed,
+    semantic_feed_path,
+    transport_endpoint_cache,
+)
 from .storage_state import decode_state, encode_state, prune_ledger, validate_state
 from .storage_types import (
     FeedName,
@@ -106,20 +111,29 @@ class Storage:
 
     def write_feed_cache(self, feed: FeedName, body: bytes) -> None:
         with self._state_lock():
-            self._atomic_write(self._feed_path(feed), body)
+            self._atomic_write(semantic_feed_path(self._cache_path, feed), body)
+
+    def write_last_good_feed(
+        self, feed: FeedName, body: bytes, validator: Callable[[bytes], bool]
+    ) -> bool:
+        """Replace semantic feed data only after its complete schema validator accepts it."""
+        if not validator(body):
+            return False
+        with self._state_lock():
+            self._atomic_write(semantic_feed_path(self._cache_path, feed), body)
+        return True
 
     def read_feed_cache(self, feed: FeedName) -> bytes | None:
         with self._state_lock():
-            path = self._feed_path(feed)
-            if not path.exists():
-                return None
-            raw = path.read_bytes()
-            try:
-                _ = decode_json(raw.decode("utf-8"))
-            except UnicodeDecodeError, ProtocolError:
-                self._discard(path)
-                return None
-            return raw
+            return read_last_good_feed(self._cache_path, feed, self._discard)
+
+    def read_last_good_feed(self, feed: FeedName) -> bytes | None:
+        """Read schema-validated last-good feed bytes without consulting transport cache."""
+        return self.read_feed_cache(feed)
+
+    def endpoint_cache(self, feed: FeedName) -> EndpointCache:
+        """Return dedicated transport paths that cannot overwrite semantic feed data."""
+        return transport_endpoint_cache(self._cache_path, feed)
 
     def save_snapshot(self, response: SnapshotResponse) -> None:
         with self._state_lock():
@@ -201,9 +215,6 @@ class Storage:
             case _:
                 self._discard(path)
                 return None
-
-    def _feed_path(self, feed: FeedName) -> Path:
-        return self._cache_path / f"{feed.value}.json"
 
     def _inventory_path(self, source: ItemSource) -> Path:
         return self._cache_path / f"inventory-{source.value}.json"

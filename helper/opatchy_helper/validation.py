@@ -9,6 +9,7 @@ from .models import (
     InventoryResponse,
     ItemId,
     ItemSource,
+    KevStatus,
     NormalizedItem,
     ProtocolError,
     ProtocolVersion,
@@ -126,10 +127,12 @@ def _validate_group(
     group: SecurityFindingGroup, source_by_item_id: dict[ItemId, ItemSource]
 ) -> None:
     source = source_by_item_id.get(group.item_id)
-    if source is None or not _is_arch_source(source):
+    if source is not None and not _is_arch_source(source):
         _fail(
             ErrorCode.INVALID_ENVELOPE, "security findings must attach to an Arch item"
         )
+    if not str(group.item_id).startswith("arch:"):
+        _fail(ErrorCode.INVALID_ENVELOPE, "security findings must use an Arch item ID")
     if not group.findings:
         _fail(ErrorCode.INVALID_ENVELOPE, "security finding groups cannot be empty")
     for finding in group.findings:
@@ -140,6 +143,22 @@ def _validate_group(
             )
         _validate_identifier(str(finding.finding_id), "finding.id")
         _validate_identifier(finding.advisory_id, "finding.advisoryId")
+        _validate_identifier(finding.advisory_type, "finding.type")
+        if finding.installed_version is not None:
+            _validate_identifier(finding.installed_version, "finding.installedVersion")
+        match finding.kev_status:
+            case KevStatus.LISTED | KevStatus.NOT_LISTED:
+                if finding.kev_provenance is None:
+                    _fail(
+                        ErrorCode.INVALID_ENVELOPE,
+                        "current KEV status requires KEV provenance",
+                    )
+            case KevStatus.UNAVAILABLE:
+                if finding.kev_provenance is not None:
+                    _fail(
+                        ErrorCode.INVALID_ENVELOPE,
+                        "unavailable KEV cannot claim provenance",
+                    )
 
 
 def _is_arch_source(source: ItemSource) -> bool:

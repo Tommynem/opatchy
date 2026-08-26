@@ -33,6 +33,8 @@ class ScanState(StrEnum):
 @unique
 class SourceName(StrEnum):
     SECURITY = "security"
+    ARCH_SECURITY = "arch-security"
+    CISA_KEV = "cisa-kev"
     OMARCHY = "omarchy"
     ARCH = "arch"
     AUR = "aur"
@@ -63,6 +65,22 @@ class Severity(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+@unique
+class ArchStatus(StrEnum):
+    UNKNOWN = "Unknown"
+    VULNERABLE = "Vulnerable"
+    TESTING = "Testing"
+    FIXED = "Fixed"
+    NOT_AFFECTED = "Not affected"
+
+
+@unique
+class KevStatus(StrEnum):
+    LISTED = "listed"
+    NOT_LISTED = "not_listed"
+    UNAVAILABLE = "unavailable"
 
 
 @unique
@@ -164,6 +182,11 @@ class SecurityFinding:
     fixed_version: str | None
     known_exploited: bool
     provenance: Provenance
+    status: ArchStatus = ArchStatus.UNKNOWN
+    advisory_type: str = "unknown"
+    installed_version: str | None = None
+    kev_status: KevStatus = KevStatus.UNAVAILABLE
+    kev_provenance: Provenance | None = None
 
 
 @dataclass(frozen=True, slots=True)

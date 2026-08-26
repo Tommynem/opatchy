@@ -179,10 +179,15 @@ def _finding(finding: SecurityFinding) -> JsonObject:
         "cveIds": list(finding.cve_ids),
         "fixedVersion": finding.fixed_version,
         "id": str(finding.finding_id),
+        "installedVersion": finding.installed_version,
         "itemId": str(finding.item_id),
+        "kevProvenance": finding.kev_provenance,
+        "kevStatus": finding.kev_status,
         "knownExploited": finding.known_exploited,
         "provenance": finding.provenance,
         "severity": finding.severity,
+        "status": finding.status,
+        "type": finding.advisory_type,
     }
 
 

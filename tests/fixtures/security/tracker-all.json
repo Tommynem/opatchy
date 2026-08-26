@@ -1,0 +1,38 @@
+[
+  {
+    "name": "ASA-2026-0001",
+    "packages": ["linux", "aur-collision"],
+    "status": "Vulnerable",
+    "severity": "High",
+    "type": "security",
+    "affected": "linux",
+    "fixed": "1:6.12.3-1",
+    "ticket": null,
+    "issues": ["CVE-2026-0001"],
+    "advisories": ["ASA-2026-0001"]
+  },
+  {
+    "name": "ASA-2026-0002",
+    "packages": ["openssl"],
+    "status": "Testing",
+    "severity": "Critical",
+    "type": "security",
+    "affected": "openssl",
+    "fixed": null,
+    "ticket": null,
+    "issues": ["CVE-2026-0002", "not-a-cve"],
+    "advisories": ["ASA-2026-0002"]
+  },
+  {
+    "name": "ASA-2026-0003",
+    "packages": ["ignored"],
+    "status": "Not affected",
+    "severity": "Low",
+    "type": "security",
+    "affected": "ignored",
+    "fixed": null,
+    "ticket": null,
+    "issues": [],
+    "advisories": []
+  }
+]

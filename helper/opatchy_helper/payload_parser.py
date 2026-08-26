@@ -1,11 +1,13 @@
 from .json_value import JsonValue
 from .models import (
+    ArchStatus,
     ErrorCode,
     ErrorInfo,
     FindingId,
     InventoryPayload,
     ItemId,
     ItemSource,
+    KevStatus,
     NormalizedItem,
     NotificationFingerprint,
     NotificationOutcome,
@@ -196,8 +198,13 @@ def _finding(value: JsonValue, path: str) -> SecurityFinding:
                 "cveIds",
                 "severity",
                 "fixedVersion",
+                "installedVersion",
                 "knownExploited",
+                "kevStatus",
+                "kevProvenance",
                 "provenance",
+                "status",
+                "type",
             )
         ),
     )
@@ -214,6 +221,19 @@ def _finding(value: JsonValue, path: str) -> SecurityFinding:
         optional_string(reader_value.field("fixedVersion"), f"{path}.fixedVersion"),
         boolean(reader_value.field("knownExploited"), f"{path}.knownExploited"),
         enum(Provenance, reader_value.field("provenance"), f"{path}.provenance"),
+        enum(ArchStatus, reader_value.field("status"), f"{path}.status"),
+        identifier(reader_value.field("type"), f"{path}.type"),
+        optional_string(
+            reader_value.field("installedVersion"), f"{path}.installedVersion"
+        ),
+        enum(KevStatus, reader_value.field("kevStatus"), f"{path}.kevStatus"),
+        None
+        if reader_value.field("kevProvenance") is None
+        else enum(
+            Provenance,
+            reader_value.field("kevProvenance"),
+            f"{path}.kevProvenance",
+        ),
     )
 
 
