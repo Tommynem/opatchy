@@ -96,7 +96,7 @@ function validGroups(values, items) {
 }
 
 function validGroup(value, items) {
-  if (!exactKeys(value, ["itemId", "findings"]) || typeof value.itemId !== "string" || value.itemId.indexOf("arch:") !== 0 || !Array.isArray(value.findings) || value.findings.length === 0) return false
+  if (!exactKeys(value, ["itemId", "findings"]) || !archItem(value.itemId) || !Array.isArray(value.findings) || value.findings.length === 0) return false
   var item = items.filter(function(candidate) { return candidate.id === value.itemId })[0]
   return (!item || item.source === "arch") && unique(value.findings, function(finding) { return object(finding) ? finding.id : null })
     && value.findings.every(function(finding) { return validFinding(finding, value.itemId) })
@@ -105,7 +105,7 @@ function validGroup(value, items) {
 function validFinding(value, groupItemId) {
   var keys = ["id", "itemId", "advisoryId", "cveIds", "severity", "fixedVersion", "installedVersion", "knownExploited", "kevStatus", "kevProvenance", "provenance", "status", "type"]
   return exactKeys(value, keys) && average(value.id) && value.itemId === groupItemId && value.advisoryId === value.id
-    && Array.isArray(value.cveIds) && value.cveIds.every(function(cve) { return typeof cve === "string" })
+    && Array.isArray(value.cveIds) && value.cveIds.every(cve)
     && member(SEVERITIES, value.severity) && nullableString(value.fixedVersion) && nullableString(value.installedVersion)
     && typeof value.knownExploited === "boolean" && member(KEV_STATUSES, value.kevStatus) && nullableProvenance(value.kevProvenance)
     && member(PROVENANCES, value.provenance) && member(ARCH_STATUSES, value.status) && bounded(value.type) && validKev(value)
@@ -142,6 +142,8 @@ function nullableString(value) { return value === null || typeof value === "stri
 function nullableProvenance(value) { return value === null || member(PROVENANCES, value) }
 function optionalBounded(value, key) { return !(key in value) || value[key] === null || bounded(value[key]) }
 function average(value) { return bounded(value) && /^AVG-[0-9]+$/.test(value) }
+function archItem(value) { return bounded(value) && /^arch:[A-Za-z0-9@._+-]+$/.test(value) }
+function cve(value) { return bounded(value) && /^CVE-[0-9]{4}-[0-9]{4,19}$/.test(value) }
 function bounded(value, maximum) { return typeof value === "string" && value.length > 0 && value.length <= (maximum || 128) }
 function timestamp(value) { return typeof value === "string" && value.length >= 21 && value.charAt(10) === "T" && value.charAt(value.length - 1) === "Z" && !isNaN(Date.parse(value)) }
 function nonnegativeInteger(value) { return typeof value === "number" && isFinite(value) && Math.floor(value) === value && value >= 0 }
