@@ -25,15 +25,12 @@ Item {
     width: parent.width
     spacing: Style.spacing.sm
 
-    Text {
+    SecurityView {
       visible: root.tab === "Security"
       width: parent.width
-      text: "Security details appear in a dedicated view."
-      textFormat: Text.PlainText
-      color: Qt.darker(root.foreground, 1.4)
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.bodySmall
-      wrapMode: Text.Wrap
+      snapshot: root.snapshot
+      foreground: root.foreground
+      fontFamily: root.fontFamily
     }
 
     Item {
