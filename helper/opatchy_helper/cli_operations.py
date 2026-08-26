@@ -140,7 +140,9 @@ def _overlay_snapshot(
         response.payload.summary,
         watched_updates=sum(item.watch_mode is not WatchMode.OFF for item in items),
     )
-    return replace(response, payload=replace(response.payload, items=items, summary=summary))
+    return replace(
+        response, payload=replace(response.payload, items=items, summary=summary)
+    )
 
 
 def _matches(item: NormalizedItem, query: str) -> bool:
@@ -152,7 +154,11 @@ def _matches(item: NormalizedItem, query: str) -> bool:
 
 
 def _item_key(item: NormalizedItem) -> tuple[str, str, str]:
-    return ("0" if item.watch_mode is not WatchMode.OFF else "1", item.label.casefold(), str(item.item_id))
+    return (
+        "0" if item.watch_mode is not WatchMode.OFF else "1",
+        item.label.casefold(),
+        str(item.item_id),
+    )
 
 
 def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
@@ -204,7 +210,9 @@ def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
         assert_never(current)
 
     updated = storage.update_state_with_inventories(_sources(), mutate).state
-    watch = next((watch for watch in updated.watches if watch.item_id == command.item_id), None)
+    watch = next(
+        (watch for watch in updated.watches if watch.item_id == command.item_id), None
+    )
     mode = WatchMode.OFF if watch is None else watch.mode
     return StarResultResponse(
         utc_now(),
