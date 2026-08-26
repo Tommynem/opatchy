@@ -571,10 +571,18 @@ class ProtocolBranchTests(unittest.TestCase):
             ),
             (("unknown",), ErrorCode.CLI_USAGE),
         )
+        unavailable = ErrorResponse(
+            FIXED_TIME,
+            GenerationId("generation-cli-error"),
+            ErrorInfo(ErrorCode.STATE_UNAVAILABLE, "validated state is unavailable"),
+        )
 
         for arguments, code in commands:
             with self.subTest(arguments=arguments):
                 stdout = CapturedStandardOutput()
-                with patch.object(sys, "stdout", stdout):
+                with (
+                    patch.object(cli, "execute", return_value=unavailable),
+                    patch.object(sys, "stdout", stdout),
+                ):
                     self.assertEqual(cli.main(arguments), cli.EXIT_ERROR)
                 self.assertIn(f'"code":"{code}"'.encode(), stdout.buffer.getvalue())
