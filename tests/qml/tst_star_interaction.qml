@@ -1,5 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15 as Controls
 import QtQuick.Window 2.15
 import QtTest 1.3
 import "../../qml/components"
