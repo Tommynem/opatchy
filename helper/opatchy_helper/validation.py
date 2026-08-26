@@ -1,3 +1,4 @@
+import re
 from typing import Final, NoReturn, assert_never
 
 from .models import (
@@ -13,6 +14,7 @@ from .models import (
     NormalizedItem,
     ProtocolError,
     ProtocolVersion,
+    Provenance,
     Response,
     SecurityFindingGroup,
     SnapshotPayload,
@@ -24,6 +26,7 @@ from .models import (
 
 MAX_IDENTIFIER_LENGTH: Final = 128
 MAX_ERROR_MESSAGE_LENGTH: Final = 512
+_AVG: Final = re.compile(r"AVG-[0-9]+")
 
 
 def validate_response(response: Response) -> None:
@@ -135,30 +138,27 @@ def _validate_group(
         _fail(ErrorCode.INVALID_ENVELOPE, "security findings must use an Arch item ID")
     if not group.findings:
         _fail(ErrorCode.INVALID_ENVELOPE, "security finding groups cannot be empty")
+    finding_ids = {finding.finding_id for finding in group.findings}
+    if len(finding_ids) != len(group.findings):
+        _fail(ErrorCode.DUPLICATE_FINDING_ID, "security finding IDs must be unique")
     for finding in group.findings:
         if finding.item_id != group.item_id:
             _fail(
                 ErrorCode.INVALID_ENVELOPE,
                 "security finding ID does not match its group",
             )
-        _validate_identifier(str(finding.finding_id), "finding.id")
-        _validate_identifier(finding.advisory_id, "finding.advisoryId")
+        _validate_avg_identifier(str(finding.finding_id), "finding.id")
+        _validate_avg_identifier(finding.advisory_id, "finding.advisoryId")
+        if finding.finding_id != finding.advisory_id:
+            _fail(
+                ErrorCode.INVALID_ENVELOPE, "finding.id must equal finding.advisoryId"
+            )
         _validate_identifier(finding.advisory_type, "finding.type")
         if finding.installed_version is not None:
             _validate_identifier(finding.installed_version, "finding.installedVersion")
-        match finding.kev_status:
-            case KevStatus.LISTED | KevStatus.NOT_LISTED:
-                if finding.kev_provenance is None:
-                    _fail(
-                        ErrorCode.INVALID_ENVELOPE,
-                        "current KEV status requires KEV provenance",
-                    )
-            case KevStatus.UNAVAILABLE:
-                if finding.kev_provenance is not None:
-                    _fail(
-                        ErrorCode.INVALID_ENVELOPE,
-                        "unavailable KEV cannot claim provenance",
-                    )
+        _validate_kev(
+            finding.known_exploited, finding.kev_status, finding.kev_provenance
+        )
 
 
 def _is_arch_source(source: ItemSource) -> bool:
@@ -174,6 +174,32 @@ def _validate_identifier(
 ) -> None:
     if not value or len(value) > maximum_length:
         _fail(ErrorCode.INVALID_TYPE, f"{path} must be a bounded non-empty string")
+
+
+def _validate_avg_identifier(value: str, path: str) -> None:
+    _validate_identifier(value, path)
+    if _AVG.fullmatch(value) is None:
+        _fail(ErrorCode.INVALID_TYPE, f"{path} must be an AVG advisory identifier")
+
+
+def _validate_kev(
+    known_exploited: bool, status: KevStatus, provenance: Provenance | None
+) -> None:
+    match status:
+        case KevStatus.LISTED:
+            if not known_exploited or provenance is None:
+                _fail(ErrorCode.INVALID_ENVELOPE, "listed KEV finding is inconsistent")
+        case KevStatus.NOT_LISTED:
+            if known_exploited or provenance is None:
+                _fail(
+                    ErrorCode.INVALID_ENVELOPE, "not-listed KEV finding is inconsistent"
+                )
+        case KevStatus.UNAVAILABLE:
+            if known_exploited or provenance is not None:
+                _fail(
+                    ErrorCode.INVALID_ENVELOPE,
+                    "unavailable KEV finding is inconsistent",
+                )
 
 
 def _validate_nonnegative(value: int, path: str) -> None:

@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -22,6 +23,7 @@ from opatchy_helper.models import (
     InventoryResponse,
     ItemId,
     ItemSource,
+    KevStatus,
     NormalizedItem,
     ProtocolVersion,
     Provenance,
@@ -87,9 +89,9 @@ def snapshot_response() -> SnapshotResponse:
     )
     item = sample_item()
     finding = SecurityFinding(
-        FindingId("ASA-2026-001"),
+        FindingId("AVG-20260001"),
         item.item_id,
-        "ASA-2026-001",
+        "AVG-20260001",
         ("CVE-2026-0001",),
         Severity.HIGH,
         "1.1",
@@ -231,9 +233,9 @@ class ProtocolCliTests(unittest.TestCase):
         response = snapshot_response()
         dangling_item_id = ItemId("aur:unrelated")
         dangling_finding = SecurityFinding(
-            FindingId("ASA-2026-002"),
+            FindingId("AVG-20260002"),
             dangling_item_id,
-            "ASA-2026-002",
+            "AVG-20260002",
             (),
             Severity.HIGH,
             "1.1",
@@ -282,6 +284,51 @@ class ProtocolCliTests(unittest.TestCase):
         for raw, code in cases:
             with self.subTest(code=code):
                 self.assert_decode_error(raw, code)
+
+    def test_security_findings_require_avg_ids_unique_group_ids_and_consistent_kev(
+        self,
+    ) -> None:
+        response = snapshot_response()
+        group = response.payload.findings[0]
+        finding = group.findings[0]
+        invalid = (
+            (
+                replace(finding, finding_id=FindingId("ASA-2026-001")),
+                ErrorCode.INVALID_TYPE,
+            ),
+            (
+                replace(
+                    finding,
+                    known_exploited=False,
+                    kev_status=KevStatus.LISTED,
+                    kev_provenance=Provenance.LIVE,
+                ),
+                ErrorCode.INVALID_ENVELOPE,
+            ),
+            (
+                replace(
+                    finding,
+                    known_exploited=True,
+                    kev_status=KevStatus.NOT_LISTED,
+                    kev_provenance=Provenance.CACHE,
+                ),
+                ErrorCode.INVALID_ENVELOPE,
+            ),
+            (
+                replace(finding, known_exploited=True),
+                ErrorCode.INVALID_ENVELOPE,
+            ),
+        )
+        for invalid_finding, code in invalid:
+            with self.subTest(code=code):
+                invalid_group = SecurityFindingGroup(group.item_id, (invalid_finding,))
+                payload = replace(response.payload, findings=(invalid_group,))
+                self.assert_encode_error(replace(response, payload=payload), code)
+        duplicate_group = SecurityFindingGroup(group.item_id, (finding, finding))
+        duplicate_payload = replace(response.payload, findings=(duplicate_group,))
+        self.assert_encode_error(
+            replace(response, payload=duplicate_payload), ErrorCode.DUPLICATE_FINDING_ID
+        )
 
     def test_non_utf8_and_five_mib_inputs_are_rejected_before_decoding(self) -> None:
         self.assert_decode_error(b"\xff", ErrorCode.INVALID_UTF8)

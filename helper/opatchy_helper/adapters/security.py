@@ -10,6 +10,7 @@ from ..runner_types import (
     CommandSucceeded,
     EndpointDownloaded,
     EndpointName,
+    EndpointNotModified,
     EndpointResult,
 )
 from ..storage_types import FeedName
@@ -46,6 +47,10 @@ class SemanticFeedStore(Protocol):
     def write_last_good_feed(
         self, feed: FeedName, body: bytes, validator: Callable[[bytes], bool], /
     ) -> bool: ...
+
+    def read_last_good_feed(
+        self, feed: FeedName, validator: Callable[[bytes], bool], /
+    ) -> bytes | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +138,18 @@ def _fallback(
                             FeedName.ARCH_SECURITY, body, _is_tracker
                         )
                     return _CurrentArch(parsed, Provenance.FALLBACK)
+        case EndpointNotModified():
+            if store is None:
+                return ArchFeedInvalid("Arch Security Tracker has no semantic cache")
+            cached = store.read_last_good_feed(FeedName.ARCH_SECURITY, _is_tracker)
+            if cached is None:
+                return ArchFeedInvalid("Arch Security Tracker has no semantic cache")
+            parsed = parse_tracker(cached)
+            match parsed:
+                case ArchFeedInvalid():
+                    return parsed
+                case tuple():
+                    return _CurrentArch(parsed, Provenance.CACHE)
         case _:
             return ArchFeedInvalid("Arch Security Tracker is unavailable")
     assert_never(result)
@@ -149,6 +166,18 @@ def _kev(
                 case KevCatalog():
                     if store is not None:
                         _ = store.write_last_good_feed(FeedName.CISA_KEV, body, _is_kev)
+                    return parsed
+                case KevFeedInvalid():
+                    return KevUnavailable("CISA KEV evidence is invalid")
+        case EndpointNotModified():
+            if store is None:
+                return KevUnavailable("CISA KEV has no semantic cache")
+            cached = store.read_last_good_feed(FeedName.CISA_KEV, _is_kev)
+            if cached is None:
+                return KevUnavailable("CISA KEV has no semantic cache")
+            parsed = parse_kev(cached, Provenance.CACHE)
+            match parsed:
+                case KevCatalog():
                     return parsed
                 case KevFeedInvalid():
                     return KevUnavailable("CISA KEV evidence is invalid")

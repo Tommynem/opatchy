@@ -182,7 +182,7 @@ def test_paths_modes_and_defaults_are_private_under_permissive_umask(
     monkeypatch.setattr(os, "umask", _permissive_umask)
 
     storage.save_state(PersistentState.empty())
-    storage.write_feed_cache(FeedName.ARCH_SECURITY, b"feed")
+    assert storage.write_last_good_feed(FeedName.ARCH_SECURITY, b"feed", lambda _: True)
 
     assert storage.state_path == state_root / "opatchy" / "state.json"
     assert storage.cache_path == cache_root / "opatchy"
@@ -337,19 +337,19 @@ def test_corrupt_cache_is_discarded(storage: Storage) -> None:
     cache_file.parent.mkdir(parents=True)
     _ = cache_file.write_bytes(b"{torn")
 
-    assert storage.read_feed_cache(FeedName.ARCH_SECURITY) is None
+    assert storage.read_last_good_feed(FeedName.ARCH_SECURITY, lambda _: False) is None
     assert not cache_file.exists()
 
 
 def test_valid_feed_cache_reads_and_state_update_is_locked(storage: Storage) -> None:
-    assert storage.read_feed_cache(FeedName.CISA_KEV) is None
-    storage.write_feed_cache(FeedName.ARCH_SECURITY, b"{}")
+    assert storage.read_last_good_feed(FeedName.CISA_KEV, lambda _: True) is None
+    assert storage.write_last_good_feed(FeedName.ARCH_SECURITY, b"{}", lambda _: True)
 
     updated = storage.update_state(
         lambda state: replace(state, watches=(watch("arch:updated"),))
     )
 
-    assert storage.read_feed_cache(FeedName.ARCH_SECURITY) == b"{}"
+    assert storage.read_last_good_feed(FeedName.ARCH_SECURITY, lambda _: True) == b"{}"
     assert updated.state.watches == (watch("arch:updated"),)
 
 

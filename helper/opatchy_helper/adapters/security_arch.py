@@ -1,6 +1,8 @@
 """Strict parsers for the documented arch-audit and Tracker feed shapes."""
 
+import re
 from dataclasses import dataclass
+from typing import Final
 
 from ..json_value import JsonValue, decode_json
 from ..models import ArchStatus, ProtocolError, Severity
@@ -10,6 +12,7 @@ _MAX_PACKAGES = 128
 _MAX_ISSUES = 128
 _MAX_IDENTIFIER = 60
 _MAX_STRING = 128
+_AVG: Final = re.compile(r"AVG-[0-9]+")
 _PRIMARY_REQUIRED = frozenset(
     {"name", "packages", "status", "type", "severity", "fixed", "issues"}
 )
@@ -92,7 +95,7 @@ def _parse_record(
 ) -> ArchAdvisory | ArchFeedInvalid:
     if type(value) is not dict or not required.issubset(value):
         return ArchFeedInvalid("feed record omits a required field")
-    name = _identifier(value["name"])
+    name = _avg_identifier(value["name"])
     packages = _identifiers(value["packages"], _MAX_PACKAGES)
     advisory_type = _string(value["type"])
     issues = _identifiers(value["issues"], _MAX_ISSUES)
@@ -116,7 +119,7 @@ def _parse_record(
 def _tracker_fields(value: dict[str, JsonValue]) -> bool:
     affected = _identifier(value["affected"])
     ticket = _optional_string(value["ticket"])
-    advisories = _identifiers(value["advisories"], _MAX_ISSUES)
+    advisories = _avg_identifiers(value["advisories"], _MAX_ISSUES)
     match ticket:
         case ArchFeedInvalid():
             return False
@@ -125,15 +128,32 @@ def _tracker_fields(value: dict[str, JsonValue]) -> bool:
 
 
 def _string(value: JsonValue) -> str | None:
-    if type(value) is str and 0 < len(value) <= _MAX_STRING:
+    if (
+        type(value) is str
+        and 0 < len(value) <= _MAX_STRING
+        and value.isprintable()
+        and "://" not in value
+    ):
         return value
     return None
 
 
 def _identifier(value: JsonValue) -> str | None:
-    if type(value) is str and 0 < len(value) <= _MAX_IDENTIFIER:
+    if (
+        type(value) is str
+        and 0 < len(value) <= _MAX_IDENTIFIER
+        and value.isprintable()
+        and "://" not in value
+    ):
         return value
     return None
+
+
+def _avg_identifier(value: JsonValue) -> str | None:
+    identifier = _identifier(value)
+    if identifier is None or _AVG.fullmatch(identifier) is None:
+        return None
+    return identifier
 
 
 def _optional_string(value: JsonValue) -> str | None | ArchFeedInvalid:
@@ -149,7 +169,17 @@ def _identifiers(value: JsonValue, maximum: int) -> tuple[str, ...] | None:
     values = tuple(_identifier(entry) for entry in value)
     if any(entry is None for entry in values):
         return None
-    return tuple(entry for entry in values if entry is not None)
+    identifiers = tuple(entry for entry in values if entry is not None)
+    return identifiers if len(set(identifiers)) == len(identifiers) else None
+
+
+def _avg_identifiers(value: JsonValue, maximum: int) -> tuple[str, ...] | None:
+    identifiers = _identifiers(value, maximum)
+    if identifiers is None or any(
+        _AVG.fullmatch(identifier) is None for identifier in identifiers
+    ):
+        return None
+    return identifiers
 
 
 def _status(value: JsonValue, tracker: bool) -> ArchStatus | None:

@@ -104,9 +104,9 @@ def valid_sources() -> tuple[SourceHealth, ...]:
 def valid_snapshot() -> SnapshotResponse:
     item = valid_item()
     finding = SecurityFinding(
-        FindingId("ASA-2026-001"),
+        FindingId("AVG-20260001"),
         item.item_id,
-        "ASA-2026-001",
+        "AVG-20260001",
         ("CVE-2026-0001",),
         Severity.HIGH,
         "1.1",

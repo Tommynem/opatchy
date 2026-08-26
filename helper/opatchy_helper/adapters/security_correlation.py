@@ -90,13 +90,15 @@ def enrich_kev(
 ) -> tuple[SecurityFindingGroup, ...]:
     """Join only validated CVE identifiers while retaining Arch findings on KEV failure."""
     match kev:
-        case KevCatalog(cve_ids=cve_ids):
+        case KevCatalog(cve_ids=cve_ids, provenance=provenance):
             return tuple(
                 SecurityFindingGroup(
                     group.item_id,
                     tuple(
                         _with_kev(
-                            finding, any(cve in cve_ids for cve in finding.cve_ids)
+                            finding,
+                            any(cve in cve_ids for cve in finding.cve_ids),
+                            provenance,
                         )
                         for finding in group.findings
                     ),
@@ -123,7 +125,7 @@ def _finding(
             case ArchDegraded(failure=failure, detail=detail):
                 return ArchCorrelationFailure(failure, detail)
     return SecurityFinding(
-        FindingId(f"{advisory.name}:{record.name}"),
+        FindingId(advisory.name),
         ItemId(f"arch:{record.name}"),
         advisory.name,
         _cve_ids(advisory.issues),
@@ -156,10 +158,12 @@ def _cve_ids(issues: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(retained)
 
 
-def _with_kev(finding: SecurityFinding, listed: bool) -> SecurityFinding:
+def _with_kev(
+    finding: SecurityFinding, listed: bool, provenance: Provenance
+) -> SecurityFinding:
     return replace(
         finding,
         known_exploited=listed,
         kev_status=KevStatus.LISTED if listed else KevStatus.NOT_LISTED,
-        kev_provenance=Provenance.LIVE,
+        kev_provenance=provenance,
     )

@@ -1,6 +1,6 @@
 [
   {
-    "name": "ASA-2026-0001",
+    "name": "AVG-20260001",
     "packages": ["linux", "aur-collision"],
     "status": "Vulnerable",
     "type": "security",
@@ -9,7 +9,7 @@
     "issues": ["CVE-2026-0001"]
   },
   {
-    "name": "ASA-2026-0002",
+    "name": "AVG-20260002",
     "packages": ["openssl"],
     "status": "Testing",
     "type": "security",

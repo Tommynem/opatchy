@@ -8,7 +8,10 @@ from .storage_types import FeedName
 
 
 def read_last_good_feed(
-    cache_path: Path, feed: FeedName, discard: Callable[[Path], None]
+    cache_path: Path,
+    feed: FeedName,
+    validator: Callable[[bytes], bool],
+    discard: Callable[[Path], None],
 ) -> bytes | None:
     path = semantic_feed_path(cache_path, feed)
     if not path.exists():
@@ -17,6 +20,9 @@ def read_last_good_feed(
     try:
         _ = decode_json(raw.decode("utf-8"))
     except UnicodeDecodeError, ProtocolError:
+        discard(path)
+        return None
+    if not validator(raw):
         discard(path)
         return None
     return raw

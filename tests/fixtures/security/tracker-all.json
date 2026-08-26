@@ -1,6 +1,6 @@
 [
   {
-    "name": "ASA-2026-0001",
+    "name": "AVG-20260001",
     "packages": ["linux", "aur-collision"],
     "status": "Vulnerable",
     "severity": "High",
@@ -9,10 +9,10 @@
     "fixed": "1:6.12.3-1",
     "ticket": null,
     "issues": ["CVE-2026-0001"],
-    "advisories": ["ASA-2026-0001"]
+    "advisories": ["AVG-20260001"]
   },
   {
-    "name": "ASA-2026-0002",
+    "name": "AVG-20260002",
     "packages": ["openssl"],
     "status": "Testing",
     "severity": "Critical",
@@ -21,10 +21,10 @@
     "fixed": null,
     "ticket": null,
     "issues": ["CVE-2026-0002", "not-a-cve"],
-    "advisories": ["ASA-2026-0002"]
+    "advisories": ["AVG-20260002"]
   },
   {
-    "name": "ASA-2026-0003",
+    "name": "AVG-20260003",
     "packages": ["ignored"],
     "status": "Not affected",
     "severity": "Low",

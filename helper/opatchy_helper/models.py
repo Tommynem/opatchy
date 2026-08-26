@@ -33,7 +33,6 @@ class ScanState(StrEnum):
 @unique
 class SourceName(StrEnum):
     SECURITY = "security"
-    ARCH_SECURITY = "arch-security"
     CISA_KEV = "cisa-kev"
     OMARCHY = "omarchy"
     ARCH = "arch"
@@ -124,6 +123,7 @@ class ErrorCode(StrEnum):
     INVALID_TIMESTAMP = "INVALID_TIMESTAMP"
     INVALID_ENVELOPE = "INVALID_ENVELOPE"
     DUPLICATE_ITEM_ID = "DUPLICATE_ITEM_ID"
+    DUPLICATE_FINDING_ID = "DUPLICATE_FINDING_ID"
     OUTPUT_TOO_LARGE = "OUTPUT_TOO_LARGE"
 
 

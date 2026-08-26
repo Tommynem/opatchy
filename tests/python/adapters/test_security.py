@@ -17,13 +17,16 @@ from opatchy_helper.adapters.security import (
     SecurityCollected,
     collect_security,
 )
-from opatchy_helper.adapters.security_kev import KevUnavailable
+from opatchy_helper.adapters.security_arch import parse_tracker
+from opatchy_helper.adapters.security_kev import KevCatalog, KevUnavailable, parse_kev
+from opatchy_helper.models import Provenance
 from opatchy_helper.runner_types import (
     CommandName,
     CommandResult,
     CommandSucceeded,
     EndpointDownloaded,
     EndpointName,
+    EndpointNotModified,
     EndpointResult,
     EndpointTimedOut,
 )
@@ -92,7 +95,9 @@ def test_primary_success_uses_fresh_inventory_without_tracker_and_enriches_kev(
     assert isinstance(result, SecurityCollected)
     assert result.groups[0].findings[0].known_exploited is True
     assert endpoint_requests == [EndpointName.CISA_KEV]
-    assert storage.read_last_good_feed(FeedName.CISA_KEV) == _fixture("cisa-kev.json")
+    assert storage.read_last_good_feed(FeedName.CISA_KEV, _valid_kev) == _fixture(
+        "cisa-kev.json"
+    )
     assert command_requests == [
         (CommandName.PACMAN_NATIVE, ()),
         (CommandName.ARCH_AUDIT, ()),
@@ -211,7 +216,7 @@ def test_transport_cache_and_semantic_last_good_cache_are_separate(
     # Then: the transport artifact cannot overwrite semantically validated last-good data.
     assert transport.body_path != storage.cache_path / "arch-security.json"
     assert accepted is False
-    assert storage.read_last_good_feed(FeedName.ARCH_SECURITY) == valid
+    assert storage.read_last_good_feed(FeedName.ARCH_SECURITY, _valid_tracker) == valid
 
 
 @pytest.mark.parametrize(
@@ -239,3 +244,63 @@ def test_kev_shape_failures_do_not_affect_arch_collection(payload: bytes) -> Non
     # Then: the Arch results remain current, with KEV unavailable rather than false.
     assert isinstance(result, SecurityCollected)
     assert isinstance(result.kev, KevUnavailable)
+
+
+def test_not_modified_reuses_only_complete_semantic_caches(tmp_path: Path) -> None:
+    # Given: fully schema-valid last-good Tracker and KEV bodies.
+    storage = Storage(
+        tmp_path / "state.json",
+        tmp_path / "cache",
+        lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        SystemAtomicOperations(),
+    )
+    assert storage.write_last_good_feed(
+        FeedName.ARCH_SECURITY, _fixture("tracker-all.json"), _valid_tracker
+    )
+    assert storage.write_last_good_feed(
+        FeedName.CISA_KEV, _fixture("cisa-kev.json"), _valid_kev
+    )
+    run, _ = _command_runner(
+        (
+            CommandSucceeded(b"linux 1:6.12.2-1\n", b""),
+            CommandSucceeded(b"{}", b""),
+            CommandSucceeded(b"-1", b""),
+        )
+    )
+    fetch, _ = _fetcher((EndpointNotModified(), EndpointNotModified()))
+
+    # When: both endpoints return a conditional 304 response.
+    result = collect_security(run, fetch, storage)
+
+    # Then: validated semantic bytes remain usable and identify their cache provenance.
+    assert isinstance(result, SecurityCollected)
+    assert result.arch_provenance is Provenance.CACHE
+    assert result.groups[0].findings[0].kev_provenance is Provenance.CACHE
+
+
+def test_semantic_cache_discards_json_that_fails_its_source_parser(
+    tmp_path: Path,
+) -> None:
+    # Given: a syntactically valid but schema-incompatible Tracker cache entry.
+    storage = Storage(
+        tmp_path / "state.json",
+        tmp_path / "cache",
+        lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        SystemAtomicOperations(),
+    )
+    assert storage.write_last_good_feed(FeedName.ARCH_SECURITY, b"{}", lambda _: True)
+
+    # When: the semantic cache is read with the complete Tracker parser predicate.
+    cached = storage.read_last_good_feed(FeedName.ARCH_SECURITY, _valid_tracker)
+
+    # Then: schema-invalid bytes are unavailable and removed rather than reused on 304.
+    assert cached is None
+    assert not (storage.cache_path / "arch-security.json").exists()
+
+
+def _valid_tracker(body: bytes) -> bool:
+    return isinstance(parse_tracker(body), tuple)
+
+
+def _valid_kev(body: bytes) -> bool:
+    return isinstance(parse_kev(body), KevCatalog)

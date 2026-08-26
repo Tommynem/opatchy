@@ -109,10 +109,6 @@ class Storage:
             self._write_state_locked(updated)
             return StateLoad(updated, loaded.warning)
 
-    def write_feed_cache(self, feed: FeedName, body: bytes) -> None:
-        with self._state_lock():
-            self._atomic_write(semantic_feed_path(self._cache_path, feed), body)
-
     def write_last_good_feed(
         self, feed: FeedName, body: bytes, validator: Callable[[bytes], bool]
     ) -> bool:
@@ -123,13 +119,12 @@ class Storage:
             self._atomic_write(semantic_feed_path(self._cache_path, feed), body)
         return True
 
-    def read_feed_cache(self, feed: FeedName) -> bytes | None:
+    def read_last_good_feed(
+        self, feed: FeedName, validator: Callable[[bytes], bool]
+    ) -> bytes | None:
+        """Read feed bytes only after their complete source validator accepts them."""
         with self._state_lock():
-            return read_last_good_feed(self._cache_path, feed, self._discard)
-
-    def read_last_good_feed(self, feed: FeedName) -> bytes | None:
-        """Read schema-validated last-good feed bytes without consulting transport cache."""
-        return self.read_feed_cache(feed)
+            return read_last_good_feed(self._cache_path, feed, validator, self._discard)
 
     def endpoint_cache(self, feed: FeedName) -> EndpointCache:
         """Return dedicated transport paths that cannot overwrite semantic feed data."""
