@@ -15,6 +15,7 @@ Item {
   property bool watchedOnly: false
   property bool notifyPermanent: true
   property bool reducedMotion: false
+  readonly property alias starState: stars
   readonly property var rows: UpdateViewModel.updateRows(snapshot, tab)
   readonly property var displayedRows: watchedOnly ? StarViewModel.watchedRows(rows).map(function(watched) {
     return rows.filter(function(row) { return row.target === watched.target })[0]
