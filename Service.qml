@@ -59,7 +59,7 @@ Item {
   readonly property bool canOpenFlatpakSystemUpdate: canOpenAction("flatpak-system")
 
   signal snapshotChanged(var snapshot)
-  signal inventoryChanged(string source, var inventory)
+  signal inventoryChanged(string source, var inventory, var operation)
   signal starResultChanged(var result)
   signal operationFailed(string message)
   signal handoffStarted(double handoffAt)
@@ -135,7 +135,7 @@ Item {
 
   function applyResponse(operation, response) {
     if (response.kind === "snapshot") snapshotChanged(response)
-    else if (response.kind === "inventory") inventoryChanged(response.payload.source, response)
+    else if (response.kind === "inventory") inventoryChanged(response.payload.source, response, operation)
     else if (response.kind === "star-result") starResultChanged(response)
   }
 

@@ -156,6 +156,15 @@ Panel {
             wrapMode: Text.Wrap
           }
 
+          SourceContent {
+            width: parent.width
+            tab: tabState.selectedTab
+            service: root.service
+            snapshot: root.service ? root.service.lastSnapshot : null
+            foreground: root.barForeground
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
+
           Text {
             width: parent.width
             visible: root.panelView.failureText !== ""

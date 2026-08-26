@@ -25,6 +25,25 @@ TestCase {
   }
 
   Component {
+    id: inventoryStateComponent
+
+    InventoryBrowseState { }
+  }
+
+  Component {
+    id: inventoryServiceComponent
+
+    QtObject {
+      property var requests: []
+
+      function requestInventory(request) {
+        requests.push(request)
+        return true
+      }
+    }
+  }
+
+  Component {
     id: fakePanelComponent
 
     QtObject {
@@ -189,5 +208,38 @@ TestCase {
       verify(layout.contentHeight <= fixture.availableHeight, fixture.edge + " height must be constrained")
       layout.destroy()
     }
+  }
+
+  function test_cached_inventory_search_is_debounced_and_keeps_current_results_when_stale() {
+    const service = inventoryServiceComponent.createObject(root)
+    const state = inventoryStateComponent.createObject(root, {
+      service: service,
+      generationId: "generation-current"
+    })
+
+    state.open("arch")
+    state.flush()
+    compare(service.requests.length, 1)
+    compare(service.requests[0].limit, 100)
+    state.setQuery("STRASSE \u041a\u043b\u044e\u0447")
+    state.flush()
+    compare(service.requests[1].query, "STRASSE \u041a\u043b\u044e\u0447")
+    state.acceptInventory("arch", {
+      generationId: "generation-current",
+      payload: { source: "arch", total: 1, items: [] }
+    }, {
+      argv: ["inventory", "--source", "arch", "--query", "STRASSE \u041a\u043b\u044e\u0447", "--limit", "100", "--offset", "0"]
+    })
+    compare(state.inventory.payload.source, "arch")
+    state.acceptInventory("arch", {
+      generationId: "generation-old",
+      payload: { source: "arch", total: 0, items: [] }
+    }, {
+      argv: ["inventory", "--source", "arch", "--query", "STRASSE \u041a\u043b\u044e\u0447", "--limit", "100", "--offset", "0"]
+    })
+    compare(state.inventory.generationId, "generation-current")
+    compare(state.statusText, "Cached inventory is stale; newer source data is required.")
+    state.destroy()
+    service.destroy()
   }
 }
