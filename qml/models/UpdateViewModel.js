@@ -30,13 +30,13 @@ function inventoryState(response, source, generationId) {
   if (!response.payload || response.payload.source !== source) {
     return { kind: "incompatible", rows: [], total: 0, summaryText: "Cached inventory is incompatible with this source." }
   }
-  if (response.generationId !== generationId) {
-    return { kind: "stale", rows: [], total: 0, summaryText: "Cached inventory is stale; newer source data is required." }
-  }
   var items = Array.isArray(response.payload.items) ? response.payload.items : []
   var total = validCount(response.payload.total) ? response.payload.total : 0
   if (total < items.length || !items.every(validItem)) {
     return { kind: "incompatible", rows: [], total: 0, summaryText: "Cached inventory is incompatible with this source." }
+  }
+  if (response.generationId !== generationId) {
+    return { kind: "stale", rows: items.map(function(item) { return row(item, "Cached inventory (last known)") }), total: total, summaryText: "Cached inventory is stale; showing last known results." }
   }
   return { kind: "ready", rows: items.map(function(item) { return row(item, "Cached inventory") }), total: total, summaryText: countText(total) }
 }

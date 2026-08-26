@@ -46,11 +46,13 @@ Item {
         width: parent.width
         spacing: Style.spacing.sm
 
-        Row {
+        BoundedControlStack {
           visible: UpdateViewModel.canBrowse(root.tab)
+          width: parent.width
           spacing: Style.spacing.sm
 
           Button {
+            width: parent.width
             text: root.browsing ? "Show updates" : "Browse packages/tools"
             tooltipText: root.browsing ? "Show actionable updates" : "Search cached packages and tools"
             foreground: root.foreground
@@ -78,8 +80,9 @@ Item {
           fontFamily: root.fontFamily
         }
 
-        Row {
+        BoundedControlStack {
           visible: root.actions.length > 0
+          width: parent.width
           spacing: Style.spacing.sm
 
           Repeater {
@@ -87,6 +90,7 @@ Item {
 
             delegate: Button {
               required property var modelData
+              width: parent.width
               text: modelData.text
               tooltipText: modelData.text
               foreground: root.foreground

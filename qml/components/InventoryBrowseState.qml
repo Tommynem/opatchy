@@ -68,7 +68,8 @@ QtObject {
     loading = false
     var view = UpdateViewModel.inventoryState(response, source, generationId)
     if (view.kind !== "ready") {
-      statusText = view.summaryText
+      var displayed = UpdateViewModel.inventoryState(inventory, source, generationId)
+      statusText = displayed.kind === "empty" ? view.summaryText : (displayed.kind === "ready" ? "" : displayed.summaryText)
       return
     }
     inventory = response

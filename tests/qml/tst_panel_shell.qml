@@ -31,6 +31,66 @@ TestCase {
   }
 
   Component {
+    id: inventoryPresentationComponent
+
+    InventoryBrowsePresentation { }
+  }
+
+  Component {
+    id: flatpakControlStackComponent
+
+    BoundedControlStack {
+      Item {
+        objectName: "flatpak-user"
+        width: parent.width
+        height: 20
+      }
+
+      Item {
+        objectName: "flatpak-system"
+        width: parent.width
+        height: 20
+      }
+    }
+  }
+
+  Component {
+    id: browseControlStackComponent
+
+    BoundedControlStack {
+      Item {
+        objectName: "browse"
+        width: parent.width
+        height: 20
+      }
+    }
+  }
+
+  Component {
+    id: paginationControlStackComponent
+
+    BoundedControlStack {
+      Item {
+        objectName: "previous"
+        width: parent.width
+        height: 20
+      }
+
+      Item {
+        objectName: "page"
+        width: parent.width
+        height: 20
+      }
+
+      Item {
+        objectName: "next"
+        width: parent.width
+        height: 20
+      }
+    }
+  }
+
+  Component {
     id: browseModeComponent
 
     BrowseModeState { }
@@ -250,9 +310,91 @@ TestCase {
       argv: ["inventory", "--source", "arch", "--query", "STRASSE \u041a\u043b\u044e\u0447", "--limit", "100", "--offset", "0"]
     })
     compare(state.inventory.generationId, "generation-current")
-    compare(state.statusText, "Cached inventory is stale; newer source data is required.")
+    compare(state.statusText, "")
     state.destroy()
     service.destroy()
+  }
+
+  function test_accepted_inventory_remains_visible_as_last_known_until_a_current_response_replaces_it() {
+    const service = inventoryServiceComponent.createObject(root)
+    const state = inventoryStateComponent.createObject(root, {
+      service: service,
+      generationId: "generation-a"
+    })
+    const presentation = inventoryPresentationComponent.createObject(root, { state: state })
+    const operation = {
+      argv: ["inventory", "--source", "arch", "--query", "", "--limit", "100", "--offset", "0"]
+    }
+    const inventory = {
+      payload: {
+        source: "arch",
+        total: 1,
+        items: [{
+          id: "arch:retained",
+          source: "arch",
+          label: "retained",
+          installed: "1.0",
+          candidate: "1.1",
+          watchable: true,
+          watchMode: "off"
+        }]
+      }
+    }
+
+    state.open("arch")
+    state.flush()
+    state.acceptInventory("arch", Object.assign({ generationId: "generation-a" }, inventory), operation)
+    compare(presentation.view.kind, "ready")
+    compare(presentation.view.rows[0].id, "arch:retained")
+
+    state.generationId = "generation-b"
+
+    compare(presentation.view.kind, "stale")
+    compare(presentation.view.rows[0].id, "arch:retained")
+    verify(presentation.view.summaryText.indexOf("last known") !== -1)
+
+    state.acceptInventory("arch", {
+      generationId: "generation-b",
+      payload: {
+        source: "arch",
+        total: 1,
+        items: [{
+          id: "arch:replacement",
+          source: "arch",
+          label: "replacement",
+          installed: "1.1",
+          candidate: "1.2",
+          watchable: true,
+          watchMode: "off"
+        }]
+      }
+    }, operation)
+
+    compare(presentation.view.kind, "ready")
+    compare(presentation.view.rows[0].id, "arch:replacement")
+    presentation.destroy()
+    state.destroy()
+    service.destroy()
+  }
+
+  function test_control_stacks_keep_flatpak_and_pagination_controls_within_narrow_and_normal_widths() {
+    const widths = [160, 520]
+
+    for (const width of widths) {
+      const stacks = [
+        browseControlStackComponent.createObject(root, { width: width }),
+        flatpakControlStackComponent.createObject(root, { width: width }),
+        paginationControlStackComponent.createObject(root, { width: width })
+      ]
+
+      for (const stack of stacks) {
+        for (const control of stack.controls) {
+          verify(control.x >= 0, control.objectName + " must start within the stack")
+          verify(control.x + control.width <= stack.width, control.objectName + " must end within the stack")
+        }
+        stack.destroy()
+      }
+    }
   }
 
   function test_browse_mode_resets_when_the_tab_identity_changes() {

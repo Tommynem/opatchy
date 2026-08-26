@@ -8,7 +8,7 @@ Item {
   property var state: null
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
-  readonly property var view: state ? UpdateViewModel.inventoryState(state.inventory, state.source, state.generationId) : ({ kind: "empty", rows: [], total: 0, summaryText: "Cached inventory is unavailable." })
+  readonly property var view: presentation.view
 
   implicitHeight: content.implicitHeight
 
@@ -43,11 +43,13 @@ Item {
       fontFamily: root.fontFamily
     }
 
-    Row {
+    BoundedControlStack {
       visible: root.view.kind === "ready" && root.view.total > 0
+      width: parent.width
       spacing: Style.spacing.sm
 
       Button {
+        width: parent.width
         text: "Previous"
         tooltipText: "Show the previous 100 cached results"
         foreground: root.foreground
@@ -60,15 +62,17 @@ Item {
       }
 
       Text {
-        anchors.verticalCenter: parent.verticalCenter
+        width: parent.width
         text: root.pageText()
         textFormat: Text.PlainText
         color: Qt.darker(root.foreground, 1.4)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
+        wrapMode: Text.Wrap
       }
 
       Button {
+        width: parent.width
         text: "Next"
         tooltipText: "Show the next 100 cached results"
         foreground: root.foreground
@@ -80,6 +84,11 @@ Item {
         onClicked: root.state.nextPage(root.view.total)
       }
     }
+  }
+
+  InventoryBrowsePresentation {
+    id: presentation
+    state: root.state
   }
 
   function pageText() {
