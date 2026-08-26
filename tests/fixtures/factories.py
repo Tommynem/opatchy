@@ -5,6 +5,24 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
+
+LOCAL_METADATA_NAMES: Final = frozenset(
+    {
+        ".codegraph",
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "htmlcov",
+    }
+)
+
+
+def isolated_copy_ignore(_: str, names: list[str]) -> set[str]:
+    return set(names).intersection(LOCAL_METADATA_NAMES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,15 +44,7 @@ def temporary_repository(source: Path) -> Generator[TemporaryRepository, None, N
         _ = shutil.copytree(
             source,
             root,
-            ignore=shutil.ignore_patterns(
-                ".git",
-                ".mypy_cache",
-                ".pytest_cache",
-                ".ruff_cache",
-                ".venv",
-                "__pycache__",
-                "htmlcov",
-            ),
+            ignore=isolated_copy_ignore,
         )
         shutil.rmtree(root / "tests" / "tooling")
         _ = subprocess.run(

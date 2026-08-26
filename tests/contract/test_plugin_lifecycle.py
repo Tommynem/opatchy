@@ -6,6 +6,8 @@ import tempfile
 from typing import Final
 import unittest
 
+from tests.fixtures.factories import isolated_copy_ignore
+
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[2]
 MANIFEST_PATH: Final = REPOSITORY_ROOT / "manifest.json"
@@ -113,7 +115,7 @@ class PluginLifecycleContractTests(unittest.TestCase):
             shutil.copytree(
                 REPOSITORY_ROOT,
                 fixture_root,
-                ignore=shutil.ignore_patterns(".git"),
+                ignore=isolated_copy_ignore,
             )
 
             cases = (
