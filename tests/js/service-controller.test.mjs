@@ -324,6 +324,8 @@ test("rejects every malformed typed snapshot field while retaining the last vali
     ["duplicate item", (document) => { document.payload.items.push({ ...document.payload.items[0] }); }],
     ["malformed finding", (document) => { document.payload.findings[0].findings[0].severity = "unknown-value"; }],
     ["malformed Arch group identity", (document) => { document.payload.findings[0].itemId = "arch:"; }],
+    ["dot-prefixed Arch group identity", (document) => { document.payload.findings[0].findings[0].itemId = document.payload.findings[0].itemId = "arch:.hidden"; }],
+    ["hyphen-prefixed Arch group identity", (document) => { document.payload.findings[0].findings[0].itemId = document.payload.findings[0].itemId = "arch:-option"; }],
     ["control-character Arch group identity", (document) => { document.payload.findings[0].itemId = "arch:bad\npkg"; }],
     ["whitespace Arch group identity", (document) => { document.payload.findings[0].itemId = "arch:bad pkg"; }],
     ["traversal Arch group identity", (document) => { document.payload.findings[0].itemId = "arch:../pkg"; }],
@@ -348,6 +350,17 @@ test("rejects every malformed typed snapshot field while retaining the last vali
 
     assert.equal(controller.state.lastSnapshot.generationId, "valid", name);
     assert.notEqual(controller.state.lastError, "", name);
+  }
+});
+
+test("accepts canonical Arch package-name punctuation in security finding groups", () => {
+  const parseResponse = loadValidator();
+
+  for (const itemId of ["arch:0ad", "arch:lib32-openssl", "arch:foo.bar", "arch:foo_bar", "arch:foo+bar", "arch:foo@bar"]) {
+    const document = snapshotDocument("package-name");
+    document.payload.findings[0].itemId = itemId;
+    document.payload.findings[0].findings[0].itemId = itemId;
+    assert.equal(parseResponse(JSON.stringify(document)).ok, true, itemId);
   }
 });
 

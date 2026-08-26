@@ -142,7 +142,7 @@ function nullableString(value) { return value === null || typeof value === "stri
 function nullableProvenance(value) { return value === null || member(PROVENANCES, value) }
 function optionalBounded(value, key) { return !(key in value) || value[key] === null || bounded(value[key]) }
 function average(value) { return bounded(value) && /^AVG-[0-9]+$/.test(value) }
-function archItem(value) { return bounded(value) && /^arch:[A-Za-z0-9@._+-]+$/.test(value) }
+function archItem(value) { return bounded(value) && /^arch:[A-Za-z0-9@_+][A-Za-z0-9@._+-]*$/.test(value) }
 function cve(value) { return bounded(value) && /^CVE-[0-9]{4}-[0-9]{4,19}$/.test(value) }
 function bounded(value, maximum) { return typeof value === "string" && value.length > 0 && value.length <= (maximum || 128) }
 function timestamp(value) { return typeof value === "string" && value.length >= 21 && value.charAt(10) === "T" && value.charAt(value.length - 1) === "Z" && !isNaN(Date.parse(value)) }

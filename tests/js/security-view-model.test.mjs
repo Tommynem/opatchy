@@ -171,12 +171,15 @@ test("uses only canonical Arch finding groups and inert bounded external text", 
   assert.equal(view.groups[0].findings[0].status.length <= 256, true);
   assert.equal(view.groups[0].findings[0].status.includes("\n"), false);
   assert.deepEqual(JSON.parse(JSON.stringify(view.groups[0].findings[0].cveIds)), ["CVE-2026-1000"]);
+  for (const itemId of ["arch:0ad", "arch:lib32-openssl", "arch:foo.bar", "arch:foo_bar", "arch:foo+bar", "arch:foo@bar"]) {
+    assert.equal(model.securityView(snapshot([group(itemId, [finding("AVG-11", { itemId })])]), Date.parse("2026-08-26T00:02:00.000Z")).kind, "findings", itemId);
+  }
 });
 
 test("rejects malformed current Arch groups and findings instead of showing clean", () => {
   const model = load(modelPath, "Todo 22 security view model must exist");
   const currentTime = Date.parse("2026-08-26T00:02:00.000Z");
-  const invalidGroups = ["aur:openssl", "arch:", "arch:bad\npkg", "arch:bad pkg", "arch:../pkg", "arch:https://example.invalid", "arch:" + "a".repeat(124)];
+  const invalidGroups = ["aur:openssl", "arch:", "arch:.hidden", "arch:-option", "arch:bad\npkg", "arch:bad pkg", "arch:../pkg", "arch:https://example.invalid", "arch:" + "a".repeat(124)];
 
   for (const itemId of invalidGroups) assert.equal(model.securityView(snapshot([group(itemId, [finding("AVG-1", { itemId })])]), currentTime).kind, "unknown", itemId);
   for (const overrides of [{ itemId: "arch:other" }, { id: "AVG-" + "1".repeat(125), advisoryId: "AVG-" + "1".repeat(125) }, { cveIds: ["CVE-2026-" + "1".repeat(20)] }]) {

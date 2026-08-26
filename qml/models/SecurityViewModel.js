@@ -141,7 +141,7 @@ function sourceFresh(source, currentTime) {
 }
 function validGroup(group) { return group && canonicalArchItem(group.itemId) && Array.isArray(group.findings) && group.findings.length > 0 }
 function validFinding(finding, groupItemId) { return finding && finding.itemId === groupItemId && canonicalAverage(finding.id) && finding.advisoryId === finding.id && Array.isArray(finding.cveIds) && finding.cveIds.every(canonicalCve) && typeof finding.severity === "string" && SEVERITIES.indexOf(finding.severity) !== -1 }
-function canonicalArchItem(value) { return typeof value === "string" && value.length <= 128 && /^arch:[A-Za-z0-9@._+-]+$/.test(value) }
+function canonicalArchItem(value) { return typeof value === "string" && value.length <= 128 && /^arch:[A-Za-z0-9@_+][A-Za-z0-9@._+-]*$/.test(value) }
 function canonicalAverage(value) { return typeof value === "string" && value.length <= 128 && /^AVG-[0-9]+$/.test(value) }
 function canonicalCve(value) { return typeof value === "string" && value.length <= 128 && /^CVE-[0-9]{4}-[0-9]{4,19}$/.test(value) }
 function presentationText(value) {
