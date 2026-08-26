@@ -23,7 +23,7 @@ Panel {
     : "Service unavailable"
   readonly property bool urgentSecurity: TabModel.hasUrgentSecurity(service ? service.lastSnapshot : null)
   readonly property var panelView: TabModel.buildPanelState(service ? service.lastSnapshot : null, {
-    "busy": service ? service.busy : false,
+    "refreshing": service ? service.refreshing : false,
     "lastAttemptAt": service ? service.lastAttemptAt : null,
     "lastSuccessAt": service ? service.lastSuccessAt : null,
     "lastFailureKind": service ? service.lastFailureKind : "",

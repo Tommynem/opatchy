@@ -137,6 +137,7 @@ test("reports scan running, stale, partial, and typed failures without treating 
   stale.payload.summary.degradedSources = 1;
   const view = model.buildPanelState(stale, {
     busy: true,
+    refreshing: true,
     lastAttemptAt: Date.parse("2026-08-26T00:00:30.000Z"),
     lastSuccessAt: Date.parse("2026-08-26T00:00:00.000Z"),
     lastFailureKind: "timeout",
@@ -150,6 +151,38 @@ test("reports scan running, stale, partial, and typed failures without treating 
   assert.equal(view.tabs[1].health.text, "Last known");
   assert.equal(view.lastAttemptText, "30 seconds ago");
   assert.equal(view.lastSuccessText, "1 minute ago");
+});
+
+test("uses the validated snapshot generation time and scan-specific refreshing state", () => {
+  const model = loadModel();
+  const view = model.buildPanelState(snapshot(), {
+    busy: true,
+    refreshing: false,
+    lastSuccessAt: Date.parse("2026-08-26T00:00:59.000Z"),
+  }, Date.parse("2026-08-26T00:01:00.000Z"));
+
+  assert.equal(view.refreshText, "Refresh");
+  assert.equal(view.lastSuccessText, "1 minute ago");
+});
+
+test("aggregates Arch security and CISA KEV health without claiming incomplete coverage is current", () => {
+  const model = loadModel();
+  const cases = [
+    ["ok", "Current", /Current source data/],
+    ["offline", "Partial coverage", /CISA KEV coverage is unavailable/],
+    ["stale", "Partial coverage, last known", /CISA KEV coverage is last known/],
+    ["not_applicable", "Partial coverage, not applicable", /CISA KEV coverage is not applicable/],
+  ];
+
+  for (const [kevStatus, healthText, tooltip] of cases) {
+    const document = snapshot();
+    document.payload.sources[1] = source("cisa-kev", kevStatus);
+    const security = model.buildPanelState(document, {}, Date.parse("2026-08-26T00:01:00.000Z"))
+      .tabs.find((tab) => tab.name === "Security");
+
+    assert.equal(security.healthText, healthText, kevStatus);
+    assert.match(security.tooltip, tooltip, kevStatus);
+  }
 });
 
 test("keeps unavailable tabs visible with their explanation", () => {

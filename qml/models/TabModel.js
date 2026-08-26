@@ -23,8 +23,11 @@ function buildPanelState(snapshot, runtime, currentTime) {
     return tab(name, TAB_SOURCES[index], payload)
   })
   var scanState = payload ? payload.scanState : "failed"
-  var sourceBanner = tabs.some(function(value) { return value.health.text === "Last known" })
+  var sourceBanner = tabs.some(function(value) { return value.health.text.toLowerCase().indexOf("last known") !== -1 })
     ? "Last known data is shown for unavailable sources."
+    : ""
+  var coverageBanner = tabs.some(function(value) { return value.health.text.indexOf("Partial coverage") === 0 })
+    ? "Partial source coverage is shown in the affected tabs."
     : ""
   var scanBanner = scanState === "partial"
     ? "Partial scan: some source results are unavailable."
@@ -32,9 +35,9 @@ function buildPanelState(snapshot, runtime, currentTime) {
   return {
     tabs: tabs,
     summaryText: summaryText(payload ? payload.summary : null),
-    bannerText: joinText(scanBanner, sourceBanner),
+    bannerText: joinText(scanBanner, joinText(sourceBanner, coverageBanner)),
     failureText: failureText(runtime ? runtime.lastFailureKind : ""),
-    refreshText: runtime && runtime.busy ? "Refreshing" : "Refresh",
+    refreshText: runtime && runtime.refreshing ? "Refreshing" : "Refresh",
     lastAttemptText: ageText(runtime ? runtime.lastAttemptAt : null, currentTime),
     lastSuccessText: ageText(successAt(snapshot, runtime), currentTime),
   }
@@ -75,8 +78,23 @@ function tab(name, source, payload) {
   var count = name === "Security"
     ? number(payload && payload.summary ? payload.summary.securityFindings : 0)
     : itemCount(payload && payload.items, source)
-  var health = healthForStatus(sourceState ? sourceState.status : "unknown")
+  var health = name === "Security"
+    ? securityHealth(sourceState, sourceFor(payload, "cisa-kev"))
+    : healthForStatus(sourceState ? sourceState.status : "unknown")
   return { name: name, source: source, count: count, glyph: health.glyph, healthText: health.text, tooltip: health.tooltip, health: health }
+}
+
+function securityHealth(security, kev) {
+  var securityHealth = healthForStatus(security ? security.status : "unknown")
+  if (!security || security.status !== "ok") return securityHealth
+  if (kev && kev.status === "ok") return securityHealth
+  if (kev && kev.status === "stale") {
+    return health("~", "Partial coverage, last known", "Arch security data is current. CISA KEV coverage is last known.")
+  }
+  if (kev && kev.status === "not_applicable") {
+    return health("N/A", "Partial coverage, not applicable", "Arch security data is current. CISA KEV coverage is not applicable.")
+  }
+  return health("!", "Partial coverage", "Arch security data is current. CISA KEV coverage is unavailable.")
 }
 
 function sourceFor(payload, name) {
@@ -119,8 +137,7 @@ function ageText(value, currentTime) {
   return plural(Math.floor(hours / 24), "day") + " ago"
 }
 
-function successAt(snapshot, runtime) {
-  if (runtime && typeof runtime.lastSuccessAt === "number") return runtime.lastSuccessAt
+function successAt(snapshot) {
   return snapshot && typeof snapshot.generatedAt === "string" ? Date.parse(snapshot.generatedAt) : null
 }
 
