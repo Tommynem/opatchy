@@ -29,6 +29,7 @@ Item {
     "handoffAt": null,
     "activeOperation": null,
     "queuedOperations": 0,
+    "refreshing": false,
     "nextWakeAt": null
   })
 
@@ -42,6 +43,7 @@ Item {
   readonly property var handoffAt: _state.handoffAt
   readonly property var activeOperation: _state.activeOperation
   readonly property int queuedOperations: _state.queuedOperations
+  readonly property bool refreshing: _state.refreshing
   readonly property var nextWakeAt: _state.nextWakeAt
   readonly property var sources: lastSnapshot ? lastSnapshot.payload.sources : []
   readonly property var summary: lastSnapshot ? lastSnapshot.payload.summary : null

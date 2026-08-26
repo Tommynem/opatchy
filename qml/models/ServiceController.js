@@ -23,7 +23,7 @@ function createController(options) {
     return {
       lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "", lastFailureKind: "",
       lastAttemptAt: null, lastSuccessAt: null, handoffAt: null,
-      activeOperation: null, queuedOperations: 0, nextWakeAt: null
+      activeOperation: null, queuedOperations: 0, refreshing: false, nextWakeAt: null
     }
   }
   function copy(value) {
@@ -34,7 +34,12 @@ function createController(options) {
   function updateQueueState() {
     state.activeOperation = active
     state.queuedOperations = queue.length
+    state.refreshing = hasScanOperation()
     state.nextWakeAt = earliestWake()
+  }
+  function hasScanOperation() {
+    if (active && active.kind === "scan") return true
+    return queue.some(function(value) { return value.kind === "scan" })
   }
   function earliestWake() {
     var earliest = null
@@ -49,13 +54,18 @@ function createController(options) {
   }
   function enqueue(next) {
     queue.push(next)
+    if (active) {
+      updateQueueState()
+      publish()
+      return
+    }
     startNext()
   }
   function startNext() {
     if (!accepting || active || queue.length === 0) return
     active = queue.shift()
     if (active.kind === "scan") refreshQueued = false
-    if (active.kind === "snapshot" || active.kind === "scan") state.lastAttemptAt = now()
+    if (active.kind === "scan") state.lastAttemptAt = now()
     updateQueueState()
     publish()
     if (options.onStart(active) !== false) return
@@ -110,7 +120,7 @@ function createController(options) {
     state.lastFailureKind = ""
     if (response.kind === "snapshot") {
       state.lastSnapshot = response
-      state.lastSuccessAt = now()
+      state.lastSuccessAt = Date.parse(response.generatedAt)
       configureSnapshotSchedule(response)
     } else if (response.kind === "inventory") {
       var inventories = copy(state.inventories)

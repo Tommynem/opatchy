@@ -226,6 +226,40 @@ test("coalesces simultaneous refreshes into one queued rescan", () => {
   assert.deepEqual(starts.map((operation) => operation.kind), ["snapshot", "scan", "scan"]);
 });
 
+test("records only source scans as attempts and uses the snapshot generation time as success", () => {
+  const { controller, starts } = fixture(120_000);
+  controller.start();
+  const cachedSnapshot = starts[0];
+
+  assert.equal(controller.state.lastAttemptAt, null);
+  complete(controller, cachedSnapshot, snapshot("cached"));
+  assert.equal(controller.state.lastSuccessAt, Date.parse("2026-08-26T00:00:00.000Z"));
+
+  controller.requestRefresh();
+  assert.equal(starts[1].kind, "scan");
+  assert.equal(controller.state.lastAttemptAt, 120_000);
+});
+
+test("reports refreshing only while a source scan is active or queued", () => {
+  const { controller, starts } = fixture();
+  controller.start();
+  assert.equal(controller.state.refreshing, false);
+  complete(controller, starts[0], snapshot("initial"));
+
+  controller.requestInventory({ source: "arch", query: "", limit: 20, offset: 0 });
+  assert.equal(controller.state.refreshing, false);
+  controller.setStar({ itemId: "arch:demo", mode: "temporary" });
+  assert.equal(controller.state.refreshing, false);
+
+  complete(controller, starts[1], inventory("inventory"));
+  controller.requestRefresh();
+  assert.equal(controller.state.refreshing, true);
+  complete(controller, starts[2], starResult("star"));
+  assert.equal(controller.state.refreshing, true);
+  complete(controller, starts[3], snapshot("refreshed"));
+  assert.equal(controller.state.refreshing, false);
+});
+
 test("preserves FIFO ordering for inventory and set-star operations", () => {
   const { controller, starts } = fixture();
   controller.start();
