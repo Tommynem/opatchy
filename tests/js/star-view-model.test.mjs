@@ -46,9 +46,9 @@ test("explains disabled permanent notifications and never arms an unavailable of
 test("builds a watched source view from validated rows including permanent missing inventory", () => {
   const model = loadModel();
   const watched = model.watchedRows([
-    { target: "arch:temporary", mode: "temporary", watchable: true, label: "Temporary" },
-    { target: "arch:missing", mode: "permanent", watchable: false, label: "Missing" },
-    { target: "arch:off", mode: "off", watchable: true, label: "Off" },
+    { target: "arch:temporary", watchMode: "temporary", watchable: true, label: "Temporary" },
+    { target: "arch:missing", watchMode: "permanent", watchable: false, label: "Missing" },
+    { target: "arch:off", watchMode: "off", watchable: true, label: "Off" },
   ]);
 
   assert.deepEqual(JSON.parse(JSON.stringify(watched.map((row) => row.target))), ["arch:temporary", "arch:missing"]);

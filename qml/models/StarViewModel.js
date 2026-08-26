@@ -34,8 +34,8 @@ function state(mode, nextMode, glyph, label, tooltip, accessibleName, enabled) {
 function watchedRows(rows) {
   if (!Array.isArray(rows)) return []
   return rows.filter(function(row) {
-    return row && (row.mode === "temporary" || row.mode === "permanent")
+    return row && (row.watchMode === "temporary" || row.watchMode === "permanent")
   }).map(function(row) {
-    return { target: row.target, mode: row.mode, watchable: row.watchable === true, label: row.label, missing: row.watchable === false && row.mode === "permanent" }
+    return { target: row.target, mode: row.watchMode, watchable: row.watchable === true, label: row.label, missing: row.watchable === false && row.watchMode === "permanent" }
   })
 }

@@ -80,7 +80,7 @@ Item {
         }
 
         BoundedControlStack {
-          visible: root.rows.length > 0
+          visible: UpdateViewModel.canBrowse(root.tab)
           width: parent.width
           spacing: Style.spacing.sm
 
@@ -93,7 +93,7 @@ Item {
             fontSize: Style.font.bodySmall
             focusable: true
             bordered: true
-            onClicked: root.watchedOnly = !root.watchedOnly
+            onClicked: { root.watchedOnly = !root.watchedOnly; if (root.watchedOnly && !root.browsing) root.toggleBrowse() }
           }
         }
 
@@ -165,7 +165,7 @@ Item {
     }
 
     function onStarResultChanged(result, operation) {
-      stars.acceptResult(result)
+      stars.acceptResult(result, operation)
     }
 
     function onStarFailed(operation, message) {

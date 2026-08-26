@@ -62,7 +62,7 @@ Item {
 
   signal snapshotChanged(var snapshot)
   signal inventoryChanged(string source, var inventory, var operation)
-  signal starResultChanged(var result)
+  signal starResultChanged(var result, var operation)
   signal starFailed(var operation, string message)
   signal operationFailed(string message)
   signal handoffStarted(double handoffAt)

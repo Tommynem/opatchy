@@ -19,23 +19,10 @@ Item {
     active: root.visible
   }
 
-          Column {
+  Column {
     id: content
     width: parent.width
-            spacing: Style.spacing.sm
-
-            StarButton {
-              width: parent.width
-              starState: root.starState
-              target: modelData.watchTarget
-              confirmedMode: root.watchRow(modelData).watchMode
-              watchable: root.watchRow(modelData).watchable
-              lastKnown: root.view.kind === "last_known"
-              notifyPermanent: root.notifyPermanent
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              fontSize: Style.font.bodySmall
-            }
+    spacing: Style.spacing.sm
 
     Text {
       width: parent.width
@@ -73,6 +60,19 @@ Item {
           id: findings
           width: parent.width
           spacing: Style.spacing.sm
+
+          StarButton {
+            width: parent.width
+            starState: root.starState
+            target: modelData.watchTarget
+            confirmedMode: root.watchRow(modelData).watchMode
+            watchable: root.watchRow(modelData).watchable
+            lastKnown: root.view.kind === "last_known"
+            notifyPermanent: root.notifyPermanent
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+          }
 
           Repeater {
             model: modelData.findings

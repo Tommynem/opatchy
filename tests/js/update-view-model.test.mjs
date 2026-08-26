@@ -22,6 +22,7 @@ function item(id, source, label, overrides = {}) {
     installed: "1.0",
     candidate: "1.1",
     watchMode: "off",
+    watchArmed: false,
     watchable: true,
     provenance: "live",
     ...overrides,

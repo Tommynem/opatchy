@@ -92,6 +92,7 @@ function snapshotDocument(generationId, freshUntil = "2026-08-26T00:05:00.000Z")
         installed: "1.0",
         candidate: "2.0",
         watchMode: "off",
+        watchArmed: false,
         watchable: true,
         provenance: "live",
       }],

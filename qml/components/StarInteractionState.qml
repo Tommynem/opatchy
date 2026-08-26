@@ -14,6 +14,7 @@ QtObject {
   property string overrideMode: ""
   property string overrideGeneration: ""
   property string errorText: ""
+  property string errorTarget: ""
 
   signal reconcileRequested(string target)
 
@@ -36,6 +37,7 @@ QtObject {
     } else if (pending) {
       view.enabled = false
     }
+    view.errorText = target === errorTarget ? errorText : ""
     return view
   }
 
@@ -48,12 +50,13 @@ QtObject {
     pendingTarget = target
     pendingMode = view.nextMode
     errorText = ""
+    errorTarget = ""
     return true
   }
 
-  function acceptResult(result) {
+  function acceptResult(result, operation) {
     var payload = result && result.payload
-    if (!pending || !payload || payload.itemId !== pendingTarget || payload.mode !== pendingMode) return
+    if (!pending || !payload || !operation || operation.kind !== "set-star" || operation.itemId !== pendingTarget || operation.mode !== pendingMode || payload.itemId !== pendingTarget || payload.mode !== pendingMode) return
     overrideTarget = pendingTarget
     overrideMode = pendingMode
     overrideGeneration = snapshotGeneration
@@ -61,6 +64,7 @@ QtObject {
     pendingTarget = ""
     pendingMode = ""
     errorText = ""
+    errorTarget = ""
     reconcileRequested(overrideTarget)
   }
 
@@ -70,6 +74,7 @@ QtObject {
     pendingTarget = ""
     pendingMode = ""
     errorText = typeof message === "string" ? message : "Watch preference could not be updated."
+    errorTarget = operation.itemId
   }
 
   function clearOverride() {

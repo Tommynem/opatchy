@@ -99,7 +99,7 @@ function row(item, context) {
     watchText: item.watchable ? "Watch: " + presentationText(item.watchMode) : "Watch: unavailable",
     watchMode: item.watchMode,
     watchable: item.watchable,
-    temporaryArmed: item.watchMode === "temporary" && typeof item.candidate === "string" && item.candidate.length > 0,
+    temporaryArmed: item.watchArmed === true,
     healthText: presentationText(context),
   }
 }
@@ -119,7 +119,7 @@ function validItem(value) {
   return value && typeof value === "object" && typeof value.id === "string" && typeof value.source === "string"
     && typeof value.label === "string" && (value.installed === null || typeof value.installed === "string")
     && (value.candidate === null || typeof value.candidate === "string") && typeof value.watchable === "boolean"
-    && typeof value.watchMode === "string" && ["off", "temporary", "permanent"].indexOf(value.watchMode) !== -1
+    && typeof value.watchMode === "string" && ["off", "temporary", "permanent"].indexOf(value.watchMode) !== -1 && typeof value.watchArmed === "boolean" && (!value.watchArmed || value.watchMode === "temporary")
 }
 function validCount(value) { return typeof value === "number" && isFinite(value) && value >= 0 && Math.floor(value) === value }
 function hasUpdate(items, sources, source) { return currentSource(sources, source) && items.some(function(item) { return validItem(item) && item.source === source && typeof item.candidate === "string" && item.candidate.length > 0 }) }

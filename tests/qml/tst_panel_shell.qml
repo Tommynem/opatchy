@@ -336,6 +336,7 @@ TestCase {
           installed: "1.0",
           candidate: "1.1",
           watchable: true,
+          watchArmed: false,
           watchMode: "off"
         }]
       }
@@ -365,6 +366,7 @@ TestCase {
           installed: "1.1",
           candidate: "1.2",
           watchable: true,
+          watchArmed: false,
           watchMode: "off"
         }]
       }

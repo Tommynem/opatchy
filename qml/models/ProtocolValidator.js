@@ -84,10 +84,10 @@ function validItems(values) {
 }
 
 function validItem(value) {
-  var required = ["id", "source", "label", "installed", "candidate", "watchMode", "watchable", "provenance"]
+  var required = ["id", "source", "label", "installed", "candidate", "watchMode", "watchArmed", "watchable", "provenance"]
   if (!allowedObject(value, required.concat(["installedFingerprint", "candidateFingerprint"])) || !hasKeys(value, required)) return false
   return bounded(value.id) && member(ITEM_SOURCES, value.source) && bounded(value.label) && nullableString(value.installed)
-    && nullableString(value.candidate) && member(WATCH_MODES, value.watchMode) && typeof value.watchable === "boolean"
+    && nullableString(value.candidate) && member(WATCH_MODES, value.watchMode) && typeof value.watchArmed === "boolean" && (!value.watchArmed || value.watchMode === "temporary") && typeof value.watchable === "boolean"
     && member(PROVENANCES, value.provenance) && optionalBounded(value, "installedFingerprint") && optionalBounded(value, "candidateFingerprint")
 }
 
