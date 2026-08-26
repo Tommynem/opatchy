@@ -89,6 +89,7 @@ function sourceHealth(snapshot, source) {
 
 function row(item, context) {
   return {
+    target: item.id,
     id: presentationText(item.id),
     identity: presentationText(item.source) + ":" + presentationText(item.id),
     label: presentationText(item.label),
@@ -96,6 +97,9 @@ function row(item, context) {
     installed: presentationText(item.installed),
     candidate: presentationText(item.candidate),
     watchText: item.watchable ? "Watch: " + presentationText(item.watchMode) : "Watch: unavailable",
+    watchMode: item.watchMode,
+    watchable: item.watchable,
+    temporaryArmed: item.watchMode === "temporary" && typeof item.candidate === "string" && item.candidate.length > 0,
     healthText: presentationText(context),
   }
 }
@@ -115,7 +119,7 @@ function validItem(value) {
   return value && typeof value === "object" && typeof value.id === "string" && typeof value.source === "string"
     && typeof value.label === "string" && (value.installed === null || typeof value.installed === "string")
     && (value.candidate === null || typeof value.candidate === "string") && typeof value.watchable === "boolean"
-    && typeof value.watchMode === "string"
+    && typeof value.watchMode === "string" && ["off", "temporary", "permanent"].indexOf(value.watchMode) !== -1
 }
 function validCount(value) { return typeof value === "number" && isFinite(value) && value >= 0 && Math.floor(value) === value }
 function hasUpdate(items, sources, source) { return currentSource(sources, source) && items.some(function(item) { return validItem(item) && item.source === source && typeof item.candidate === "string" && item.candidate.length > 0 }) }

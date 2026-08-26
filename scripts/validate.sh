@@ -8,6 +8,22 @@ state_root=""
 cache_root=""
 hidden_virtual_environment=""
 declare -a child_process_groups=()
+readonly -a node_test_files=(
+    tests/js/action-controller.test.mjs
+    tests/js/harness.test.mjs
+    tests/js/security-view-model.test.mjs
+    tests/js/service-controller.test.mjs
+    tests/js/star-view-model.test.mjs
+    tests/js/tab-model.test.mjs
+    tests/js/update-view-model.test.mjs
+)
+readonly -a qml_test_files=(
+    tests/qml/tst_lifecycle.qml
+    tests/qml/tst_panel_shell.qml
+    tests/qml/tst_security_view.qml
+    tests/qml/tst_star_interaction.qml
+    tests/qml/tst_tab_navigation.qml
+)
 
 restore_virtual_environment() {
     if [[ -n "${hidden_virtual_environment}" ]] && [[ -e "${hidden_virtual_environment}" ]]; then
@@ -119,6 +135,12 @@ run_gate format uv run --locked --no-sync ruff format --check .
 run_gate lint uv run --locked --no-sync ruff check .
 run_gate type uv run --locked --no-sync basedpyright
 run_qml_lint
+for qml_test_file in "${qml_test_files[@]}"; do
+    if [[ ! -f "${qml_test_file}" ]]; then
+        printf 'ERROR(required test): %s is unavailable\n' "${qml_test_file}" >&2
+        exit 127
+    fi
+done
 run_gate qml-offscreen "${repository_root}/scripts/qml_offscreen.sh"
 run_manifest_validation
 run_gate python-tests uv run --locked --no-sync pytest -q
@@ -129,7 +151,7 @@ else
     printf '%s\n' 'PENDING(integration): 90% helper coverage awaits Todo 2 package'
 fi
 
-run_gate js node --test tests/js/*.test.mjs
+run_gate js node --test "${node_test_files[@]}" tests/js/*.test.mjs
 run_gate repository-contract /usr/bin/python3 -m unittest discover -s tests/contract -p 'test_*.py'
 run_gate runtime "${repository_root}/scripts/runtime_without_venv.sh"
 run_gate static git diff --check

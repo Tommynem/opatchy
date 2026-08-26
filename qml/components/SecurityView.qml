@@ -8,6 +8,8 @@ Item {
   readonly property double currentTime: clock.currentTime
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
+  property var starState: null
+  property bool notifyPermanent: true
   readonly property var view: presentation.view
 
   implicitHeight: content.implicitHeight
@@ -17,10 +19,23 @@ Item {
     active: root.visible
   }
 
-  Column {
+          Column {
     id: content
     width: parent.width
-    spacing: Style.spacing.sm
+            spacing: Style.spacing.sm
+
+            StarButton {
+              width: parent.width
+              starState: root.starState
+              target: modelData.watchTarget
+              confirmedMode: root.watchRow(modelData).watchMode
+              watchable: root.watchRow(modelData).watchable
+              lastKnown: root.view.kind === "last_known"
+              notifyPermanent: root.notifyPermanent
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.bodySmall
+            }
 
     Text {
       width: parent.width
@@ -80,5 +95,11 @@ Item {
     id: presentation
     snapshot: root.snapshot
     currentTime: root.currentTime
+  }
+
+  function watchRow(group) {
+    var items = snapshot && snapshot.payload && Array.isArray(snapshot.payload.items) ? snapshot.payload.items : []
+    var item = items.filter(function(candidate) { return candidate && candidate.id === group.watchTarget })[0]
+    return item ? { watchMode: item.watchMode, watchable: item.watchable === true } : { watchMode: "off", watchable: false }
   }
 }

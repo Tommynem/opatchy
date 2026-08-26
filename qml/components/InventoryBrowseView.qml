@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Ui
 import "../models/UpdateViewModel.js" as UpdateViewModel
+import "../models/StarViewModel.js" as StarViewModel
 
 Item {
   id: root
@@ -8,7 +9,13 @@ Item {
   property var state: null
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
+  property var starState: null
+  property bool notifyPermanent: true
+  property bool watchedOnly: false
   readonly property var view: presentation.view
+  readonly property var displayedRows: watchedOnly ? StarViewModel.watchedRows(view.rows).map(function(watched) {
+    return view.rows.filter(function(row) { return row.target === watched.target })[0]
+  }) : view.rows
 
   implicitHeight: content.implicitHeight
 
@@ -37,8 +44,10 @@ Item {
 
     UpdateListView {
       width: parent.width
-      rows: root.view.rows
+      rows: root.displayedRows
       emptyText: ""
+      starState: root.starState
+      notifyPermanent: root.notifyPermanent
       foreground: root.foreground
       fontFamily: root.fontFamily
     }

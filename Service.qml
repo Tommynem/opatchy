@@ -24,6 +24,7 @@ Item {
     "lastStarResult": null,
     "lastError": "",
     "lastFailureKind": "",
+    "lastFailureOperation": null,
     "lastAttemptAt": null,
     "lastSuccessAt": null,
     "handoffAt": null,
@@ -38,6 +39,7 @@ Item {
   readonly property var lastStarResult: _state.lastStarResult
   readonly property string lastError: _state.lastError
   readonly property string lastFailureKind: _state.lastFailureKind
+  readonly property var lastFailureOperation: _state.lastFailureOperation
   readonly property var lastAttemptAt: _state.lastAttemptAt
   readonly property var lastSuccessAt: _state.lastSuccessAt
   readonly property var handoffAt: _state.handoffAt
@@ -61,6 +63,7 @@ Item {
   signal snapshotChanged(var snapshot)
   signal inventoryChanged(string source, var inventory, var operation)
   signal starResultChanged(var result)
+  signal starFailed(var operation, string message)
   signal operationFailed(string message)
   signal handoffStarted(double handoffAt)
 
@@ -136,7 +139,7 @@ Item {
   function applyResponse(operation, response) {
     if (response.kind === "snapshot") snapshotChanged(response)
     else if (response.kind === "inventory") inventoryChanged(response.payload.source, response, operation)
-    else if (response.kind === "star-result") starResultChanged(response)
+    else if (response.kind === "star-result") starResultChanged(response, operation)
   }
 
   function startOperation(operation) {
@@ -158,7 +161,9 @@ Item {
     timeoutMs: root.helperTimeoutMs
     onCompleted: function(operation, result) {
       if (root._controller) root._controller.complete(operation.id, result)
-      if (root.lastError !== "") root.operationFailed(root.lastError)
+      if (operation.kind === "set-star" && root.lastFailureOperation && root.lastFailureOperation.id === operation.id)
+        root.starFailed(root.lastFailureOperation, root.lastError)
+      else if (root.lastError !== "") root.operationFailed(root.lastError)
     }
   }
 

@@ -6,6 +6,8 @@ Item {
 
   property var rows: []
   property string emptyText: "No actionable updates in this source."
+  property var starState: null
+  property bool notifyPermanent: true
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
 
@@ -34,6 +36,8 @@ Item {
         required property var modelData
         width: parent.width
         row: modelData
+        starState: root.starState
+        notifyPermanent: root.notifyPermanent
         foreground: root.foreground
         fontFamily: root.fontFamily
       }

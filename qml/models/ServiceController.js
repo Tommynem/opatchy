@@ -21,7 +21,7 @@ function createController(options) {
   }
   function emptyState() {
     return {
-      lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "", lastFailureKind: "",
+      lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "", lastFailureKind: "", lastFailureOperation: null,
       lastAttemptAt: null, lastSuccessAt: null, handoffAt: null,
       activeOperation: null, queuedOperations: 0, refreshing: false, nextWakeAt: null
     }
@@ -69,7 +69,7 @@ function createController(options) {
     updateQueueState()
     publish()
     if (options.onStart(active) !== false) return
-    setError("transport", "helper transport is unavailable")
+    recordFailure(active, "transport", "helper transport is unavailable")
     active = null
     updateQueueState()
     publish()
@@ -78,6 +78,12 @@ function createController(options) {
   function setError(kind, message) {
     state.lastFailureKind = kind
     state.lastError = message
+  }
+  function recordFailure(completed, kind, message) {
+    setError(kind, message)
+    state.lastFailureOperation = completed ? {
+      id: completed.id, kind: completed.kind, itemId: completed.itemId, mode: completed.mode
+    } : null
   }
   function refresh() {
     if (!accepting || refreshQueued) return false
@@ -118,6 +124,7 @@ function createController(options) {
   function accept(response) {
     state.lastError = ""
     state.lastFailureKind = ""
+    state.lastFailureOperation = null
     if (response.kind === "snapshot") {
       state.lastSnapshot = response
       state.lastSuccessAt = Date.parse(response.generatedAt)
@@ -150,9 +157,12 @@ function createController(options) {
   }
   controller.setStar = function(request) {
     if (!validStarRequest(request)) return false
-    enqueue(operation("set-star", [
+    var next = operation("set-star", [
       "set-star", "--item-id", request.itemId, "--mode", request.mode
-    ], "star-result"))
+    ], "star-result")
+    next.itemId = request.itemId
+    next.mode = request.mode
+    enqueue(next)
     return true
   }
   controller.wake = function(at) {
@@ -179,19 +189,19 @@ function createController(options) {
     if (!accepting || !active || active.id !== operationId) return
     var completed = active
     if (result.timedOut === true) {
-      setError("timeout", "helper operation timed out")
+      recordFailure(completed, "timeout", "helper operation timed out")
     } else if (result.outputTooLarge === true) {
-      setError("output", "helper output exceeded the five MiB limit")
+      recordFailure(completed, "output", "helper output exceeded the five MiB limit")
     } else if (result.exitCode !== 0) {
-      setError("command", "helper exited with status " + result.exitCode)
+      recordFailure(completed, "command", "helper exited with status " + result.exitCode)
     } else {
       var parsed = options.parseResponse(result.stdout)
       if (!parsed.ok) {
-        setError("incompatible", parsed.error)
+        recordFailure(completed, "incompatible", parsed.error)
       } else if (parsed.value.kind === "error") {
-        setError("helper", parsed.value.error.code + ": " + parsed.value.error.message)
+        recordFailure(completed, "helper", parsed.value.error.code + ": " + parsed.value.error.message)
       } else if (parsed.value.kind !== completed.expectedKind) {
-        setError("incompatible", "helper response kind does not match the operation")
+        recordFailure(completed, "incompatible", "helper response kind does not match the operation")
       } else {
         accept(parsed.value)
       }

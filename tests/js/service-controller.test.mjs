@@ -381,6 +381,21 @@ test("rejects helper requests outside the exact CLI bounds", () => {
   assert.equal(controller.setStar({ itemId: "arch:demo", mode: "unknown" }), false);
 });
 
+test("correlates set-star failures to the requested canonical target and mode", () => {
+  const { controller, starts } = fixture();
+  controller.start();
+  complete(controller, starts[0], snapshot("generation-1"));
+
+  controller.setStar({ itemId: "arch:demo", mode: "temporary" });
+  const star = starts[1];
+  complete(controller, star, "", { exitCode: 1 });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(controller.state.lastFailureOperation)), {
+    id: star.id, kind: "set-star", itemId: "arch:demo", mode: "temporary",
+  });
+  assert.equal(controller.state.lastStarResult, null);
+});
+
 test("schedules initial, earliest-source, and post-handoff scans deterministically", () => {
   const { controller, starts } = fixture();
   controller.start();

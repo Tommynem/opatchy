@@ -5,6 +5,8 @@ Item {
   id: root
 
   property var row: ({})
+  property var starState: null
+  property bool notifyPermanent: true
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
 
@@ -26,6 +28,20 @@ Item {
       font.pixelSize: Style.font.body
       elide: Text.ElideRight
       maximumLineCount: 1
+    }
+
+    StarButton {
+      width: parent.width
+      starState: root.starState
+      target: typeof root.row.target === "string" ? root.row.target : ""
+      confirmedMode: typeof root.row.watchMode === "string" ? root.row.watchMode : "off"
+      watchable: root.row.watchable === true
+      temporaryArmed: root.row.temporaryArmed === true
+      lastKnown: typeof root.row.healthText === "string" && root.row.healthText.indexOf("Last known") !== -1
+      notifyPermanent: root.notifyPermanent
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
     }
 
     Text {
