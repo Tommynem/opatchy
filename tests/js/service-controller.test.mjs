@@ -189,8 +189,12 @@ test("rejects duplicate JSON keys with Python decoder parity", () => {
     `{"protocolVersion":1,"protocolVersion":1,${base}}`,
     `{"protocolVersion":1,${base.replace('"code":"STATE_UNAVAILABLE"', '"code":"STATE_UNAVAILABLE","code":"STATE_UNAVAILABLE"')}}`,
     `{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"generation","error":{"code":"STATE_UNAVAILABLE","message":"x","\\u006dessage":"x"}}`,
+    `{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"\\uD800","error":{"code":"STATE_UNAVAILABLE","message":"x"}}`,
+    `{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"\\uDC00","error":{"code":"STATE_UNAVAILABLE","message":"x"}}`,
   ];
   const validEscapes = '{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generation\\u0049d":"\\u0067eneration","error":{"code":"STATE_UNAVAILABLE","message":"quote: \\" slash: \\/ unicode: \\uD83D\\uDE00"}}';
+  const literalUnpairedHigh = `{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"${String.fromCharCode(0xD800)}","error":{"code":"STATE_UNAVAILABLE","message":"x"}}`;
+  const literalUnpairedLow = `{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"${String.fromCharCode(0xDC00)}","error":{"code":"STATE_UNAVAILABLE","message":"x"}}`;
 
   for (const raw of cases) {
     assert.equal(parseResponse(raw).ok, pythonAccepts(raw), raw);
@@ -198,6 +202,8 @@ test("rejects duplicate JSON keys with Python decoder parity", () => {
   }
   assert.equal(parseResponse(validEscapes).ok, pythonAccepts(validEscapes));
   assert.equal(parseResponse(validEscapes).ok, true);
+  assert.equal(parseResponse(literalUnpairedHigh).ok, false);
+  assert.equal(parseResponse(literalUnpairedLow).ok, false);
 });
 
 test("coalesces simultaneous refreshes into one queued rescan", () => {

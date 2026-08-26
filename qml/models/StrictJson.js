@@ -6,9 +6,9 @@ function hasDuplicateObjectKey(text) {
   var scanner = { text: text, index: 0, duplicate: false, depth: 0 }
   if (typeof text !== "string") return false
   scanSpace(scanner)
-  scanValue(scanner)
+  if (!scanValue(scanner)) return true
   scanSpace(scanner)
-  return scanner.duplicate
+  return scanner.duplicate || scanner.index !== scanner.text.length
 }
 
 function scanValue(scanner) {
@@ -84,28 +84,37 @@ function scanString(scanner) {
   if (scanner.text.charAt(scanner.index) !== "\"") return null
   scanner.index += 1
   var value = ""
+  var pendingHighSurrogate = false
   while (scanner.index < scanner.text.length) {
     var character = scanner.text.charAt(scanner.index)
     scanner.index += 1
-    if (character === "\"") return value
+    if (character === "\"") return pendingHighSurrogate ? null : value
     if (character.charCodeAt(0) < 0x20) return null
-    if (character !== "\\") {
-      value += character
-      continue
+    if (character === "\\") {
+      if (scanner.index >= scanner.text.length) return null
+      var escape = scanner.text.charAt(scanner.index)
+      scanner.index += 1
+      if (escape === "u") {
+        var hex = scanner.text.substr(scanner.index, 4)
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) return null
+        character = String.fromCharCode(parseInt(hex, 16))
+        scanner.index += 4
+      } else {
+        var escapes = { "\"": "\"", "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" }
+        if (!(escape in escapes)) return null
+        character = escapes[escape]
+      }
     }
-    if (scanner.index >= scanner.text.length) return null
-    var escape = scanner.text.charAt(scanner.index)
-    scanner.index += 1
-    if (escape === "u") {
-      var hex = scanner.text.substr(scanner.index, 4)
-      if (!/^[0-9a-fA-F]{4}$/.test(hex)) return null
-      value += String.fromCharCode(parseInt(hex, 16))
-      scanner.index += 4
-      continue
+    var codeUnit = character.charCodeAt(0)
+    if (pendingHighSurrogate) {
+      if (codeUnit < 0xDC00 || codeUnit > 0xDFFF) return null
+      pendingHighSurrogate = false
+    } else if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+      pendingHighSurrogate = true
+    } else if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) {
+      return null
     }
-    var escapes = { "\"": "\"", "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" }
-    if (!(escape in escapes)) return null
-    value += escapes[escape]
+    value += character
   }
   return null
 }
