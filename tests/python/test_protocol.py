@@ -201,6 +201,15 @@ class ProtocolCliTests(unittest.TestCase):
             with self.subTest(response=response):
                 self.assertEqual(decode_response(encode_response(response)), response)
 
+    def test_star_result_rejects_armed_non_temporary_modes(self) -> None:
+        for mode in (WatchMode.OFF, WatchMode.PERMANENT):
+            response = StarResultResponse(
+                FIXED_TIME,
+                GenerationId("generation-star"),
+                StarResultPayload(ItemId("arch:demo"), mode, True),
+            )
+            self.assert_encode_error(response, ErrorCode.INVALID_ENVELOPE)
+
     def test_duplicate_item_ids_are_rejected_when_inventory_is_decoded(self) -> None:
         item = b'{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchArmed":false,"watchMode":"off","watchable":true}'
         raw = (

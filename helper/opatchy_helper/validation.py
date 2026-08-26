@@ -42,6 +42,11 @@ def validate_response(response: Response) -> None:
             return
         case StarResultResponse(payload=payload):
             _validate_identifier(str(payload.item_id), "star-result.itemId")
+            if payload.watch_armed and payload.mode is not WatchMode.TEMPORARY:
+                _fail(
+                    ErrorCode.INVALID_ENVELOPE,
+                    "only temporary star results can be armed",
+                )
             return
         case ErrorResponse(error=error):
             _validate_error(error)
