@@ -22,4 +22,4 @@ if [[ "${runner_help}" != *"-repeat n"* ]]; then
 fi
 
 cd "${repository_root}"
-QT_QPA_PLATFORM=offscreen "${qt6_qmltestrunner}" -input tests/qml
+QT_QPA_PLATFORM=offscreen "${qt6_qmltestrunner}" -import tests/qml/imports -input tests/qml

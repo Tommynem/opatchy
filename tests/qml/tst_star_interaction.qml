@@ -20,39 +20,28 @@ TestCase {
   }
 
   Component {
-    id: buttonComponent
+    id: starButtonComponent
     Window {
       id: window
       visible: true
       width: 120
       height: 48
-      property int activations: 0
-      Controls.Button {
+      property var service: ({ requests: [], setStar: function(request) { this.requests.push(request); return true } })
+      StarInteractionState { id: stars; service: window.service }
+      StarButton {
         id: button
         width: 120
         height: 48
-        text: "Watch"
-        activeFocusOnTab: true
-        onClicked: window.activations += 1
+        starState: stars
+        target: "arch:demo"
+        confirmedMode: "off"
+        watchable: true
       }
       property alias button: button
+      property alias stars: stars
     }
   }
 
-  Component {
-    id: keyboardComponent
-    FocusScope {
-      id: route
-      focus: true
-      property int activations: 0
-      Controls.Button {
-        id: button
-        activeFocusOnTab: true
-        onClicked: route.activations += 1
-      }
-      property alias button: button
-    }
-  }
 
   function test_pending_request_retains_confirmed_mode_and_coalesces_rapid_clicks() {
     const state = stateComponent.createObject(root)
@@ -130,17 +119,16 @@ TestCase {
   }
 
   function test_native_button_routes_pointer_space_and_enter() {
-    const keyboard = keyboardComponent.createObject(root)
-    keyboard.button.forceActiveFocus()
-    keyClick(Qt.Key_Space)
-    compare(keyboard.activations, 1)
-    keyboard.button.forceActiveFocus()
-    keyClick(Qt.Key_Return)
-    compare(keyboard.activations, 2)
-    keyboard.destroy()
-    const view = buttonComponent.createObject(root)
+    const view = starButtonComponent.createObject(root)
     mouseClick(view.button)
-    compare(view.activations, 1)
+    compare(view.service.requests.length, 1)
+    compare(view.service.requests[0].mode, "temporary")
+    compare(view.button.confirmedMode, "off")
+    view.button.forceActiveFocus()
+    keyClick(Qt.Key_Space)
+    view.button.forceActiveFocus()
+    keyClick(Qt.Key_Return)
+    compare(view.service.requests.length, 1)
     view.destroy()
   }
 }
