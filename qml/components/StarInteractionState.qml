@@ -7,6 +7,7 @@ QtObject {
   property var service: null
   property string snapshotGeneration: ""
   property bool notifyPermanent: true
+  property bool reducedMotion: false
   property bool pending: false
   property string pendingTarget: ""
   property string pendingMode: ""

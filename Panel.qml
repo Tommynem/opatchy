@@ -162,6 +162,7 @@ Panel {
             service: root.service
             snapshot: root.service ? root.service.lastSnapshot : null
             notifyPermanent: setting("notifyPermanent", true) === true
+            reducedMotion: setting("reducedMotion", false) === true
             foreground: root.barForeground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }

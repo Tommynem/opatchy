@@ -95,6 +95,14 @@ TestCase {
     state.destroy()
   }
 
+  function test_reduced_motion_is_one_shared_star_state_preference() {
+    const state = stateComponent.createObject(root)
+    compare(state.reducedMotion, false)
+    state.reducedMotion = true
+    compare(state.reducedMotion, true)
+    state.destroy()
+  }
+
   function test_native_button_routes_pointer_space_and_enter() {
     const keyboard = keyboardComponent.createObject(root)
     keyboard.button.forceActiveFocus()

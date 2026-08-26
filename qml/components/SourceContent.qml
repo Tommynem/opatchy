@@ -14,6 +14,7 @@ Item {
   property alias browsing: browseMode.browsing
   property bool watchedOnly: false
   property bool notifyPermanent: true
+  property bool reducedMotion: false
   readonly property var rows: UpdateViewModel.updateRows(snapshot, tab)
   readonly property var displayedRows: watchedOnly ? StarViewModel.watchedRows(rows).map(function(watched) {
     return rows.filter(function(row) { return row.target === watched.target })[0]
@@ -31,6 +32,7 @@ Item {
     service: root.service
     snapshotGeneration: root.snapshot && typeof root.snapshot.generationId === "string" ? root.snapshot.generationId : ""
     notifyPermanent: root.notifyPermanent
+    reducedMotion: root.reducedMotion
     onReconcileRequested: function(target) {
       if (browseState.source !== "" && target.indexOf(browseState.source + ":") === 0) browseState.queueRequest()
     }

@@ -19,9 +19,16 @@ Button {
   tooltipText: view.tooltip
   accessibleName: view.accessibleName
   enabled: view.enabled
+  opacity: view.pending ? 0.72 : 1
   focusable: true
   bordered: true
   onClicked: if (starState) starState.request(target, confirmedMode, watchable)
+
+  Behavior on opacity {
+    NumberAnimation {
+      duration: root.starState && root.starState.reducedMotion ? 0 : 100
+    }
+  }
 
   Text {
     visible: root.view.errorText !== ""
