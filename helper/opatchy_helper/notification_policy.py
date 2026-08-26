@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
+from html import escape
 from typing import Final, assert_never
 
 from .models import (
@@ -67,11 +68,14 @@ def _watch_candidates(
         if (
             item.item_id not in watched_ids
             or candidate is None
+            or item.installed_fingerprint is None
+            or item.candidate_fingerprint is None
             or not _fresh_item(snapshot, item.source, item.provenance, now)
         ):
             continue
-        candidate_hash = _digest((item.source.value, str(item.item_id), candidate))
-        fingerprint = watch_notification_reference(item.item_id, candidate_hash)
+        fingerprint = watch_notification_reference(
+            item.item_id, item.candidate_fingerprint, item.installed_fingerprint
+        )
         reference = f"watch-v1:{item.item_id}:"
         candidates.append(
             NotificationCandidate(
@@ -194,7 +198,7 @@ def _eligible_security(finding: SecurityFinding, minimum: Severity) -> bool:
         str(finding.item_id).startswith("arch:")
         and _current_provenance(finding.provenance)
         and _fixed(finding.status)
-        and _at_or_above_minimum(finding.severity, minimum)
+        and _notifiable_severity(finding.severity, minimum)
     )
 
 
@@ -212,25 +216,14 @@ def _fixed(status: ArchStatus) -> bool:
     assert_never(status)
 
 
-def _at_or_above_minimum(severity: Severity, minimum: Severity) -> bool:
-    return (
-        _severity_rank(severity) >= _severity_rank(minimum)
-        and _severity_rank(severity) >= 0
-    )
-
-
-def _severity_rank(severity: Severity) -> int:
+def _notifiable_severity(severity: Severity, minimum: Severity) -> bool:
     match severity:
-        case Severity.UNKNOWN:
-            return -1
-        case Severity.LOW:
-            return 0
-        case Severity.MEDIUM:
-            return 1
-        case Severity.HIGH:
-            return 2
         case Severity.CRITICAL:
-            return 3
+            return True
+        case Severity.HIGH:
+            return minimum is not Severity.CRITICAL
+        case Severity.UNKNOWN | Severity.LOW | Severity.MEDIUM:
+            return False
     assert_never(severity)
 
 
@@ -257,4 +250,4 @@ def _digest(parts: tuple[str, ...]) -> str:
 
 
 def _text(value: str) -> str:
-    return value.replace("\0", "?")[:_MAX_TEXT]
+    return escape(value.replace("\0", "?")[:_MAX_TEXT], quote=True)

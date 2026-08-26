@@ -112,9 +112,15 @@ def missing_permanent_item_ids(
 
 
 def watch_notification_reference(
-    item_id: ItemId, candidate_fingerprint: str
+    item_id: ItemId,
+    candidate_fingerprint: str,
+    installed_fingerprint: str | None = None,
 ) -> NotificationFingerprint:
-    return NotificationFingerprint(f"watch-v1:{item_id}:{candidate_fingerprint}")
+    return NotificationFingerprint(
+        f"watch-v1:{item_id}:{installed_fingerprint}:{candidate_fingerprint}"
+        if installed_fingerprint is not None
+        else f"watch-v1:{item_id}:{candidate_fingerprint}"
+    )
 
 
 def _star_click(state: PersistentState, event: StarClick) -> PersistentState:

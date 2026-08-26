@@ -96,6 +96,7 @@ def _item(
     *,
     item_id: str = "arch:demo",
     label: str = "demo",
+    installed: str | None = "1.0",
     candidate: str | None = "2.0",
     source: ItemSource = ItemSource.ARCH,
     provenance: Provenance = Provenance.LIVE,
@@ -104,11 +105,13 @@ def _item(
         ItemId(item_id),
         source,
         label,
-        "1.0",
+        installed,
         candidate,
         WatchMode.OFF,
         True,
         provenance,
+        None if installed is None else f"installed:{installed}",
+        None if candidate is None else f"candidate:{candidate}",
     )
 
 
@@ -180,7 +183,10 @@ def _dispatch_in_process(
     store = Storage(
         Path(state_path), Path(cache_path), lambda: NOW, SystemAtomicOperations()
     )
-    snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+    snapshot = _snapshot(
+        items=(_item(), _item(item_id="arch:second", label="second")),
+        sources=(_health(SourceName.ARCH),),
+    )
     dispatched = NotificationCoordinator(
         store, BlockingProcessRunner(entered, release), lambda: NOW
     ).dispatch(snapshot)
@@ -330,6 +336,32 @@ def test_security_fix_and_severity_escalation_create_new_identities() -> None:
     assert len({first.fingerprint, changed_fix.fingerprint, escalated.fingerprint}) == 3
 
 
+def test_watch_identity_changes_when_adapter_installed_evidence_changes() -> None:
+    # Given: a permanent watch with a delivered candidate fingerprint.
+    state = _state(_permanent())
+    initial = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+    first = notification_candidates(state, initial, NOW)[0]
+    restored = PersistentState(
+        state.watches,
+        (LedgerEntry(first.fingerprint, NotificationStatus.DELIVERED, NOW),),
+        (),
+    )
+
+    # When: only the adapter-produced installed fingerprint changes.
+    changed = notification_candidates(
+        restored,
+        _snapshot(
+            items=(_item(installed="1.1"),),
+            sources=(_health(SourceName.ARCH),),
+        ),
+        NOW,
+    )[0]
+
+    # Then: watched identity is new despite the unchanged candidate version.
+    assert changed.change is NotificationChange.NEW
+    assert changed.fingerprint != first.fingerprint
+
+
 def test_coordinator_delivers_exact_closed_argv_once_per_kind_and_deduplicates_restart(
     tmp_path: Path,
 ) -> None:
@@ -338,7 +370,7 @@ def test_coordinator_delivers_exact_closed_argv_once_per_kind_and_deduplicates_r
     sentinel.unlink(missing_ok=True)
     store = _store(tmp_path)
     store.save_state(_state(_permanent()))
-    hostile = "$(touch /tmp/opatchy-injection-sentinel); --urgency=critical"
+    hostile = "<b>$(touch /tmp/opatchy-injection-sentinel)</b>& --urgency=critical"
     snapshot = _snapshot(
         items=(_item(label=hostile),),
         findings=(
@@ -374,6 +406,11 @@ def test_coordinator_delivers_exact_closed_argv_once_per_kind_and_deduplicates_r
     assert all(len(arguments) == 2 for _, arguments in runner.calls)
     assert all(
         "-a" not in arguments and "-u" not in arguments for _, arguments in runner.calls
+    )
+    assert all(
+        "<b>" not in argument and "</b>" not in argument
+        for _, arguments in runner.calls
+        for argument in arguments
     )
     assert not sentinel.exists()
 
@@ -440,7 +477,14 @@ def test_coordinator_supersedes_old_pending_when_candidate_changes(
 
     # Then: the old pending identity is suppressed and the changed candidate delivers.
     assert changed[0].status is NotificationStatus.DELIVERED
-    assert store.load_state().state.ledger[0].status is NotificationStatus.SUPPRESSED
+    assert (
+        next(
+            entry.status
+            for entry in store.load_state().state.ledger
+            if entry.fingerprint == first.fingerprint
+        )
+        is NotificationStatus.SUPPRESSED
+    )
     assert len(runner.calls) == 1
 
 
@@ -628,8 +672,8 @@ def test_notification_settings_default_and_disabled_categories_skip_candidates()
 @pytest.mark.parametrize(
     ("minimum", "expected"),
     (
-        (Severity.LOW, ("low", "medium", "high", "critical")),
-        (Severity.MEDIUM, ("medium", "high", "critical")),
+        (Severity.LOW, ("high", "critical")),
+        (Severity.MEDIUM, ("high", "critical")),
         (Severity.HIGH, ("high", "critical")),
         (Severity.CRITICAL, ("critical",)),
     ),
@@ -666,7 +710,7 @@ def test_concurrent_coordinators_only_the_claim_winner_invokes_runner(
 ) -> None:
     # Given: two process-isolated coordinators share fresh permanent-watch state.
     store = _store(tmp_path)
-    store.save_state(_state(_permanent()))
+    store.save_state(_state(_permanent(), _permanent("arch:second")))
     entered: Queue[str] = multiprocessing.Queue()
     outcomes: Queue[tuple[NotificationStatus, ...]] = multiprocessing.Queue()
     release = multiprocessing.Event()
@@ -706,7 +750,10 @@ def test_concurrent_coordinators_only_the_claim_winner_invokes_runner(
     release.set()
     first.join(5)
     assert first.exitcode == 0
-    assert outcomes.get(timeout=1) == (NotificationStatus.DELIVERED,)
+    assert outcomes.get(timeout=1) == (
+        NotificationStatus.DELIVERED,
+        NotificationStatus.DELIVERED,
+    )
 
 
 def test_coordinator_does_not_run_when_another_owner_holds_candidate_lease(
@@ -740,3 +787,98 @@ def test_coordinator_does_not_run_when_another_owner_holds_candidate_lease(
     # Then: it cannot claim the lease and never invokes the notification runner.
     assert outcomes == ()
     assert runner.calls == []
+
+
+def test_coordinator_batches_watch_candidates_and_deduplicates_unchanged_restart(
+    tmp_path: Path,
+) -> None:
+    # Given: two eligible permanent watches from one fresh source.
+    store = _store(tmp_path)
+    store.save_state(_state(_permanent(), _permanent("arch:second")))
+    snapshot = _snapshot(
+        items=(_item(), _item(item_id="arch:second", label="second")),
+        sources=(_health(SourceName.ARCH),),
+    )
+    runner = RecordingRunner([CommandSucceeded(b"", b"")], [])
+    coordinator = NotificationCoordinator(store, runner, lambda: NOW)
+
+    # When: the scan and then its unchanged restart are dispatched.
+    first = coordinator.dispatch(snapshot)
+    restarted = coordinator.dispatch(snapshot)
+
+    # Then: one summarized handoff accounts for both fingerprints with no trickle.
+    assert [outcome.status for outcome in first] == [
+        NotificationStatus.DELIVERED,
+        NotificationStatus.DELIVERED,
+    ]
+    assert restarted == ()
+    assert len(runner.calls) == 1
+    assert "1 additional watched update" in runner.calls[0][1][1]
+    assert {entry.status for entry in store.load_state().state.ledger} == {
+        NotificationStatus.DELIVERED
+    }
+
+
+def test_coordinator_batches_security_candidates_with_one_runner_call(
+    tmp_path: Path,
+) -> None:
+    # Given: two fresh high/critical fixed Arch advisories.
+    store = _store(tmp_path)
+    snapshot = _snapshot(
+        findings=(
+            SecurityFindingGroup(
+                ItemId("arch:demo"),
+                (
+                    _finding(),
+                    _finding(advisory="AVG-20260002", severity=Severity.CRITICAL),
+                ),
+            ),
+        ),
+        sources=(_health(SourceName.SECURITY),),
+    )
+    runner = RecordingRunner([CommandSucceeded(b"", b"")], [])
+
+    # When: the coordinator dispatches the eligible security batch.
+    outcomes = NotificationCoordinator(store, runner, lambda: NOW).dispatch(snapshot)
+
+    # Then: both fingerprints are delivered after one summarized notification.
+    assert [outcome.status for outcome in outcomes] == [
+        NotificationStatus.DELIVERED,
+        NotificationStatus.DELIVERED,
+    ]
+    assert len(runner.calls) == 1
+    assert "1 additional security update" in runner.calls[0][1][1]
+
+
+def test_failed_watch_batch_retries_once_and_accounts_for_every_fingerprint(
+    tmp_path: Path,
+) -> None:
+    # Given: two eligible watched updates and two failed batch handoffs.
+    store = _store(tmp_path)
+    store.save_state(_state(_permanent(), _permanent("arch:second")))
+    snapshot = _snapshot(
+        items=(_item(), _item(item_id="arch:second", label="second")),
+        sources=(_health(SourceName.ARCH),),
+    )
+    runner = RecordingRunner(
+        [CommandExited(1, b"", b""), CommandExited(1, b"", b"")], []
+    )
+    coordinator = NotificationCoordinator(store, runner, lambda: NOW)
+
+    # When: the original batch fails and its unchanged batch retries.
+    first = coordinator.dispatch(snapshot)
+    second = coordinator.dispatch(snapshot)
+
+    # Then: every fingerprint follows the bounded pending-to-failed transition.
+    assert [outcome.status for outcome in first] == [
+        NotificationStatus.PENDING,
+        NotificationStatus.PENDING,
+    ]
+    assert [outcome.status for outcome in second] == [
+        NotificationStatus.FAILED,
+        NotificationStatus.FAILED,
+    ]
+    assert len(runner.calls) == 2
+    assert {entry.status for entry in store.load_state().state.ledger} == {
+        NotificationStatus.FAILED
+    }
