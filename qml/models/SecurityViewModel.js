@@ -2,6 +2,7 @@
 
 var MAX_PRESENTATION_LENGTH = 256
 var SEVERITIES = ["critical", "high", "medium", "low", "unknown"]
+var CURRENT_PROVENANCES = ["live", "fallback", "cache"]
 
 function securityView(snapshot, currentTime) {
   var payload = snapshot && snapshot.payload && typeof snapshot.payload === "object" ? snapshot.payload : null
@@ -125,7 +126,7 @@ function sourceFor(values, name) {
 }
 
 function isCurrent(source, currentTime) {
-  return source && source.status === "ok" && source.provenance === "live" && sourceFresh(source, currentTime)
+  return source && source.status === "ok" && CURRENT_PROVENANCES.indexOf(source.provenance) !== -1 && sourceFresh(source, currentTime)
 }
 function isRetainedOrCurrent(source, currentTime) {
   return isCurrent(source, currentTime) || (source && source.status === "stale" && source.provenance === "last_good")

@@ -72,6 +72,31 @@ test("shows the exact clean sentence only for current valid Arch security eviden
   assert.equal(view.archCoverage.text, "Arch security data: current");
 });
 
+test("accepts fresh fallback and cache provenance as current Arch and KEV evidence", () => {
+  const model = load(modelPath, "Todo 22 security view model must exist");
+  const currentTime = Date.parse("2026-08-26T00:02:00.000Z");
+
+  for (const provenance of ["fallback", "cache"]) {
+    const clean = snapshot([], { payload: { sources: [source("security", { provenance }), source("cisa-kev", { provenance })], findings: [] } });
+    const findings = snapshot([group("arch:openssl", [finding("AVG-89", { provenance, kevProvenance: provenance })])], { payload: { sources: [source("security", { provenance }), source("cisa-kev", { provenance })], findings: [group("arch:openssl", [finding("AVG-89", { provenance, kevProvenance: provenance })])] } });
+
+    assert.equal(model.securityView(clean, currentTime).kind, "clean", provenance);
+    assert.equal(model.securityView(clean, currentTime).archCoverage.text, "Arch security data: current", provenance);
+    assert.equal(model.securityView(clean, currentTime).kevCoverage.text, "CISA KEV data: current", provenance);
+    assert.equal(model.securityView(findings, currentTime).kind, "findings", provenance);
+  }
+});
+
+test("rejects misleading ok last-good, missing, and unknown Arch provenance", () => {
+  const model = load(modelPath, "Todo 22 security view model must exist");
+  const currentTime = Date.parse("2026-08-26T00:02:00.000Z");
+
+  for (const provenance of ["last_good", null, "unexpected"]) {
+    const document = snapshot([], { payload: { sources: [source("security", { provenance }), source("cisa-kev")], findings: [] } });
+    assert.equal(model.securityView(document, currentTime).kind, "unknown", String(provenance));
+  }
+});
+
 test("does not turn expired current-looking Arch metadata into a clean result", () => {
   const model = load(modelPath, "Todo 22 security view model must exist");
   const currentTime = Date.parse("2026-08-26T00:02:00.000Z");
@@ -191,6 +216,7 @@ test("security presentation stays plain text and contains no assurance or local-
   const link = readFileSync(resolve(repositoryRoot, "qml/components/SafeExternalLink.qml"), "utf8");
 
   assert.match(source, /textFormat:\s*Text\.PlainText/g);
+  assert.match(source, /Timer\s*\{[\s\S]*interval:\s*60000[\s\S]*running:\s*root\.visible/);
   assert.match(row, /textFormat:\s*Text\.PlainText/g);
   assert.match(integration, /SecurityView\s*\{/);
   assert.match(link, /SecurityLinkPolicy\.linkFor\(linkKind, identifier\)/);
