@@ -36,11 +36,16 @@ TestCase {
     property var pluginRegistry: registry
   }
 
+  QtObject {
+    id: initialService
+  }
+
+  QtObject {
+    id: replacementService
+  }
+
   function initTestCase() {
-    const serviceComponent = Qt.createComponent(Qt.resolvedUrl("../../Service.qml"))
-    compare(serviceComponent.status, Component.Ready, serviceComponent.errorString())
-    serviceObject = serviceComponent.createObject(root, { "manifest": manifest, "shell": shellHost })
-    verify(serviceObject !== null)
+    serviceObject = initialService
     currentService = serviceObject
 
     const lifecycleComponent = Qt.createComponent(Qt.resolvedUrl("../../LifecycleState.qml"))
@@ -79,23 +84,16 @@ TestCase {
   }
 
   function test_replacement_service_is_not_stale() {
-    const serviceComponent = Qt.createComponent(Qt.resolvedUrl("../../Service.qml"))
-    const replacement = serviceComponent.createObject(root, { "manifest": manifest, "shell": shellHost })
-    verify(replacement !== null)
-    currentService = replacement
+    currentService = replacementService
 
-    tryCompare(firstConsumer, "service", replacement)
+    tryCompare(firstConsumer, "service", replacementService)
     compare(firstConsumer.service === serviceObject, false)
-    compare(secondConsumer.service, replacement)
-
-    serviceObject.destroy()
-    serviceObject = replacement
+    compare(secondConsumer.service, replacementService)
   }
 
   function cleanupTestCase() {
     if (firstConsumer) firstConsumer.destroy()
     if (secondConsumer) secondConsumer.destroy()
     if (missingCapabilityConsumer) missingCapabilityConsumer.destroy()
-    if (serviceObject) serviceObject.destroy()
   }
 }

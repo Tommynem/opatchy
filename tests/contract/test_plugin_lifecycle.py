@@ -111,7 +111,9 @@ class PluginLifecycleContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             fixture_root = Path(temporary_directory) / "plugin"
             shutil.copytree(
-                REPOSITORY_ROOT, fixture_root, ignore=shutil.ignore_patterns(".git")
+                REPOSITORY_ROOT,
+                fixture_root,
+                ignore=shutil.ignore_patterns(".git"),
             )
 
             cases = (
@@ -184,8 +186,11 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.assertIn("Item {", service_source)
         self.assertIn("property var manifest: null", service_source)
         self.assertIn("manifest.__sourceDir", service_source)
-        self.assertNotIn("Timer {", service_source)
+        self.assertIn('localPath(sourceDir) + "/helper/opatchy.py"', service_source)
+        self.assertEqual(service_source.count("Timer {"), 1)
         self.assertNotIn("Process {", service_source)
+        self.assertNotIn("Qt.createComponent", service_source)
+        self.assertNotIn("ensureService", service_source)
         self.assertIn("QtObject {", lifecycle_source)
         self.assertIn('typeof shell.serviceFor === "function"', lifecycle_source)
         self.assertIn("Service unavailable", lifecycle_source)
