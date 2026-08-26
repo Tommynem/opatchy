@@ -59,11 +59,20 @@ def test_inventory_places_missing_permanent_watch_on_first_page(tmp_path: Path) 
     write_inventory(
         store,
         ItemSource.ARCH,
-        *(item(f"arch:a{index:03}", ItemSource.ARCH, f"a{index:03}") for index in range(101)),
+        *(
+            item(f"arch:a{index:03}", ItemSource.ARCH, f"a{index:03}")
+            for index in range(101)
+        ),
     )
     store.save_state(
         PersistentState(
-            (WatchRecord(ItemId("arch:zmissing"), WatchMode.PERMANENT, None, None, False),), (), ()
+            (
+                WatchRecord(
+                    ItemId("arch:zmissing"), WatchMode.PERMANENT, None, None, False
+                ),
+            ),
+            (),
+            (),
         )
     )
 
@@ -75,6 +84,36 @@ def test_inventory_places_missing_permanent_watch_on_first_page(tmp_path: Path) 
     # Then: the durable missing watch precedes all unwatched rows before slicing.
     assert result.payload.total == 102
     assert result.payload.items[0].item_id == ItemId("arch:zmissing")
+
+
+def test_set_star_clears_a_missing_permanent_watch(tmp_path: Path) -> None:
+    # Given: a durable permanent watch absent from its cached inventory.
+    store = storage(tmp_path)
+    write_inventory(store, ItemSource.ARCH)
+    store.save_state(
+        PersistentState(
+            (
+                WatchRecord(
+                    ItemId("arch:missing"), WatchMode.PERMANENT, None, None, False
+                ),
+            ),
+            (),
+            (),
+        )
+    )
+
+    # When: the ordinary permanent-to-off operation is requested.
+    result = cli_operations.set_star(
+        store, SetStarCommand(ItemId("arch:missing"), WatchMode.OFF)
+    )
+
+    # Then: both the result and subsequent browse state are authoritative off.
+    assert result.payload.mode is WatchMode.OFF
+    assert result.payload.watch_armed is False
+    inventory = cli_operations.inventory_response(
+        store, InventoryCommand(ItemSource.ARCH, "", 100, 0)
+    )
+    assert inventory.payload.items == ()
 
 
 def test_snapshot_uses_only_validated_cached_response_or_reports_unavailable(
