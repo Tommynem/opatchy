@@ -12,6 +12,13 @@ Item {
 
   implicitHeight: content.implicitHeight
 
+  Timer {
+    interval: 60000
+    repeat: true
+    running: root.visible
+    onTriggered: root.currentTime = Date.now()
+  }
+
   Column {
     id: content
     width: parent.width
