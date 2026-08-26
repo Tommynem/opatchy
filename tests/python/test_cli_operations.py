@@ -15,9 +15,10 @@ from opatchy_helper.models import (
     WatchMode,
 )
 from opatchy_helper.stars import WatchTransitionError
+from opatchy_helper.storage import Storage, SystemAtomicOperations
 from opatchy_helper.storage_types import PersistentState, SourceMetadata, WatchRecord
 
-from tests.python.cli_support import item, storage, write_inventory
+from tests.python.cli_support import NOW, item, storage, write_inventory
 
 
 def test_inventory_reads_valid_cache_and_adds_missing_permanent_id(
@@ -116,6 +117,55 @@ def test_set_star_rejects_a_requested_mode_outside_the_cycle(tmp_path: Path) -> 
 
     # Then: no arbitrary direct durable state is constructed.
     assert store.load_state().state == PersistentState.empty()
+
+
+def test_set_star_rejects_inventory_removed_before_locked_mutation(
+    tmp_path: Path,
+) -> None:
+    # Given: an item whose legacy cache disappears after the old pre-lock read.
+    inventory_path = tmp_path / "cache" / "opatchy" / "inventory-arch.json"
+
+    def remove_inventory() -> None:
+        inventory_path.unlink(missing_ok=True)
+
+    store = Storage(
+        tmp_path / "state" / "opatchy" / "state.json",
+        tmp_path / "cache" / "opatchy",
+        lambda: NOW,
+        SystemAtomicOperations(),
+        before_mutation=remove_inventory,
+    )
+    write_inventory(store, ItemSource.ARCH, item("arch:demo", ItemSource.ARCH, "Demo"))
+
+    # When: the first requested durable transition enters the state transaction.
+    with pytest.raises(WatchTransitionError):
+        _ = cli_operations.set_star(
+            store, SetStarCommand(ItemId("arch:demo"), WatchMode.TEMPORARY)
+        )
+
+    # Then: no stale inventory evidence can create a temporary watch.
+    assert store.load_state().state == PersistentState.empty()
+
+
+def test_set_star_reads_generation_inventory_inside_transaction(tmp_path: Path) -> None:
+    # Given: a completed fresh generation with a watchable cached inventory item.
+    store = storage(tmp_path)
+    now = datetime.now(timezone.utc)
+    store.save_state(
+        PersistentState(
+            (), (), tuple(SourceMetadata(source, now, None) for source in SourceName)
+        )
+    )
+    _ = cli_operations.scan(store, False)
+    write_inventory(store, ItemSource.ARCH, item("arch:demo", ItemSource.ARCH, "Demo"))
+
+    # When: the first approved durable transition is requested.
+    result = cli_operations.set_star(
+        store, SetStarCommand(ItemId("arch:demo"), WatchMode.TEMPORARY)
+    )
+
+    # Then: generation-backed evidence creates the exact temporary watch.
+    assert result.payload.mode is WatchMode.TEMPORARY
 
 
 def test_scan_uses_runtime_coordinator_without_collecting_not_due_sources(

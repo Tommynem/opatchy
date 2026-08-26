@@ -131,26 +131,25 @@ def _item_key(item: NormalizedItem) -> tuple[str, str, str]:
 
 
 def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
-    inventory = CachedInventory(
-        tuple(
-            cached_item(item)
-            for source in _sources()
-            if (cached := storage.load_inventory(source)) is not None
-            for item in cached.payload.items
+    def mutate(
+        state: PersistentState, inventories: tuple[InventoryResponse, ...]
+    ) -> PersistentState:
+        inventory = CachedInventory(
+            tuple(
+                cached_item(item)
+                for cached in inventories
+                for item in cached.payload.items
+            )
         )
-    )
-    event = StarClick(command.item_id, inventory)
-
-    def mutate(state: PersistentState) -> PersistentState:
         current = next(
             (watch.mode for watch in state.watches if watch.item_id == command.item_id),
             None,
         )
         if command.mode is not _next_mode(current):
             raise WatchTransitionError("watch mode does not match the transition")
-        return transition(state, event)
+        return transition(state, StarClick(command.item_id, inventory))
 
-    updated = storage.update_state(mutate).state
+    updated = storage.update_state_with_inventories(_sources(), mutate).state
     mode = next(
         (watch.mode for watch in updated.watches if watch.item_id == command.item_id),
         WatchMode.OFF,

@@ -1,18 +1,20 @@
-import fcntl
-import hashlib
 import os
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
-from dataclasses import replace
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import TypeAlias, final
 
 from .cache_metadata import read_cache_validators
 from .models import InventoryResponse, ItemSource, ProtocolError, SnapshotResponse
-from .protocol import encode_response
 from .runner_types import EndpointCache
-from .storage_cache import load_inventory, load_snapshot
+from .storage_cache import (
+    CacheAccess,
+    read_cached_inventory,
+    read_cached_snapshot,
+    read_current_inventories,
+    save_cached_inventory,
+    save_cached_snapshot,
+)
 from .storage_feeds import (
     read_last_good_feed,
     transport_endpoint_cache,
@@ -23,15 +25,14 @@ from .storage_generation import (
     encode_generation,
 )
 from .storage_io import (
-    PRIVATE_FILE_MODE,
     AtomicOperations,
     SystemAtomicOperations,
     atomic_write,
-    ensure_directory,
     fsync_directory,
 )
+from .storage_locked_state import StateAccess, load_state, state_lock, write_state
 from .storage_semantic import write_last_good_feed
-from .storage_state import decode_state, encode_state, prune_ledger, validate_state
+from .storage_state import encode_state, validate_state
 from .storage_types import (
     FeedName,
     LedgerEntry,
@@ -45,6 +46,9 @@ from .storage_types import (
 )
 
 StateMutation: TypeAlias = Callable[[PersistentState], PersistentState]
+StateInventoryMutation: TypeAlias = Callable[
+    [PersistentState, tuple[InventoryResponse, ...]], PersistentState
+]
 
 
 @final
@@ -55,11 +59,14 @@ class Storage:
         cache_path: Path,
         clock: Callable[[], datetime],
         operations: AtomicOperations,
+        *,
+        before_mutation: Callable[[], None] | None = None,
     ) -> None:
         self._state_path = state_path
         self._cache_path = cache_path
         self._clock = clock
         self._operations = operations
+        self._before_mutation = before_mutation
 
     @classmethod
     def from_environment(
@@ -102,7 +109,20 @@ class Storage:
     def update_state(self, mutation: StateMutation) -> StateLoad:
         with self._state_lock():
             loaded = self._load_state_locked(persist_pruning=False)
+            if self._before_mutation is not None:
+                self._before_mutation()
             updated = mutation(loaded.state)
+            self._write_state_locked(updated)
+            return StateLoad(updated, loaded.warning)
+
+    def update_state_with_inventories(
+        self, sources: tuple[ItemSource, ...], mutation: StateInventoryMutation
+    ) -> StateLoad:
+        with self._state_lock():
+            loaded = self._load_state_locked(persist_pruning=False)
+            if self._before_mutation is not None:
+                self._before_mutation()
+            updated = mutation(loaded.state, self._load_inventories_locked(sources))
             self._write_state_locked(updated)
             return StateLoad(updated, loaded.warning)
 
@@ -155,60 +175,19 @@ class Storage:
 
     def save_snapshot(self, response: SnapshotResponse) -> None:
         with self._state_lock():
-            generation = self._load_generation_locked()
-            if generation is not None:
-                self._write_generation_locked(replace(generation, snapshot=response))
-                return
-            atomic_write(
-                self._cache_path / "snapshot.json",
-                encode_response(response),
-                self._operations,
-            )
+            save_cached_snapshot(self._cache_access(), response)
 
     def load_snapshot(self) -> SnapshotResponse | None:
         with self._state_lock():
-            generation = self._load_generation_locked()
-            if generation is not None:
-                return generation.snapshot
-            return self._read_snapshot_locked()
+            return read_cached_snapshot(self._cache_access())
 
     def save_inventory(self, response: InventoryResponse) -> None:
         with self._state_lock():
-            generation = self._load_generation_locked()
-            if generation is not None:
-                inventories = tuple(
-                    item
-                    for item in generation.inventories
-                    if item.payload.source is not response.payload.source
-                ) + (response,)
-                self._write_generation_locked(
-                    replace(
-                        generation,
-                        inventories=tuple(
-                            sorted(inventories, key=lambda item: item.payload.source)
-                        ),
-                    )
-                )
-                return
-            atomic_write(
-                self._inventory_path(response.payload.source),
-                encode_response(response),
-                self._operations,
-            )
+            save_cached_inventory(self._cache_access(), response)
 
     def load_inventory(self, source: ItemSource) -> InventoryResponse | None:
         with self._state_lock():
-            generation = self._load_generation_locked()
-            if generation is not None:
-                return next(
-                    (
-                        item
-                        for item in generation.inventories
-                        if item.payload.source is source
-                    ),
-                    None,
-                )
-            return load_inventory(self._cache_path, source, self._discard)
+            return read_cached_inventory(self._cache_access(), source)
 
     def load_generation(self) -> GenerationBundle | None:
         with self._state_lock():
@@ -228,47 +207,14 @@ class Storage:
             )
             return True
 
-    @contextmanager
-    def _state_lock(self) -> Generator[None]:
-        ensure_directory(self._state_path.parent)
-        lock_path = self._state_path.parent / "state.lock"
-        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-        os.chmod(lock_path, 0o600)
-        with os.fdopen(descriptor, "r+") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    def _state_lock(self):
+        return state_lock(self._state_path)
 
     def _load_state_locked(self, *, persist_pruning: bool = True) -> StateLoad:
-        generation = self._load_generation_locked()
-        if generation is not None:
-            decoded = generation.state
-            pruned = prune_ledger(decoded, self._clock())
-            if persist_pruning and pruned != decoded:
-                self._write_state_locked(pruned)
-            return StateLoad(pruned, None)
-        if not self._state_path.exists():
-            return StateLoad(PersistentState.empty(), None)
-        raw = self._state_path.read_bytes()
-        try:
-            decoded = decode_state(raw)
-            pruned = prune_ledger(decoded, self._clock())
-            if persist_pruning and pruned != decoded:
-                self._write_state_locked(pruned)
-            return StateLoad(pruned, None)
-        except ProtocolError, StateCorruptError:
-            self._quarantine(raw)
-            return StateLoad(PersistentState.empty(), StorageWarning.STATE_CORRUPT)
+        return load_state(self._state_access(), persist_pruning=persist_pruning)
 
     def _write_state_locked(self, state: PersistentState) -> None:
-        generation = self._load_generation_locked()
-        if generation is not None:
-            self._write_generation_locked(replace(generation, state=state))
-        atomic_write(
-            self._state_path, encode_state(state, self._clock()), self._operations
-        )
+        write_state(self._state_access(), state)
 
     def _load_generation_locked(self) -> GenerationBundle | None:
         if not self.generation_path.exists():
@@ -286,18 +232,28 @@ class Storage:
             self._operations,
         )
 
-    def _read_snapshot_locked(self) -> SnapshotResponse | None:
-        return load_snapshot(self._cache_path, self._discard)
+    def _cache_access(self) -> CacheAccess:
+        return CacheAccess(
+            self._cache_path,
+            self._operations,
+            self._load_generation_locked,
+            self._write_generation_locked,
+            self._discard,
+        )
 
-    def _inventory_path(self, source: ItemSource) -> Path:
-        return self._cache_path / f"inventory-{source.value}.json"
+    def _state_access(self) -> StateAccess:
+        return StateAccess(
+            self._state_path,
+            self._clock,
+            self._operations,
+            self._load_generation_locked,
+            self._write_generation_locked,
+        )
 
-    def _quarantine(self, raw: bytes) -> None:
-        digest = hashlib.sha256(raw).hexdigest()
-        target = self._state_path.with_name(f"state.json.corrupt-{digest}")
-        self._operations.replace(self._state_path, target)
-        os.chmod(target, PRIVATE_FILE_MODE)
-        fsync_directory(self._state_path.parent, self._operations)
+    def _load_inventories_locked(
+        self, sources: tuple[ItemSource, ...]
+    ) -> tuple[InventoryResponse, ...]:
+        return read_current_inventories(self._cache_access(), sources)
 
     def _discard(self, path: Path) -> None:
         path.unlink(missing_ok=True)
