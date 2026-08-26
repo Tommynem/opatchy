@@ -57,13 +57,9 @@ QtObject {
     var text = String(data)
     var remaining = maxDiagnosticBytes - stderrBytes
     if (remaining <= 0) return
-    if (utf8Length(text) <= remaining) {
-      stderrText += text
-      stderrBytes += utf8Length(text)
-      return
-    }
-    stderrText += text.substring(0, remaining)
-    stderrBytes = maxDiagnosticBytes
+    var retained = truncateUtf8(text, remaining)
+    stderrText += retained
+    stderrBytes += utf8Length(retained)
   }
 
   function finish(exitCode) {
@@ -93,6 +89,25 @@ QtObject {
       } else length += 3
     }
     return length
+  }
+
+  function truncateUtf8(value, maximumBytes) {
+    var bytes = 0
+    var end = 0
+    while (end < value.length) {
+      var code = value.charCodeAt(end)
+      var width = code < 0x80 ? 1 : code < 0x800 ? 2 : 3
+      var units = 1
+      if (code >= 0xd800 && code <= 0xdbff && end + 1 < value.length
+        && value.charCodeAt(end + 1) >= 0xdc00 && value.charCodeAt(end + 1) <= 0xdfff) {
+        width = 4
+        units = 2
+      }
+      if (bytes + width > maximumBytes) break
+      bytes += width
+      end += units
+    }
+    return value.substring(0, end)
   }
 
   property Timer timeoutTimer: Timer {
