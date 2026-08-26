@@ -21,6 +21,7 @@ from .notification_types import (
     NotificationCandidate,
     NotificationChange,
     NotificationKind,
+    NotificationSettings,
 )
 from .stars import watch_notification_reference
 from .storage_types import LedgerEntry, PersistentState
@@ -28,15 +29,19 @@ from .storage_types import LedgerEntry, PersistentState
 _MAX_TEXT: Final = 256
 _WATCH_TITLE: Final = "Watched update available"
 _SECURITY_TITLE: Final = "Security update available"
+_DEFAULT_SETTINGS: Final = NotificationSettings()
 
 
 def notification_candidates(
-    state: PersistentState, snapshot: SnapshotResponse, now: datetime
+    state: PersistentState,
+    snapshot: SnapshotResponse,
+    now: datetime,
+    settings: NotificationSettings = _DEFAULT_SETTINGS,
 ) -> tuple[NotificationCandidate, ...]:
     """Return every fresh eligible candidate with durable identity classification."""
     candidates = (
-        *_watch_candidates(state, snapshot, now),
-        *_security_candidates(state, snapshot, now),
+        *_watch_candidates(state, snapshot, now, settings),
+        *_security_candidates(state, snapshot, now, settings),
     )
     return tuple(
         sorted(
@@ -46,8 +51,13 @@ def notification_candidates(
 
 
 def _watch_candidates(
-    state: PersistentState, snapshot: SnapshotResponse, now: datetime
+    state: PersistentState,
+    snapshot: SnapshotResponse,
+    now: datetime,
+    settings: NotificationSettings,
 ) -> tuple[NotificationCandidate, ...]:
+    if not settings.notify_permanent:
+        return ()
     watched_ids = frozenset(
         watch.item_id for watch in state.watches if watch.mode is WatchMode.PERMANENT
     )
@@ -77,15 +87,22 @@ def _watch_candidates(
 
 
 def _security_candidates(
-    state: PersistentState, snapshot: SnapshotResponse, now: datetime
+    state: PersistentState,
+    snapshot: SnapshotResponse,
+    now: datetime,
+    settings: NotificationSettings,
 ) -> tuple[NotificationCandidate, ...]:
-    if not _fresh_source(snapshot, SourceName.SECURITY, now):
+    if not settings.notify_security or not _fresh_source(
+        snapshot, SourceName.SECURITY, now
+    ):
         return ()
     candidates: list[NotificationCandidate] = []
     for group in snapshot.payload.findings:
         for finding in group.findings:
             fixed = finding.fixed_version
-            if fixed is None or not _eligible_security(finding):
+            if fixed is None or not _eligible_security(
+                finding, settings.security_minimum_severity
+            ):
                 continue
             reference_hash = _digest(
                 ("security", str(finding.item_id), finding.advisory_id)
@@ -172,12 +189,12 @@ def _source_name(source: ItemSource) -> SourceName:
     assert_never(source)
 
 
-def _eligible_security(finding: SecurityFinding) -> bool:
+def _eligible_security(finding: SecurityFinding, minimum: Severity) -> bool:
     return (
         str(finding.item_id).startswith("arch:")
         and _current_provenance(finding.provenance)
         and _fixed(finding.status)
-        and _notifiable_severity(finding.severity)
+        and _at_or_above_minimum(finding.severity, minimum)
     )
 
 
@@ -195,12 +212,25 @@ def _fixed(status: ArchStatus) -> bool:
     assert_never(status)
 
 
-def _notifiable_severity(severity: Severity) -> bool:
+def _at_or_above_minimum(severity: Severity, minimum: Severity) -> bool:
+    return (
+        _severity_rank(severity) >= _severity_rank(minimum)
+        and _severity_rank(severity) >= 0
+    )
+
+
+def _severity_rank(severity: Severity) -> int:
     match severity:
-        case Severity.HIGH | Severity.CRITICAL:
-            return True
-        case Severity.UNKNOWN | Severity.LOW | Severity.MEDIUM:
-            return False
+        case Severity.UNKNOWN:
+            return -1
+        case Severity.LOW:
+            return 0
+        case Severity.MEDIUM:
+            return 1
+        case Severity.HIGH:
+            return 2
+        case Severity.CRITICAL:
+            return 3
     assert_never(severity)
 
 

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import multiprocessing
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
+from multiprocessing.queues import Queue
+from multiprocessing.synchronize import Event
 from pathlib import Path
+from queue import Empty
 from typing import Final
 
 import pytest
@@ -33,6 +37,7 @@ from opatchy_helper.models import (
     Summary,
     WatchMode,
 )
+from opatchy_helper.notification_types import NotificationSettings
 from opatchy_helper.notifications import (
     NotificationChange,
     NotificationCoordinator,
@@ -62,6 +67,18 @@ class RecordingRunner:
     def __call__(self, name: CommandName, arguments: tuple[str, ...]) -> CommandResult:
         self.calls.append((name, arguments))
         return self.results.pop(0)
+
+
+@dataclass(frozen=True, slots=True)
+class BlockingProcessRunner:
+    entered: Queue[str]
+    release: Event
+
+    def __call__(self, name: CommandName, arguments: tuple[str, ...]) -> CommandResult:
+        _ = name, arguments
+        self.entered.put("entered")
+        assert self.release.wait(timeout=5)
+        return CommandSucceeded(b"", b"")
 
 
 def _health(
@@ -151,6 +168,23 @@ def _store(tmp_path: Path) -> Storage:
         lambda: NOW,
         SystemAtomicOperations(),
     )
+
+
+def _dispatch_in_process(
+    state_path: str,
+    cache_path: str,
+    entered: Queue[str],
+    release: Event,
+    outcomes: Queue[tuple[NotificationStatus, ...]],
+) -> None:
+    store = Storage(
+        Path(state_path), Path(cache_path), lambda: NOW, SystemAtomicOperations()
+    )
+    snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+    dispatched = NotificationCoordinator(
+        store, BlockingProcessRunner(entered, release), lambda: NOW
+    ).dispatch(snapshot)
+    outcomes.put(tuple(outcome.status for outcome in dispatched))
 
 
 def test_notification_candidates_select_only_fresh_permanent_watches_and_security() -> (
@@ -362,6 +396,8 @@ def test_coordinator_keeps_failure_pending_for_one_retry_then_marks_failed(
 
     # Then: success is never recorded before exit zero, and retry is bounded.
     assert first[0].status is NotificationStatus.PENDING
+    assert store.load_state().state.ledger[0].lease_token is None
+    assert store.load_state().state.ledger[0].lease_expires_at is None
     assert second[0].status is NotificationStatus.FAILED
     assert store.load_state().state.ledger[0].status is NotificationStatus.FAILED
     assert len(runner.calls) == 2
@@ -559,3 +595,148 @@ def test_coordinator_fails_closed_for_future_runner_result(tmp_path: Path) -> No
     # Then: it raises rather than treating an unknown runner outcome as success or retry.
     with pytest.raises(AssertionError):
         _ = NotificationCoordinator(store, runner, lambda: NOW).dispatch(snapshot)
+
+
+def test_notification_settings_default_and_disabled_categories_skip_candidates() -> (
+    None
+):
+    # Given: fresh permanent-watch and security evidence under each disabled setting.
+    snapshot = _snapshot(
+        items=(_item(),),
+        findings=(SecurityFindingGroup(ItemId("arch:demo"), (_finding(),)),),
+        sources=(_health(SourceName.ARCH), _health(SourceName.SECURITY)),
+    )
+    state = _state(_permanent())
+
+    # When: category settings are applied before policy candidate construction.
+    defaults = NotificationSettings()
+    watches_disabled = notification_candidates(
+        state, snapshot, NOW, NotificationSettings(notify_permanent=False)
+    )
+    security_disabled = notification_candidates(
+        state, snapshot, NOW, NotificationSettings(notify_security=False)
+    )
+
+    # Then: defaults are exact and disabled categories yield no matching candidates.
+    assert defaults.notify_permanent
+    assert defaults.notify_security
+    assert defaults.security_minimum_severity is Severity.HIGH
+    assert [candidate.kind.value for candidate in watches_disabled] == ["security"]
+    assert [candidate.kind.value for candidate in security_disabled] == ["watch"]
+
+
+@pytest.mark.parametrize(
+    ("minimum", "expected"),
+    (
+        (Severity.LOW, ("low", "medium", "high", "critical")),
+        (Severity.MEDIUM, ("medium", "high", "critical")),
+        (Severity.HIGH, ("high", "critical")),
+        (Severity.CRITICAL, ("critical",)),
+    ),
+)
+def test_notification_settings_apply_security_minimum_severity(
+    minimum: Severity, expected: tuple[str, ...]
+) -> None:
+    # Given: otherwise eligible fixed advisories across all policy severities.
+    findings = tuple(
+        _finding(advisory=f"AVG-{severity.value}", severity=severity)
+        for severity in Severity
+    )
+    snapshot = _snapshot(
+        findings=(SecurityFindingGroup(ItemId("arch:demo"), findings),),
+        sources=(_health(SourceName.SECURITY),),
+    )
+
+    # When: the typed security threshold evaluates the fresh findings.
+    candidates = notification_candidates(
+        PersistentState.empty(),
+        snapshot,
+        NOW,
+        NotificationSettings(security_minimum_severity=minimum),
+    )
+
+    # Then: only fixed Arch advisories at or above that threshold remain eligible.
+    assert {candidate.body.rsplit("(", 1)[1][:-2] for candidate in candidates} == set(
+        expected
+    )
+
+
+def test_concurrent_coordinators_only_the_claim_winner_invokes_runner(
+    tmp_path: Path,
+) -> None:
+    # Given: two process-isolated coordinators share fresh permanent-watch state.
+    store = _store(tmp_path)
+    store.save_state(_state(_permanent()))
+    entered: Queue[str] = multiprocessing.Queue()
+    outcomes: Queue[tuple[NotificationStatus, ...]] = multiprocessing.Queue()
+    release = multiprocessing.Event()
+    first = multiprocessing.Process(
+        target=_dispatch_in_process,
+        args=(
+            str(store.state_path),
+            str(store.cache_path),
+            entered,
+            release,
+            outcomes,
+        ),
+    )
+    second = multiprocessing.Process(
+        target=_dispatch_in_process,
+        args=(
+            str(store.state_path),
+            str(store.cache_path),
+            entered,
+            release,
+            outcomes,
+        ),
+    )
+
+    # When: the first runner is held after its durable claim and the second dispatches.
+    first.start()
+    assert entered.get(timeout=1) == "entered"
+    second.start()
+    second.join(5)
+
+    # Then: the second coordinator had no delivery and never entered its runner.
+    assert second.exitcode == 0
+    assert outcomes.get(timeout=1) == ()
+    with pytest.raises(Empty):
+        _ = entered.get(timeout=0.2)
+
+    release.set()
+    first.join(5)
+    assert first.exitcode == 0
+    assert outcomes.get(timeout=1) == (NotificationStatus.DELIVERED,)
+
+
+def test_coordinator_does_not_run_when_another_owner_holds_candidate_lease(
+    tmp_path: Path,
+) -> None:
+    # Given: a fresh permanent-watch candidate already leased by another coordinator.
+    store = _store(tmp_path)
+    state = _state(_permanent())
+    snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+    candidate = notification_candidates(state, snapshot, NOW)[0]
+    store.save_state(
+        PersistentState(
+            state.watches,
+            (
+                LedgerEntry(
+                    candidate.fingerprint,
+                    NotificationStatus.PENDING,
+                    NOW,
+                    "other-owner",
+                    NOW + timedelta(seconds=30),
+                ),
+            ),
+            (),
+        )
+    )
+    runner = RecordingRunner([], [])
+
+    # When: this coordinator dispatches the same fresh candidate.
+    outcomes = NotificationCoordinator(store, runner, lambda: NOW).dispatch(snapshot)
+
+    # Then: it cannot claim the lease and never invokes the notification runner.
+    assert outcomes == ()
+    assert runner.calls == []

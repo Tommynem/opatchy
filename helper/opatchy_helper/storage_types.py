@@ -58,6 +58,8 @@ class LedgerEntry:
     fingerprint: NotificationFingerprint
     status: NotificationStatus
     recorded_at: datetime
+    lease_token: str | None = None
+    lease_expires_at: datetime | None = None
 
     @property
     def is_active(self) -> bool:

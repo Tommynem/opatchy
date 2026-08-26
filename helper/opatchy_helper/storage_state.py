@@ -75,6 +75,11 @@ def validate_state(state: PersistentState) -> None:
             _corrupt("source permanent failure is invalid")
     for watch in state.watches:
         validate_watch(watch)
+    for entry in state.ledger:
+        if (entry.lease_token is None) != (entry.lease_expires_at is None):
+            _corrupt("ledger lease is incomplete")
+        if entry.lease_token == "":
+            _corrupt("ledger lease token is invalid")
 
 
 def prune_ledger(state: PersistentState, now: datetime) -> PersistentState:
@@ -119,12 +124,16 @@ def _parse_v1(document: JsonObject) -> PersistentState:
 
 def _parse_ledger(value: JsonValue) -> LedgerEntry:
     document = _object(value, "ledger entry")
+    lease_token = _optional_ledger_string(document, "leaseToken")
+    lease_expires_at = _optional_ledger_timestamp(document, "leaseExpiresAt")
     return LedgerEntry(
         NotificationFingerprint(
             _string(_field(document, "fingerprint"), "ledger.fingerprint")
         ),
         _notification_status(_field(document, "status")),
         _timestamp(_field(document, "recordedAt"), "ledger.recordedAt"),
+        lease_token,
+        lease_expires_at,
     )
 
 
@@ -144,6 +153,8 @@ def _ledger_value(entry: LedgerEntry) -> JsonObject:
         "fingerprint": str(entry.fingerprint),
         "status": entry.status.value,
         "recordedAt": _format_timestamp(entry.recorded_at),
+        "leaseToken": entry.lease_token,
+        "leaseExpiresAt": _optional_timestamp_value(entry.lease_expires_at),
     }
 
 
@@ -217,6 +228,26 @@ def _timestamp(value: JsonValue, path: str) -> datetime:
 
 def _optional_timestamp(value: JsonValue, path: str) -> datetime | None:
     return None if value is None else _timestamp(value, path)
+
+
+def _optional_ledger_string(document: JsonObject, name: str) -> str | None:
+    return (
+        None
+        if name not in document
+        else _optional_string(document[name], f"ledger.{name}")
+    )
+
+
+def _optional_string(value: JsonValue, path: str) -> str | None:
+    return None if value is None else _string(value, path)
+
+
+def _optional_ledger_timestamp(document: JsonObject, name: str) -> datetime | None:
+    return (
+        None
+        if name not in document
+        else _optional_timestamp(document[name], f"ledger.{name}")
+    )
 
 
 def _source_failure_count(document: JsonObject) -> int:

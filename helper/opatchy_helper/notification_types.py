@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum, unique
 from typing import Protocol
 
-from .models import NotificationFingerprint
+from .models import NotificationFingerprint, Severity
 from .runner_types import CommandName, CommandResult
 
 
@@ -17,6 +17,13 @@ class NotificationChange(StrEnum):
     FIRST = "first"
     NEW = "new"
     UNCHANGED = "unchanged"
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationSettings:
+    notify_permanent: bool = True
+    notify_security: bool = True
+    security_minimum_severity: Severity = Severity.HIGH
 
 
 @dataclass(frozen=True, slots=True)

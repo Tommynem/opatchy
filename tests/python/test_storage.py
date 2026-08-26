@@ -501,6 +501,27 @@ def test_v1_state_decodes_watch_ledger_and_source_metadata(storage: Storage) -> 
     assert loaded.sources[0].last_success == NOW
 
 
+def test_ledger_lease_round_trips_with_legacy_entries(storage: Storage) -> None:
+    # Given: a legacy entry and an in-flight pending notification lease.
+    legacy = LedgerEntry(
+        NotificationFingerprint("legacy"), NotificationStatus.DELIVERED, NOW
+    )
+    claimed = LedgerEntry(
+        NotificationFingerprint("claimed"),
+        NotificationStatus.PENDING,
+        NOW,
+        "claim-token",
+        NOW + timedelta(seconds=30),
+    )
+
+    # When: the state is persisted and reloaded.
+    storage.save_state(PersistentState((), (legacy, claimed), ()))
+    restored = storage.load_state().state.ledger
+
+    # Then: leases survive while old entries remain valid without a lease.
+    assert restored == (claimed, legacy)
+
+
 @pytest.mark.parametrize(
     "raw",
     (

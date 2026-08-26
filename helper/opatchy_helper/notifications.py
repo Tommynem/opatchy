@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, datetime
-from typing import assert_never, final
+from datetime import UTC, datetime, timedelta
+from typing import Final, assert_never, final
+from uuid import uuid4
 
 from .models import (
     NotificationFingerprint,
@@ -17,6 +18,7 @@ from .notification_types import (
     NotificationChange,
     NotificationKind,
     NotificationRunner,
+    NotificationSettings,
 )
 from .runner import run_command
 from .runner_types import (
@@ -31,6 +33,9 @@ from .runner_types import (
 )
 from .storage import Storage
 from .storage_types import LedgerEntry, PersistentState
+
+_LEASE_DURATION: Final = timedelta(seconds=30)
+_DEFAULT_SETTINGS: Final = NotificationSettings()
 
 __all__ = (
     "NotificationCandidate",
@@ -57,28 +62,42 @@ class NotificationCoordinator:
         storage: Storage,
         run: NotificationRunner = run_command,
         clock: Callable[[], datetime] = _utc_now,
+        *,
+        settings: NotificationSettings = _DEFAULT_SETTINGS,
     ) -> None:
         self._storage = storage
         self._run = run
         self._clock = clock
+        self._settings = settings
 
     def dispatch(self, snapshot: SnapshotResponse) -> tuple[NotificationOutcome, ...]:
         now = self._clock()
         state = self._storage.load_state().state
-        candidates = notification_candidates(state, snapshot, now)
-        return tuple(
-            self._dispatch(candidate)
-            for kind in NotificationKind
-            if (candidate := _first_dispatchable(candidates, state, kind)) is not None
-        )
+        candidates = notification_candidates(state, snapshot, now, self._settings)
+        outcomes: list[NotificationOutcome] = []
+        for kind in NotificationKind:
+            candidate = _first_dispatchable(candidates, state, kind)
+            if candidate is None:
+                continue
+            outcome = self._dispatch(candidate)
+            if outcome is not None:
+                outcomes.append(outcome)
+        return tuple(outcomes)
 
-    def _dispatch(self, candidate: NotificationCandidate) -> NotificationOutcome:
+    def _dispatch(self, candidate: NotificationCandidate) -> NotificationOutcome | None:
         now = self._clock()
-        _ = self._storage.update_state(lambda state: _reserve(state, candidate, now))
+        lease_token = uuid4().hex
+        claimed = self._storage.update_state(
+            lambda state: _reserve(state, candidate, now, lease_token)
+        ).state
+        if not _owns_lease(claimed, candidate.fingerprint, lease_token):
+            return None
         result = self._run(CommandName.NOTIFY, (candidate.title, candidate.body))
         status = _delivery_status(result, candidate.change)
         _ = self._storage.update_state(
-            lambda state: _replace_status(state, candidate.fingerprint, status)
+            lambda state: _replace_status(
+                state, candidate.fingerprint, status, lease_token
+            )
         )
         return NotificationOutcome(candidate.fingerprint, status)
 
@@ -106,17 +125,36 @@ def is_dispatchable(entry: LedgerEntry | None) -> bool:
 
 
 def _reserve(
-    state: PersistentState, candidate: NotificationCandidate, now: datetime
+    state: PersistentState,
+    candidate: NotificationCandidate,
+    now: datetime,
+    lease_token: str,
 ) -> PersistentState:
-    if _entry(state, candidate.fingerprint) is not None:
-        return state
+    existing = _entry(state, candidate.fingerprint)
+    if existing is not None:
+        if not _can_claim(existing, now):
+            return state
+        return _replace_entry(
+            state,
+            replace(
+                existing,
+                lease_token=lease_token,
+                lease_expires_at=now + _LEASE_DURATION,
+            ),
+        )
     ledger = tuple(
         replace(entry, status=NotificationStatus.SUPPRESSED)
         if entry.is_active and str(entry.fingerprint).startswith(candidate.reference)
         else entry
         for entry in state.ledger
     )
-    entry = LedgerEntry(candidate.fingerprint, NotificationStatus.PENDING, now)
+    entry = LedgerEntry(
+        candidate.fingerprint,
+        NotificationStatus.PENDING,
+        now,
+        lease_token,
+        now + _LEASE_DURATION,
+    )
     return PersistentState(state.watches, (*ledger, entry), state.sources)
 
 
@@ -124,17 +162,43 @@ def _replace_status(
     state: PersistentState,
     fingerprint: NotificationFingerprint,
     status: NotificationStatus,
+    lease_token: str,
 ) -> PersistentState:
     return PersistentState(
         state.watches,
         tuple(
-            replace(entry, status=status)
+            replace(entry, status=status, lease_token=None, lease_expires_at=None)
             if entry.fingerprint == fingerprint
             and entry.status is NotificationStatus.PENDING
+            and entry.lease_token == lease_token
             else entry
             for entry in state.ledger
         ),
         state.sources,
+    )
+
+
+def _replace_entry(state: PersistentState, updated: LedgerEntry) -> PersistentState:
+    return PersistentState(
+        state.watches,
+        tuple(
+            updated if entry.fingerprint == updated.fingerprint else entry
+            for entry in state.ledger
+        ),
+        state.sources,
+    )
+
+
+def _owns_lease(
+    state: PersistentState, fingerprint: NotificationFingerprint, lease_token: str
+) -> bool:
+    entry = _entry(state, fingerprint)
+    return entry is not None and entry.lease_token == lease_token
+
+
+def _can_claim(entry: LedgerEntry, now: datetime) -> bool:
+    return entry.status is NotificationStatus.PENDING and (
+        entry.lease_expires_at is None or entry.lease_expires_at <= now
     )
 
 
