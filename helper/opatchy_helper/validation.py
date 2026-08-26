@@ -77,9 +77,10 @@ def _validate_snapshot(payload: SnapshotPayload) -> None:
 def _validate_inventory(payload: InventoryPayload) -> None:
     _validate_inventory_source(payload.source)
     _validate_nonnegative(payload.total, "inventory.total")
-    if payload.total != len(payload.items):
+    if payload.total < len(payload.items):
         _fail(
-            ErrorCode.INVALID_ENVELOPE, "inventory.total does not match inventory.items"
+            ErrorCode.INVALID_ENVELOPE,
+            "inventory.total is smaller than inventory.items",
         )
     _validate_items(payload.items)
     if any(item.source is not payload.source for item in payload.items):

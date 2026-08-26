@@ -84,7 +84,7 @@ def inventory_response(
     return InventoryResponse(
         cached.generated_at,
         cached.generation_id,
-        InventoryPayload(command.source, len(paged), paged),
+        InventoryPayload(command.source, len(ordered), paged),
     )
 
 

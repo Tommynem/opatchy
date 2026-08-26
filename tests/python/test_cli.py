@@ -97,6 +97,37 @@ def test_inventory_casefolds_unicode_sorts_duplicate_labels_and_pages(
     assert paged.payload.items[0].item_id == ItemId("arch:zeta")
 
 
+def test_inventory_reports_full_filtered_total_across_pages(tmp_path: Path) -> None:
+    # Given: three sorted query matches and one unrelated cached item.
+    store = storage(tmp_path)
+    write_inventory(
+        store,
+        ItemSource.ARCH,
+        item("arch:gamma", ItemSource.ARCH, "same"),
+        item("arch:alpha", ItemSource.ARCH, "same"),
+        item("arch:beta", ItemSource.ARCH, "same"),
+        item("arch:other", ItemSource.ARCH, "other"),
+    )
+
+    # When: empty, first, middle, and beyond-end pages are requested.
+    empty = inventory(inventory_cli(tmp_path, "arch", "missing", "1", "0"))
+    first = inventory(inventory_cli(tmp_path, "arch", "same", "1", "0"))
+    middle = inventory(inventory_cli(tmp_path, "arch", "same", "1", "1"))
+    beyond = inventory(inventory_cli(tmp_path, "arch", "same", "1", "3"))
+
+    # Then: each response reports the complete filtered count, not page size.
+    assert (empty.payload.total, empty.payload.items) == (0, ())
+    assert (first.payload.total, first.payload.items[0].item_id) == (
+        3,
+        ItemId("arch:alpha"),
+    )
+    assert (middle.payload.total, middle.payload.items[0].item_id) == (
+        3,
+        ItemId("arch:beta"),
+    )
+    assert (beyond.payload.total, beyond.payload.items) == (3, ())
+
+
 def test_inventory_rejects_boundaries_and_supports_every_approved_source(
     tmp_path: Path,
 ) -> None:

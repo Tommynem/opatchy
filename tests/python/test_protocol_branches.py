@@ -344,7 +344,7 @@ class ProtocolBranchTests(unittest.TestCase):
                 ErrorCode.PROTOCOL_VERSION_INVALID,
             ),
             (
-                replace(inventory, payload=replace(inventory.payload, total=2)),
+                replace(inventory, payload=replace(inventory.payload, total=0)),
                 ErrorCode.INVALID_ENVELOPE,
             ),
             (
