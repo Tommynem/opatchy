@@ -55,6 +55,7 @@ class PluginLifecycleContractTests(unittest.TestCase):
             {
                 "refreshIntervalSec": 21600,
                 "notifyPermanent": True,
+                "reducedMotion": False,
                 "notifySecurity": True,
                 "securityMinimumSeverity": "high",
                 "enableCisaKev": True,
@@ -67,6 +68,7 @@ class PluginLifecycleContractTests(unittest.TestCase):
             {
                 "refreshIntervalSec",
                 "notifyPermanent",
+                "reducedMotion",
                 "notifySecurity",
                 "securityMinimumSeverity",
                 "enableCisaKev",
@@ -76,6 +78,8 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.assertEqual(schema["refreshIntervalSec"]["type"], "integer")
         self.assertEqual(schema["refreshIntervalSec"]["min"], 900)
         self.assertEqual(schema["refreshIntervalSec"]["max"], 86400)
+        self.assertEqual(schema["reducedMotion"]["type"], "boolean")
+        self.assertIs(schema["reducedMotion"]["defaultValue"], False)
         self.assertEqual(
             schema["securityMinimumSeverity"]["options"], ["high", "critical"]
         )
