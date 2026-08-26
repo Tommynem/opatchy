@@ -4,8 +4,10 @@ import os
 import select
 import signal
 import subprocess
+import sys
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import IO
 
 from .runner_types import (
@@ -21,6 +23,8 @@ from .runner_types import (
     redact_diagnostic,
 )
 
+_SUPERVISOR_PATH = Path(__file__).with_name("command_supervisor.py")
+
 
 def run_spec(spec: CommandSpec, arguments: tuple[str, ...]) -> CommandResult:
     if not arguments_allowed(spec.argument_policy, arguments):
@@ -31,9 +35,18 @@ def run_spec(spec: CommandSpec, arguments: tuple[str, ...]) -> CommandResult:
         "LANG": "C",
         "PATH": "/usr/bin:/bin",
     }
+    if not spec.executable.is_file() or not os.access(spec.executable, os.X_OK):
+        return CommandMissing(redact_diagnostic(str(spec.executable)))
     try:
         process = subprocess.Popen(  # noqa: S603 - immutable closed CommandSpec registry only
-            (str(spec.executable), *spec.base_argv, *arguments),
+            (
+                sys.executable,
+                str(_SUPERVISOR_PATH),
+                str(os.getpid()),
+                str(spec.executable),
+                *spec.base_argv,
+                *arguments,
+            ),
             cwd=spec.cwd,
             env=environment,
             stdin=subprocess.DEVNULL,

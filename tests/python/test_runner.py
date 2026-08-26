@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import signal
 import ssl
+import subprocess
 import sys
 import time
 import urllib.error
@@ -17,7 +19,7 @@ import pytest
 HELPER_ROOT = Path(__file__).resolve().parents[2] / "helper"
 sys.path.insert(0, str(HELPER_ROOT))
 
-from opatchy_helper import runner
+from opatchy_helper import command_supervisor, runner
 
 
 @final
@@ -70,6 +72,126 @@ def _patch_command(
         "COMMAND_SPECS",
         MappingProxyType({runner.CommandName.OMARCHY_UPDATE_AVAILABLE: spec}),
     )
+
+
+def _wait_for_file(path: Path, timeout_seconds: float = 2) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while not path.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert path.exists()
+
+
+def test_outer_helper_death_kills_controlled_runner_descendants(tmp_path: Path) -> None:
+    # Given: an outer helper whose controlled runner starts a target and descendant.
+    child_pid = tmp_path / "child-pid"
+    ready = tmp_path / "ready"
+    sentinel = tmp_path / "descendant-survived"
+    child_source = (
+        "import pathlib, time; time.sleep(0.25); "
+        f"pathlib.Path({str(sentinel)!r}).touch()"
+    )
+    target_directory = tmp_path / "target"
+    outer_directory = tmp_path / "outer"
+    target_directory.mkdir()
+    outer_directory.mkdir()
+    target = _fake_command(
+        target_directory,
+        "\n".join(
+            (
+                "import pathlib, subprocess, sys, time",
+                f"child = subprocess.Popen([sys.executable, '-c', {child_source!r}])",
+                f"pathlib.Path({str(child_pid)!r}).write_text(str(child.pid))",
+                f"pathlib.Path({str(ready)!r}).touch()",
+                "time.sleep(0.5)",
+            )
+        ),
+    )
+    outer = _fake_command(
+        outer_directory,
+        "\n".join(
+            (
+                "import sys",
+                "from pathlib import Path",
+                f"sys.path.insert(0, {str(HELPER_ROOT)!r})",
+                "from opatchy_helper.runner_process import run_spec",
+                "from opatchy_helper.runner_types import ArgumentPolicy, CommandSpec",
+                f"run_spec(CommandSpec(Path({str(target)!r}), (), ArgumentPolicy.NONE, 30, 1024, 1024), ())",
+            )
+        ),
+    )
+    process = subprocess.Popen([str(outer)])
+    _wait_for_file(ready)
+
+    # When: the outer helper is killed without any QML-side cleanup.
+    os.kill(process.pid, signal.SIGKILL)
+    assert process.wait(timeout=2) == -signal.SIGKILL
+
+    # Then: the target group prevents the delayed child side effect without test cleanup.
+    _wait_for_file(child_pid)
+    time.sleep(0.6)
+    assert not sentinel.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(child_pid.read_text(encoding="utf-8")), 0)
+
+
+def test_runner_has_one_supervisor_command_launch_seam() -> None:
+    # Given: the two production modules that participate in external command launch.
+    process_source = (HELPER_ROOT / "opatchy_helper/runner_process.py").read_text(
+        encoding="utf-8"
+    )
+    supervisor_source = (
+        HELPER_ROOT / "opatchy_helper/command_supervisor.py"
+    ).read_text(encoding="utf-8")
+
+    # When: the production launch seams are inspected statically.
+    process_launches = process_source.count("subprocess.Popen(")
+    target_launches = supervisor_source.count("subprocess.Popen(")
+
+    # Then: only the runner launches a supervisor and only it launches fixed targets.
+    assert process_launches == 1
+    assert "str(_SUPERVISOR_PATH)" in process_source
+    assert target_launches == 1
+
+
+def test_command_supervisor_forwards_fixed_target_exit_status(tmp_path: Path) -> None:
+    # Given: a controlled target and the current test process as its expected parent.
+    executable = _fake_command(tmp_path, "raise SystemExit(7)")
+
+    # When: the supervisor arms parent-death handling and waits for the target.
+    result = command_supervisor.main((str(os.getppid()), str(executable)))
+
+    # Then: the target's ordinary exit status reaches the runner unchanged.
+    assert result == 7
+
+
+def test_command_supervisor_rejects_invalid_or_missing_targets(tmp_path: Path) -> None:
+    # Given: malformed supervisor arguments and an absent fixed executable.
+    missing = tmp_path / "missing"
+
+    # When: each invalid launch shape reaches the supervisor boundary.
+    malformed = command_supervisor.main(())
+    absent = command_supervisor.main((str(os.getppid()), str(missing)))
+
+    # Then: neither shape can start an uncontrolled target.
+    assert malformed == command_supervisor.LAUNCH_FAILURE
+    assert absent == command_supervisor.LAUNCH_FAILURE
+
+
+def test_command_supervisor_fails_closed_when_parent_death_setup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a prctl boundary that cannot arm parent-death notification.
+    def fail_setup() -> None:
+        raise command_supervisor.SupervisorSetupError(1)
+
+    monkeypatch.setattr(command_supervisor, "_set_parent_death_signal", fail_setup)
+
+    # When: a trusted launch reaches the setup boundary.
+    result = command_supervisor.main((str(os.getppid()), "/usr/bin/true"))
+    _ = signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGUSR1})
+
+    # Then: the supervisor returns before spawning the target.
+    assert result == command_supervisor.LAUNCH_FAILURE
 
 
 def test_run_command_rejects_hostile_argv_without_creating_sentinel(
