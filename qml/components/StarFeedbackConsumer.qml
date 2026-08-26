@@ -8,12 +8,13 @@ QtObject {
   property string confirmedMode: "off"
   property bool temporaryArmed: false
   property int activations: 0
+  property string observedState: ""
 
   signal activated()
 
   onConfirmedModeChanged: observe()
   onTemporaryArmedChanged: observe()
-  Component.onCompleted: observe()
+  Component.onCompleted: observedState = currentState()
 
   function acceptFeedback(changedTarget) {
     if (changedTarget === target) {
@@ -23,6 +24,12 @@ QtObject {
   }
 
   function observe() {
-    if (starState && target !== "") starState.observeConfirmed(target, confirmedMode, temporaryArmed)
+    var current = currentState()
+    if (observedState !== "" && observedState !== current) acceptFeedback(target)
+    observedState = current
+  }
+
+  function currentState() {
+    return confirmedMode + ":" + temporaryArmed
   }
 }

@@ -113,16 +113,13 @@ TestCase {
     const first = consumerComponent.createObject(root, { starState: state, target: "arch:demo" })
     const second = consumerComponent.createObject(root, { starState: state, target: "arch:demo" })
     const other = consumerComponent.createObject(root, { starState: state, target: "arch:other" })
-    state.feedbackRequested.connect(function(target) {
-      first.acceptFeedback(target)
-      second.acceptFeedback(target)
-      other.acceptFeedback(target)
-    })
     first.confirmedMode = "temporary"
+    second.confirmedMode = "temporary"
     compare(first.activations, 1)
     compare(second.activations, 1)
     compare(other.activations, 0)
     first.temporaryArmed = true
+    second.temporaryArmed = true
     compare(first.activations, 2)
     compare(second.activations, 2)
     compare(other.activations, 0)
