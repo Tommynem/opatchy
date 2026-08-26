@@ -102,17 +102,18 @@ TestCase {
 
   function test_security_clock_updates_only_while_active() {
     const clock = clockComponent.createObject(root)
-    const initialTime = clock.currentTime
 
     compare(clock.interval, 10)
-    wait(30)
-    compare(clock.currentTime, initialTime)
+    clock._clockTime = 1
+    compare(clock.currentTime, 1)
     clock.active = true
-    tryVerify(function() { return clock.currentTime > initialTime }, 100)
-    const activeTime = clock.currentTime
+    verify(clock.currentTime > 1)
+    const activationTime = clock.currentTime
+    tryVerify(function() { return clock.currentTime > activationTime }, 100)
+    const periodicTime = clock.currentTime
     clock.active = false
     wait(30)
-    compare(clock.currentTime, activeTime)
+    compare(clock.currentTime, periodicTime)
     clock.destroy()
   }
 }
