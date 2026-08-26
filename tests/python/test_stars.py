@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -198,15 +199,62 @@ def test_fresh_confirmed_removal_clears_temporary() -> None:
     state = PersistentState((temporary(candidate="1.1", armed=True),), (), ())
 
     assert (
-        transition(state, FreshSourceScan(ItemSource.ARCH, inventory()))
+        transition(
+            state,
+            FreshSourceScan(
+                ItemSource.ARCH, inventory(), frozenset((ItemId("arch:demo"),))
+            ),
+        )
         == PersistentState.empty()
     )
 
 
-def test_candidate_withdrawal_with_unchanged_installation_preserves_armed_temporary() -> (
+@pytest.mark.parametrize(
+    "watch",
+    (temporary(), temporary(candidate="1.1", armed=True)),
+)
+def test_empty_fresh_updates_without_explicit_removal_preserve_temporary_watch(
+    watch: WatchRecord,
+) -> None:
+    state = PersistentState((watch,), (), ())
+
+    updated = transition(state, FreshSourceScan(ItemSource.ARCH, inventory()))
+
+    assert updated == state
+
+
+def test_source_scoped_removal_cannot_clear_same_label_item_from_another_source() -> (
     None
 ):
-    state = PersistentState((temporary(candidate="1.1", armed=True),), (), ())
+    arch_watch = temporary("arch:shared", candidate="1.1", armed=True)
+    aur_watch = temporary("aur:shared", candidate="1.1", armed=True)
+    state = PersistentState((arch_watch, aur_watch), (), ())
+
+    ignored = transition(
+        state,
+        FreshSourceScan(
+            ItemSource.ARCH, inventory(), frozenset((ItemId("aur:shared"),))
+        ),
+    )
+    cleared = transition(
+        state,
+        FreshSourceScan(
+            ItemSource.ARCH, inventory(), frozenset((ItemId("arch:shared"),))
+        ),
+    )
+
+    assert ignored == state
+    assert cleared.watches == (aur_watch,)
+
+
+@pytest.mark.parametrize(
+    "watch",
+    (temporary(), temporary(candidate="1.1", armed=True)),
+)
+def test_candidate_withdrawal_with_unchanged_installation_preserves_temporary_state(
+    watch: WatchRecord,
+) -> None:
+    state = PersistentState((watch,), (), ())
 
     updated = transition(
         state, FreshSourceScan(ItemSource.ARCH, inventory(item(candidate=None)))
@@ -299,6 +347,10 @@ def test_cached_adapter_fingerprint_is_deterministic_and_duplicate_labels_remain
     assert (
         state.watches[0].installed_fingerprint != state.watches[1].installed_fingerprint
     )
+    assert (
+        state.watches[0].installed_fingerprint
+        == hashlib.sha256(b"arch\x00arch:shared\x001.0").hexdigest()
+    )
 
 
 def test_cached_adapter_preserves_absent_native_evidence_without_fabricating_fingerprint() -> (
@@ -319,16 +371,26 @@ def test_cached_adapter_preserves_absent_native_evidence_without_fabricating_fin
     assert cached_item(normalized).candidate_fingerprint is None
 
 
-def test_invalid_in_memory_off_record_is_inert_for_click_and_fresh_scan() -> None:
+def test_invalid_in_memory_off_record_fails_closed_for_click_and_fresh_scan() -> None:
     state = PersistentState(
         (WatchRecord(ItemId("arch:demo"), WatchMode.OFF, None, None, False),), (), ()
     )
 
-    clicked = transition(state, StarClick(ItemId("arch:demo"), inventory(item())))
-    scanned = transition(state, FreshSourceScan(ItemSource.ARCH, inventory(item())))
+    with pytest.raises(WatchTransitionError):
+        _ = transition(state, StarClick(ItemId("arch:demo"), inventory(item())))
+    with pytest.raises(WatchTransitionError):
+        _ = transition(state, FreshSourceScan(ItemSource.ARCH, inventory(item())))
 
-    assert clicked == state
-    assert scanned == state
+
+def test_unknown_in_memory_watch_mode_fails_closed_for_click_and_fresh_scan() -> None:
+    watch = WatchRecord(ItemId("arch:demo"), WatchMode.OFF, None, None, False)
+    object.__setattr__(watch, "mode", "future")
+    state = PersistentState((watch,), (), ())
+
+    with pytest.raises(WatchTransitionError):
+        _ = transition(state, StarClick(ItemId("arch:demo"), inventory(item())))
+    with pytest.raises(WatchTransitionError):
+        _ = transition(state, FreshSourceScan(ItemSource.ARCH, inventory(item())))
 
 
 def test_transition_error_keeps_its_typed_reason() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import hashlib
 from dataclasses import dataclass, replace
 from typing import TypeAlias, assert_never, final, override
 
@@ -39,6 +39,7 @@ class StarClick:
 class FreshSourceScan:
     source: ItemSource
     inventory: CachedInventory
+    confirmed_removed_item_ids: frozenset[ItemId] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,25 +141,35 @@ def _star_click(state: PersistentState, event: StarClick) -> PersistentState:
                 item.candidate_fingerprint is not None,
             )
             return PersistentState((*state.watches, watch), state.ledger, state.sources)
-        case WatchRecord(mode=WatchMode.TEMPORARY):
+        case watch:
+            return _click_existing_watch(state, watch)
+
+
+def _click_existing_watch(
+    state: PersistentState, watch: WatchRecord
+) -> PersistentState:
+    match str(watch.mode):
+        case "temporary":
             permanent = WatchRecord(
-                current.item_id, WatchMode.PERMANENT, None, None, False
+                watch.item_id, WatchMode.PERMANENT, None, None, False
             )
             return PersistentState(
                 tuple(
-                    permanent if watch == current else watch for watch in state.watches
+                    permanent if record == watch else record for record in state.watches
                 ),
                 state.ledger,
                 state.sources,
             )
-        case WatchRecord(mode=WatchMode.PERMANENT):
+        case "permanent":
             return PersistentState(
-                tuple(watch for watch in state.watches if watch != current),
-                _without_active_references(state.ledger, current.item_id),
+                tuple(record for record in state.watches if record != watch),
+                _without_active_references(state.ledger, watch.item_id),
                 state.sources,
             )
-        case WatchRecord():  # pragma: no branch
-            return state
+        case "off":
+            raise WatchTransitionError("off watches are not durable")
+        case _:
+            raise WatchTransitionError("watch mode is invalid")
 
 
 def _fresh_scan(state: PersistentState, event: FreshSourceScan) -> PersistentState:
@@ -170,23 +181,27 @@ def _fresh_scan(state: PersistentState, event: FreshSourceScan) -> PersistentSta
     watches = tuple(
         updated
         for watch in state.watches
-        if (updated := _observe_watch(watch, event.source, items)) is not None
+        if (updated := _observe_watch(watch, event, items)) is not None
     )
     return PersistentState(watches, state.ledger, state.sources)
 
 
 def _observe_watch(
-    watch: WatchRecord, source: ItemSource, items: dict[ItemId, CachedItem]
+    watch: WatchRecord,
+    event: FreshSourceScan,
+    items: dict[ItemId, CachedItem],
 ) -> WatchRecord | None:
-    match watch.mode:
-        case WatchMode.PERMANENT:
+    match str(watch.mode):
+        case "permanent":
             return watch
-        case WatchMode.TEMPORARY:
-            if not str(watch.item_id).startswith(f"{source.value}:"):
+        case "temporary":
+            if not str(watch.item_id).startswith(f"{event.source.value}:"):
                 return watch
             item = items.get(watch.item_id)
             if item is None:
-                return None
+                return (
+                    None if watch.item_id in event.confirmed_removed_item_ids else watch
+                )
             if (
                 item.installed_fingerprint is not None
                 and item.installed_fingerprint != watch.installed_fingerprint
@@ -197,8 +212,10 @@ def _observe_watch(
                     watch, candidate_fingerprint=item.candidate_fingerprint, armed=True
                 )
             return watch
-        case WatchMode.OFF:  # pragma: no branch
-            return watch
+        case "off":
+            raise WatchTransitionError("off watches are not durable")
+        case _:
+            raise WatchTransitionError("watch mode is invalid")
 
 
 def _fingerprint(
@@ -206,9 +223,7 @@ def _fingerprint(
 ) -> str | None:
     if evidence is None:
         return None
-    return json.dumps(
-        (source.value, str(item_id), evidence), ensure_ascii=True, separators=(",", ":")
-    )
+    return hashlib.sha256(f"{source.value}\0{item_id}\0{evidence}".encode()).hexdigest()
 
 
 def _without_active_references(
