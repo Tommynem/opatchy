@@ -186,11 +186,27 @@ def test_tracker_discards_not_affected_and_kev_exact_joins_only_valid_cves() -> 
     assert correlated.groups[0].findings[0].kev_status is KevStatus.UNAVAILABLE
 
 
+def test_tracker_parser_accepts_six_digit_date_and_one_digit_sequence() -> None:
+    # Given: a source-faithful Tracker advisory reference.
+    payload = (
+        b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable",'
+        b'"type":"security","severity":"High","fixed":null,"issues":[], '
+        b'"affected":"pkg","ticket":null,"advisories":["ASA-202506-1"]}]'
+    )
+
+    # When: Tracker parsing validates its published advisory reference.
+    result = parse_tracker(payload)
+
+    # Then: a six-digit YYYYMM date and unpadded sequence suffix are accepted.
+    assert isinstance(result, tuple)
+
+
 @pytest.mark.parametrize(
     "payload",
     (
         b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":["CVE-2026-0001","CVE-2026-0001"]}]',
         b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":[],"affected":"pkg","ticket":null,"advisories":["ASA-2026-0001","ASA-2026-0001"]}]',
+        b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":[],"affected":"pkg","ticket":null,"advisories":["ASA-2026-0001"]}]',
         b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":[],"affected":"pkg","ticket":null,"advisories":["AVG-20260001"]}]',
     ),
 )

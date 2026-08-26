@@ -13,7 +13,7 @@ _MAX_ISSUES = 128
 _MAX_IDENTIFIER = 60
 _MAX_STRING = 128
 _AVG: Final = re.compile(r"AVG-[0-9]+")
-_ASA: Final = re.compile(r"ASA-[0-9]{4}-[0-9]+")
+_ASA: Final = re.compile(r"^ASA-[0-9]{6}-[0-9]+$")
 _PRIMARY_REQUIRED = frozenset(
     {"name", "packages", "status", "type", "severity", "fixed", "issues"}
 )

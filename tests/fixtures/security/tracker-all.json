@@ -9,7 +9,7 @@
     "fixed": "1:6.12.3-1",
     "ticket": null,
     "issues": ["CVE-2026-0001"],
-    "advisories": ["ASA-2026-0001"]
+    "advisories": ["ASA-202506-1"]
   },
   {
     "name": "AVG-20260002",
@@ -21,7 +21,7 @@
     "fixed": null,
     "ticket": null,
     "issues": ["CVE-2026-0002", "not-a-cve"],
-    "advisories": ["ASA-2026-0002"]
+    "advisories": ["ASA-202107-12"]
   },
   {
     "name": "AVG-20260003",
