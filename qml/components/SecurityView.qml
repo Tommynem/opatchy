@@ -65,7 +65,8 @@ Item {
             width: parent.width
             starState: root.starState
             target: modelData.watchTarget
-            confirmedMode: root.watchRow(modelData).watchMode
+              confirmedMode: root.watchRow(modelData).watchMode
+              temporaryArmed: root.watchRow(modelData).watchArmed
             watchable: root.watchRow(modelData).watchable
             lastKnown: root.view.kind === "last_known"
             notifyPermanent: root.notifyPermanent
@@ -100,6 +101,6 @@ Item {
   function watchRow(group) {
     var items = snapshot && snapshot.payload && Array.isArray(snapshot.payload.items) ? snapshot.payload.items : []
     var item = items.filter(function(candidate) { return candidate && candidate.id === group.watchTarget })[0]
-    return item ? { watchMode: item.watchMode, watchable: item.watchable === true } : { watchMode: "off", watchable: false }
+    return item ? { watchMode: item.watchMode, watchArmed: item.watchArmed === true, watchable: item.watchable === true } : { watchMode: "off", watchArmed: false, watchable: false }
   }
 }

@@ -131,7 +131,7 @@ def _inventory(payload: InventoryPayload) -> JsonObject:
 
 
 def _star_result(payload: StarResultPayload) -> JsonObject:
-    return {"itemId": str(payload.item_id), "mode": payload.mode}
+    return {"itemId": str(payload.item_id), "mode": payload.mode, "watchArmed": payload.watch_armed}
 
 
 def _source(source: SourceHealth) -> JsonObject:

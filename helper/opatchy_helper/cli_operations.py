@@ -55,11 +55,12 @@ def scan(storage: Storage, force: bool) -> SnapshotResponse:
     previous = storage.load_generation()
     order = 0 if previous is None else previous.order + 1
     request = ScanRequest(GenerationId(f"scan-{uuid4().hex}"), order, force)
-    return (
+    result = (
         ScanCoordinator(storage, RuntimeScanCollector(storage), utc_now)
         .run(request)
         .snapshot
     )
+    return _overlay_snapshot(result, storage.load_state().state.watches)
 
 
 def snapshot(storage: Storage) -> SnapshotResponse:
@@ -67,13 +68,7 @@ def snapshot(storage: Storage) -> SnapshotResponse:
     if snapshot is None:
         raise CliUnavailableError("validated snapshot storage is unavailable")
     state = storage.load_state().state
-    return replace(
-        snapshot,
-        payload=replace(
-            snapshot.payload,
-            items=_watched_items(snapshot.payload.items, state.watches),
-        ),
-    )
+    return _overlay_snapshot(snapshot, state.watches)
 
 
 def inventory_response(
@@ -137,6 +132,17 @@ def _watched_items(
     )
 
 
+def _overlay_snapshot(
+    response: SnapshotResponse, watches: tuple[WatchRecord, ...]
+) -> SnapshotResponse:
+    items = _watched_items(response.payload.items, watches)
+    summary = replace(
+        response.payload.summary,
+        watched_updates=sum(item.watch_mode is not WatchMode.OFF for item in items),
+    )
+    return replace(response, payload=replace(response.payload, items=items, summary=summary))
+
+
 def _matches(item: NormalizedItem, query: str) -> bool:
     return (
         not query
@@ -146,7 +152,7 @@ def _matches(item: NormalizedItem, query: str) -> bool:
 
 
 def _item_key(item: NormalizedItem) -> tuple[str, str, str]:
-    return (item.source.value, item.label.casefold(), str(item.item_id))
+    return ("0" if item.watch_mode is not WatchMode.OFF else "1", item.label.casefold(), str(item.item_id))
 
 
 def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
@@ -198,14 +204,12 @@ def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
         assert_never(current)
 
     updated = storage.update_state_with_inventories(_sources(), mutate).state
-    mode = next(
-        (watch.mode for watch in updated.watches if watch.item_id == command.item_id),
-        WatchMode.OFF,
-    )
+    watch = next((watch for watch in updated.watches if watch.item_id == command.item_id), None)
+    mode = WatchMode.OFF if watch is None else watch.mode
     return StarResultResponse(
         utc_now(),
         GenerationId(f"star-{uuid4().hex}"),
-        StarResultPayload(command.item_id, mode),
+        StarResultPayload(command.item_id, mode, watch is not None and watch.armed),
     )
 
 

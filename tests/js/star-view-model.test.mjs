@@ -18,12 +18,12 @@ test("maps each watch mode to one explicit next mode and distinct accessible pre
   const model = loadModel();
   const cases = [
     ["off", "temporary", "Not watched"],
-    ["temporary", "permanent", "Watching until one observed update installs"],
+    ["temporary", "permanent", "Watching for an observed update"],
     ["permanent", "off", "Watching permanently with notifications"],
   ];
 
   for (const [mode, nextMode, label] of cases) {
-    const presentation = model.presentation(mode, true, true, false);
+    const presentation = model.presentation(mode, true, true, false, false);
     assert.equal(presentation.mode, mode);
     assert.equal(presentation.nextMode, nextMode);
     assert.equal(presentation.label, label);
@@ -31,6 +31,14 @@ test("maps each watch mode to one explicit next mode and distinct accessible pre
     assert.notEqual(presentation.tooltip, "");
     assert.notEqual(presentation.accessibleName, "");
   }
+});
+
+test("distinguishes authoritative armed temporary watches", () => {
+  const model = loadModel();
+  const armed = model.presentation("temporary", true, true, false, true);
+  const waiting = model.presentation("temporary", true, true, false, false);
+  assert.notEqual(armed.glyph, waiting.glyph);
+  assert.notEqual(armed.shortLabel, waiting.shortLabel);
 });
 
 test("explains disabled permanent notifications and never arms an unavailable off row", () => {

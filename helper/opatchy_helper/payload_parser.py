@@ -91,10 +91,11 @@ def parse_inventory(value: JsonValue) -> InventoryPayload:
 
 
 def parse_star_result(value: JsonValue) -> StarResultPayload:
-    reader_value = reader(value, "star-result", frozenset(("itemId", "mode")))
+    reader_value = reader(value, "star-result", frozenset(("itemId", "mode", "watchArmed")))
     return StarResultPayload(
         ItemId(identifier(reader_value.field("itemId"), "star-result.itemId")),
         enum(WatchMode, reader_value.field("mode"), "star-result.mode"),
+        boolean(reader_value.field("watchArmed"), "star-result.watchArmed"),
     )
 
 

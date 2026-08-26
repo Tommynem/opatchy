@@ -2,9 +2,9 @@
 
 var MODES = ["off", "temporary", "permanent"]
 
-function presentation(mode, notifyPermanent, watchable, lastKnown) {
+function presentation(mode, notifyPermanent, watchable, lastKnown, temporaryArmed) {
   var normalized = MODES.indexOf(mode) === -1 ? "off" : mode
-  var result = modePresentation(normalized, notifyPermanent === true, watchable === true)
+  var result = modePresentation(normalized, notifyPermanent === true, watchable === true, temporaryArmed === true)
   if (lastKnown === true && normalized !== "off") {
     result.label += " (last-known)"
     result.tooltip += " This is last-known data."
@@ -12,14 +12,14 @@ function presentation(mode, notifyPermanent, watchable, lastKnown) {
   return result
 }
 
-function modePresentation(mode, notifyPermanent, watchable) {
+function modePresentation(mode, notifyPermanent, watchable, temporaryArmed) {
   switch (mode) {
   case "off":
     return watchable
       ? state("off", "temporary", "☆", "Not watched", "Not watched. Watch until one observed update installs.", "Not watched; activate temporary watch", true)
       : state("off", null, "☆", "Not watched", "Not watched. This unavailable item cannot start a watch.", "Not watched; unavailable item", false)
   case "temporary":
-    return state("temporary", "permanent", "◌", "Watching until one observed update installs", "Temporary watch. It clears only after one observed update installs.", "Temporary watch; activate permanent watch", true)
+    return temporaryArmed ? state("temporary", "permanent", "◉", "Watching one observed update", "Temporary watch is armed and clears after one observed update installs.", "Temporary watch armed; activate permanent watch", true) : state("temporary", "permanent", "◌", "Watching for an observed update", "Temporary watch is waiting for an observed update.", "Temporary watch unarmed; activate permanent watch", true)
   case "permanent":
     return state("permanent", "off", "★", notifyPermanent ? "Watching permanently with notifications" : "Watching permanently; notifications disabled in settings", notifyPermanent ? "Permanent watch with notifications. Clear this watch." : "Permanent watch; notifications are disabled in settings. Clear this watch.", notifyPermanent ? "Permanent watch with notifications; clear watch" : "Permanent watch; notifications disabled in settings; clear watch", true)
   }
@@ -27,7 +27,7 @@ function modePresentation(mode, notifyPermanent, watchable) {
 }
 
 function state(mode, nextMode, glyph, label, tooltip, accessibleName, enabled) {
-  var shortLabel = mode === "off" ? "Off" : (mode === "temporary" ? "One update" : "Always")
+  var shortLabel = mode === "off" ? "Off" : (mode === "temporary" ? (glyph === "◉" ? "Armed" : "Waiting") : "Always")
   return { mode: mode, nextMode: nextMode, glyph: glyph, label: label, shortLabel: shortLabel, tooltip: tooltip, accessibleName: accessibleName, enabled: enabled }
 }
 

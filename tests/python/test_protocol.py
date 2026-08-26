@@ -186,7 +186,7 @@ class ProtocolCliTests(unittest.TestCase):
             StarResultResponse(
                 FIXED_TIME,
                 GenerationId("generation-star"),
-                StarResultPayload(ItemId("arch:demo"), WatchMode.PERMANENT),
+                StarResultPayload(ItemId("arch:demo"), WatchMode.PERMANENT, False),
             ),
             ErrorResponse(
                 FIXED_TIME,

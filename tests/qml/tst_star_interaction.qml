@@ -88,7 +88,7 @@ TestCase {
     state.service = { setStar: function() { return true } }
     state.snapshotGeneration = "generation-1"
     verify(state.request("arch:demo", "off", true))
-    state.acceptResult({ payload: { itemId: "arch:demo", mode: "temporary" } }, { kind: "set-star", itemId: "arch:demo", mode: "temporary" })
+    state.acceptResult({ payload: { itemId: "arch:demo", mode: "temporary", watchArmed: true } }, { kind: "set-star", itemId: "arch:demo", mode: "temporary" })
     compare(state.modeFor("arch:demo", "off"), "temporary")
     state.snapshotGeneration = "generation-2"
     compare(state.modeFor("arch:demo", "off"), "off")

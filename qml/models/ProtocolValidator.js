@@ -124,7 +124,7 @@ function validInventory(value) {
 }
 
 function validStarResult(value) {
-  return exactKeys(value, ["itemId", "mode"]) && bounded(value.itemId) && member(WATCH_MODES, value.mode)
+  return exactKeys(value, ["itemId", "mode", "watchArmed"]) && bounded(value.itemId) && member(WATCH_MODES, value.mode) && typeof value.watchArmed === "boolean" && (!value.watchArmed || value.mode === "temporary")
 }
 
 function validError(value) {

@@ -245,6 +245,7 @@ class InventoryPayload:
 class StarResultPayload:
     item_id: ItemId
     mode: WatchMode
+    watch_armed: bool
 
 
 @dataclass(frozen=True, slots=True)

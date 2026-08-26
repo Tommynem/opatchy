@@ -145,7 +145,7 @@ function starResult(generationId) {
     kind: "star-result",
     generatedAt: "2026-08-26T00:00:00.000Z",
     generationId,
-    payload: { itemId: "arch:demo", mode: "temporary" },
+    payload: { itemId: "arch:demo", mode: "temporary", watchArmed: true },
   });
 }
 

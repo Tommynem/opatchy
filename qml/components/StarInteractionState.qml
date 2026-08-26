@@ -12,6 +12,7 @@ QtObject {
   property string pendingMode: ""
   property string overrideTarget: ""
   property string overrideMode: ""
+  property bool overrideArmed: false
   property string overrideGeneration: ""
   property string errorText: ""
   property string errorTarget: ""
@@ -27,8 +28,8 @@ QtObject {
   }
 
   function stateFor(target, confirmedMode, watchable, temporaryArmed, lastKnown) {
-    var view = StarViewModel.presentation(modeFor(target, confirmedMode), notifyPermanent, watchable, lastKnown)
-    view.temporaryArmed = temporaryArmed === true
+    var effectiveArmed = target === overrideTarget ? overrideArmed : temporaryArmed
+    var view = StarViewModel.presentation(modeFor(target, confirmedMode), notifyPermanent, watchable, lastKnown, effectiveArmed)
     view.pending = pending && pendingTarget === target
     if (view.pending) {
       view.enabled = false
@@ -59,6 +60,7 @@ QtObject {
     if (!pending || !payload || !operation || operation.kind !== "set-star" || operation.itemId !== pendingTarget || operation.mode !== pendingMode || payload.itemId !== pendingTarget || payload.mode !== pendingMode) return
     overrideTarget = pendingTarget
     overrideMode = pendingMode
+    overrideArmed = payload.watchArmed === true
     overrideGeneration = snapshotGeneration
     pending = false
     pendingTarget = ""
@@ -81,6 +83,7 @@ QtObject {
     overrideTarget = ""
     overrideMode = ""
     overrideGeneration = ""
+    overrideArmed = false
   }
 
 }
