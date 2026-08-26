@@ -77,6 +77,8 @@ class SourceMetadata:
     source: SourceName
     last_success: datetime | None
     backoff_until: datetime | None
+    failure_count: int = 0
+    permanent_failure: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -13,6 +13,7 @@ from .models import (
     ProtocolError,
     Response,
     ResponseKind,
+    ScopeHealth,
     SecurityFinding,
     SecurityFindingGroup,
     SnapshotPayload,
@@ -134,13 +135,27 @@ def _star_result(payload: StarResultPayload) -> JsonObject:
 
 
 def _source(source: SourceHealth) -> JsonObject:
-    return {
+    value: JsonObject = {
         "cause": None if source.cause is None else _error(source.cause),
         "freshUntil": _timestamp(source.fresh_until),
         "observedAt": _timestamp(source.observed_at),
         "provenance": source.provenance,
         "source": source.source,
         "status": source.status,
+    }
+    if source.scopes:
+        value["scopes"] = [_scope(scope) for scope in source.scopes]
+    return value
+
+
+def _scope(scope: ScopeHealth) -> JsonObject:
+    return {
+        "cause": None if scope.cause is None else _error(scope.cause),
+        "freshUntil": _timestamp(scope.fresh_until),
+        "observedAt": _timestamp(scope.observed_at),
+        "provenance": scope.provenance,
+        "scope": scope.scope,
+        "status": scope.status,
     }
 
 
@@ -154,7 +169,7 @@ def _summary(summary: Summary) -> JsonObject:
 
 
 def _item(item: NormalizedItem) -> JsonObject:
-    return {
+    value: JsonObject = {
         "candidate": item.candidate,
         "id": str(item.item_id),
         "installed": item.installed,
@@ -164,6 +179,11 @@ def _item(item: NormalizedItem) -> JsonObject:
         "watchMode": item.watch_mode,
         "watchable": item.watchable,
     }
+    if item.installed_fingerprint is not None:
+        value["installedFingerprint"] = item.installed_fingerprint
+    if item.candidate_fingerprint is not None:
+        value["candidateFingerprint"] = item.candidate_fingerprint
+    return value
 
 
 def _group(group: SecurityFindingGroup) -> JsonObject:

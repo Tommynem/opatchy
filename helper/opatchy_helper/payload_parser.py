@@ -14,12 +14,14 @@ from .models import (
     NotificationStatus,
     Provenance,
     ScanState,
+    ScopeHealth,
     SecurityFinding,
     SecurityFindingGroup,
     Severity,
     SnapshotPayload,
     SourceHealth,
     SourceName,
+    SourceScope,
     SourceStatus,
     StarResultPayload,
     Summary,
@@ -111,13 +113,50 @@ def _source(value: JsonValue, path: str) -> SourceHealth:
         value,
         path,
         frozenset(
-            ("source", "status", "provenance", "observedAt", "freshUntil", "cause")
+            (
+                "source",
+                "status",
+                "provenance",
+                "observedAt",
+                "freshUntil",
+                "cause",
+                "scopes",
+            )
         ),
     )
     cause_value = reader_value.field("cause")
     cause = None if cause_value is None else parse_error(cause_value, f"{path}.cause")
+    scopes = (
+        ()
+        if "scopes" not in reader_value.value
+        else tuple(
+            _scope(entry, f"{path}.scopes")
+            for entry in list_value(reader_value.field("scopes"), f"{path}.scopes")
+        )
+    )
     return SourceHealth(
         enum(SourceName, reader_value.field("source"), f"{path}.source"),
+        enum(SourceStatus, reader_value.field("status"), f"{path}.status"),
+        enum(Provenance, reader_value.field("provenance"), f"{path}.provenance"),
+        timestamp(reader_value.field("observedAt"), f"{path}.observedAt"),
+        timestamp(reader_value.field("freshUntil"), f"{path}.freshUntil"),
+        cause,
+        scopes,
+    )
+
+
+def _scope(value: JsonValue, path: str) -> ScopeHealth:
+    reader_value = reader(
+        value,
+        path,
+        frozenset(
+            ("scope", "status", "provenance", "observedAt", "freshUntil", "cause")
+        ),
+    )
+    cause_value = reader_value.field("cause")
+    cause = None if cause_value is None else parse_error(cause_value, f"{path}.cause")
+    return ScopeHealth(
+        enum(SourceScope, reader_value.field("scope"), f"{path}.scope"),
         enum(SourceStatus, reader_value.field("status"), f"{path}.status"),
         enum(Provenance, reader_value.field("provenance"), f"{path}.provenance"),
         timestamp(reader_value.field("observedAt"), f"{path}.observedAt"),
@@ -160,8 +199,24 @@ def _item(value: JsonValue, path: str) -> NormalizedItem:
                 "watchMode",
                 "watchable",
                 "provenance",
+                "installedFingerprint",
+                "candidateFingerprint",
             )
         ),
+    )
+    installed_fingerprint = (
+        None
+        if "installedFingerprint" not in reader_value.value
+        else optional_string(
+            reader_value.field("installedFingerprint"), f"{path}.installedFingerprint"
+        )
+    )
+    candidate_fingerprint = (
+        None
+        if "candidateFingerprint" not in reader_value.value
+        else optional_string(
+            reader_value.field("candidateFingerprint"), f"{path}.candidateFingerprint"
+        )
     )
     return NormalizedItem(
         ItemId(identifier(reader_value.field("id"), f"{path}.id")),
@@ -172,6 +227,8 @@ def _item(value: JsonValue, path: str) -> NormalizedItem:
         enum(WatchMode, reader_value.field("watchMode"), f"{path}.watchMode"),
         boolean(reader_value.field("watchable"), f"{path}.watchable"),
         enum(Provenance, reader_value.field("provenance"), f"{path}.provenance"),
+        installed_fingerprint,
+        candidate_fingerprint,
     )
 
 

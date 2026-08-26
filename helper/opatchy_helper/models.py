@@ -5,6 +5,7 @@ from typing import Final, NewType, TypeAlias, override
 
 ProtocolVersion = NewType("ProtocolVersion", int)
 GenerationId = NewType("GenerationId", str)
+GenerationOrder = NewType("GenerationOrder", int)
 ItemId = NewType("ItemId", str)
 FindingId = NewType("FindingId", str)
 NotificationFingerprint = NewType("NotificationFingerprint", str)
@@ -39,6 +40,12 @@ class SourceName(StrEnum):
     AUR = "aur"
     FLATPAK = "flatpak"
     MISE = "mise"
+
+
+@unique
+class SourceScope(StrEnum):
+    USER = "user"
+    SYSTEM = "system"
 
 
 @unique
@@ -125,6 +132,8 @@ class ErrorCode(StrEnum):
     DUPLICATE_ITEM_ID = "DUPLICATE_ITEM_ID"
     DUPLICATE_FINDING_ID = "DUPLICATE_FINDING_ID"
     OUTPUT_TOO_LARGE = "OUTPUT_TOO_LARGE"
+    SOURCE_INVALID = "SOURCE_INVALID"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +159,17 @@ class SourceHealth:
     observed_at: datetime
     fresh_until: datetime
     cause: ErrorInfo | None
+    scopes: tuple["ScopeHealth", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ScopeHealth:
+    scope: SourceScope
+    status: SourceStatus
+    provenance: Provenance
+    observed_at: datetime
+    fresh_until: datetime
+    cause: ErrorInfo | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +190,8 @@ class NormalizedItem:
     watch_mode: WatchMode
     watchable: bool
     provenance: Provenance
+    installed_fingerprint: str | None = None
+    candidate_fingerprint: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

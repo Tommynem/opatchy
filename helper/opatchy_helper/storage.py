@@ -1,22 +1,36 @@
 import fcntl
 import hashlib
 import os
-import tempfile
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO, Final, Protocol, TypeAlias, final
+from typing import TypeAlias, final
 
 from .cache_metadata import read_cache_validators
 from .models import InventoryResponse, ItemSource, ProtocolError, SnapshotResponse
-from .protocol import decode_response, encode_response
+from .protocol import encode_response
 from .runner_types import EndpointCache
+from .storage_cache import load_inventory, load_snapshot
 from .storage_feeds import (
     read_last_good_feed,
-    semantic_feed_path,
     transport_endpoint_cache,
 )
+from .storage_generation import (
+    GenerationBundle,
+    decode_generation,
+    encode_generation,
+)
+from .storage_io import (
+    PRIVATE_FILE_MODE,
+    AtomicOperations,
+    SystemAtomicOperations,
+    atomic_write,
+    ensure_directory,
+    fsync_directory,
+)
+from .storage_semantic import write_last_good_feed
 from .storage_state import decode_state, encode_state, prune_ledger, validate_state
 from .storage_types import (
     FeedName,
@@ -30,29 +44,7 @@ from .storage_types import (
     WatchRecord,
 )
 
-PRIVATE_DIRECTORY_MODE: Final = 0o700
-PRIVATE_FILE_MODE: Final = 0o600
 StateMutation: TypeAlias = Callable[[PersistentState], PersistentState]
-
-
-class AtomicOperations(Protocol):
-    def write(self, handle: BinaryIO, data: bytes) -> int: ...
-
-    def fsync(self, descriptor: int) -> None: ...
-
-    def replace(self, source: Path, destination: Path) -> None: ...
-
-
-@final
-class SystemAtomicOperations:
-    def write(self, handle: BinaryIO, data: bytes) -> int:
-        return handle.write(data)
-
-    def fsync(self, descriptor: int) -> None:
-        os.fsync(descriptor)
-
-    def replace(self, source: Path, destination: Path) -> None:
-        os.replace(source, destination)
 
 
 @final
@@ -93,6 +85,10 @@ class Storage:
     def cache_path(self) -> Path:
         return self._cache_path
 
+    @property
+    def generation_path(self) -> Path:
+        return self._cache_path / "generation.json"
+
     def load_state(self) -> StateLoad:
         with self._state_lock():
             return self._load_state_locked()
@@ -114,11 +110,14 @@ class Storage:
         self, feed: FeedName, body: bytes, validator: Callable[[bytes], bool]
     ) -> bool:
         """Replace semantic feed data only after its complete schema validator accepts it."""
-        if not validator(body):
-            return False
         with self._state_lock():
-            self._atomic_write(semantic_feed_path(self._cache_path, feed), body)
-        return True
+            return write_last_good_feed(
+                self._cache_path,
+                feed,
+                body,
+                validator,
+                lambda path, value: atomic_write(path, value, self._operations),
+            )
 
     def read_last_good_feed(
         self, feed: FeedName, validator: Callable[[bytes], bool]
@@ -156,45 +155,85 @@ class Storage:
 
     def save_snapshot(self, response: SnapshotResponse) -> None:
         with self._state_lock():
-            self._atomic_write(
-                self._cache_path / "snapshot.json", encode_response(response)
+            generation = self._load_generation_locked()
+            if generation is not None:
+                self._write_generation_locked(replace(generation, snapshot=response))
+                return
+            atomic_write(
+                self._cache_path / "snapshot.json",
+                encode_response(response),
+                self._operations,
             )
 
     def load_snapshot(self) -> SnapshotResponse | None:
         with self._state_lock():
+            generation = self._load_generation_locked()
+            if generation is not None:
+                return generation.snapshot
             return self._read_snapshot_locked()
 
     def save_inventory(self, response: InventoryResponse) -> None:
         with self._state_lock():
-            self._atomic_write(
-                self._inventory_path(response.payload.source), encode_response(response)
+            generation = self._load_generation_locked()
+            if generation is not None:
+                inventories = tuple(
+                    item
+                    for item in generation.inventories
+                    if item.payload.source is not response.payload.source
+                ) + (response,)
+                self._write_generation_locked(
+                    replace(
+                        generation,
+                        inventories=tuple(
+                            sorted(inventories, key=lambda item: item.payload.source)
+                        ),
+                    )
+                )
+                return
+            atomic_write(
+                self._inventory_path(response.payload.source),
+                encode_response(response),
+                self._operations,
             )
 
     def load_inventory(self, source: ItemSource) -> InventoryResponse | None:
         with self._state_lock():
-            path = self._inventory_path(source)
-            if not path.exists():
-                return None
-            try:
-                cached = decode_response(path.read_bytes())
-            except ProtocolError:
-                self._discard(path)
-                return None
-            match cached:
-                case InventoryResponse(payload=payload):
-                    if payload.source == source:
-                        return cached
-                case _:
-                    pass
-            self._discard(path)
-            return None
+            generation = self._load_generation_locked()
+            if generation is not None:
+                return next(
+                    (
+                        item
+                        for item in generation.inventories
+                        if item.payload.source is source
+                    ),
+                    None,
+                )
+            return load_inventory(self._cache_path, source, self._discard)
+
+    def load_generation(self) -> GenerationBundle | None:
+        with self._state_lock():
+            return self._load_generation_locked()
+
+    def commit_generation(self, generation: GenerationBundle) -> bool:
+        """Publish a complete validated generation only when its order is newest."""
+        with self._state_lock():
+            current = self._load_generation_locked()
+            if current is not None and generation.order <= current.order:
+                return False
+            self._write_generation_locked(generation)
+            atomic_write(
+                self._state_path,
+                encode_state(generation.state, self._clock()),
+                self._operations,
+            )
+            return True
 
     @contextmanager
     def _state_lock(self) -> Generator[None]:
-        self._ensure_directory(self._state_path.parent)
+        ensure_directory(self._state_path.parent)
         lock_path = self._state_path.parent / "state.lock"
-        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, PRIVATE_FILE_MODE)
-        os.chmod(lock_path, PRIVATE_FILE_MODE)
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        os.chmod(lock_path, 0o600)
         with os.fdopen(descriptor, "r+") as lock_file:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             try:
@@ -203,6 +242,13 @@ class Storage:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _load_state_locked(self, *, persist_pruning: bool = True) -> StateLoad:
+        generation = self._load_generation_locked()
+        if generation is not None:
+            decoded = generation.state
+            pruned = prune_ledger(decoded, self._clock())
+            if persist_pruning and pruned != decoded:
+                self._write_state_locked(pruned)
+            return StateLoad(pruned, None)
         if not self._state_path.exists():
             return StateLoad(PersistentState.empty(), None)
         raw = self._state_path.read_bytes()
@@ -217,23 +263,31 @@ class Storage:
             return StateLoad(PersistentState.empty(), StorageWarning.STATE_CORRUPT)
 
     def _write_state_locked(self, state: PersistentState) -> None:
-        self._atomic_write(self._state_path, encode_state(state, self._clock()))
+        generation = self._load_generation_locked()
+        if generation is not None:
+            self._write_generation_locked(replace(generation, state=state))
+        atomic_write(
+            self._state_path, encode_state(state, self._clock()), self._operations
+        )
 
-    def _read_snapshot_locked(self) -> SnapshotResponse | None:
-        path = self._cache_path / "snapshot.json"
-        if not path.exists():
+    def _load_generation_locked(self) -> GenerationBundle | None:
+        if not self.generation_path.exists():
             return None
         try:
-            cached = decode_response(path.read_bytes())
-        except ProtocolError:
-            self._discard(path)
+            return decode_generation(self.generation_path.read_bytes())
+        except ProtocolError, StateCorruptError:
+            self._discard(self.generation_path)
             return None
-        match cached:
-            case SnapshotResponse():
-                return cached
-            case _:
-                self._discard(path)
-                return None
+
+    def _write_generation_locked(self, generation: GenerationBundle) -> None:
+        atomic_write(
+            self.generation_path,
+            encode_generation(generation, self._clock()),
+            self._operations,
+        )
+
+    def _read_snapshot_locked(self) -> SnapshotResponse | None:
+        return load_snapshot(self._cache_path, self._discard)
 
     def _inventory_path(self, source: ItemSource) -> Path:
         return self._cache_path / f"inventory-{source.value}.json"
@@ -243,46 +297,11 @@ class Storage:
         target = self._state_path.with_name(f"state.json.corrupt-{digest}")
         self._operations.replace(self._state_path, target)
         os.chmod(target, PRIVATE_FILE_MODE)
-        self._fsync_directory(self._state_path.parent)
+        fsync_directory(self._state_path.parent, self._operations)
 
     def _discard(self, path: Path) -> None:
         path.unlink(missing_ok=True)
-        self._fsync_directory(path.parent)
-
-    def _atomic_write(self, path: Path, data: bytes) -> None:
-        self._ensure_directory(path.parent)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-        )
-        temporary_path = Path(temporary_name)
-        replaced = False
-        try:
-            os.fchmod(descriptor, PRIVATE_FILE_MODE)
-            with os.fdopen(descriptor, "wb") as handle:
-                written = self._operations.write(handle, data)
-                if written != len(data):
-                    raise OSError("atomic write was partial")
-                handle.flush()
-                self._operations.fsync(handle.fileno())
-            self._operations.replace(temporary_path, path)
-            replaced = True
-            os.chmod(path, PRIVATE_FILE_MODE)
-            self._fsync_directory(path.parent)
-        except OSError:
-            if not replaced:
-                temporary_path.unlink(missing_ok=True)
-            raise
-
-    def _ensure_directory(self, path: Path) -> None:
-        path.mkdir(mode=PRIVATE_DIRECTORY_MODE, parents=True, exist_ok=True)
-        os.chmod(path, PRIVATE_DIRECTORY_MODE)
-
-    def _fsync_directory(self, path: Path) -> None:
-        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            self._operations.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+        fsync_directory(path.parent, self._operations)
 
 
 __all__ = (
@@ -291,6 +310,7 @@ __all__ = (
     "LedgerEntry",
     "PersistentState",
     "StateSchemaIncompatible",
+    "SystemAtomicOperations",
     "StoragePathError",
     "Storage",
     "StorageWarning",

@@ -21,6 +21,7 @@ from .models import (
     SnapshotResponse,
     SourceHealth,
     SourceName,
+    SourceScope,
     StarResultResponse,
 )
 
@@ -103,6 +104,20 @@ def _validate_sources(sources: tuple[SourceHealth, ...]) -> None:
     for source in sources:
         if source.cause is not None:
             _validate_error(source.cause)
+        _validate_scopes(source)
+
+
+def _validate_scopes(source: SourceHealth) -> None:
+    if not source.scopes:
+        return
+    if source.source is not SourceName.FLATPAK:
+        _fail(ErrorCode.INVALID_ENVELOPE, "only Flatpak supports scoped source health")
+    scopes = {scope.scope for scope in source.scopes}
+    if len(scopes) != len(source.scopes) or scopes != set(SourceScope):
+        _fail(ErrorCode.INVALID_ENVELOPE, "Flatpak source scopes are incomplete")
+    for scope in source.scopes:
+        if scope.cause is not None:
+            _validate_error(scope.cause)
 
 
 def _validate_items(items: tuple[NormalizedItem, ...]) -> None:
@@ -112,6 +127,14 @@ def _validate_items(items: tuple[NormalizedItem, ...]) -> None:
     for item in items:
         _validate_identifier(str(item.item_id), "item.id")
         _validate_identifier(item.label, "item.label")
+        if item.installed_fingerprint is not None:
+            _validate_identifier(
+                item.installed_fingerprint, "item.installedFingerprint"
+            )
+        if item.candidate_fingerprint is not None:
+            _validate_identifier(
+                item.candidate_fingerprint, "item.candidateFingerprint"
+            )
 
 
 def _validate_groups(

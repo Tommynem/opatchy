@@ -70,6 +70,11 @@ def validate_state(state: PersistentState) -> None:
         (str(source.source) for source in state.sources),
         "state has duplicate source metadata",
     )
+    for source in state.sources:
+        if type(source.failure_count) is not int or source.failure_count < 0:
+            _corrupt("source failure count is invalid")
+        if type(source.permanent_failure) is not bool:
+            _corrupt("source permanent failure is invalid")
 
 
 def prune_ledger(state: PersistentState, now: datetime) -> PersistentState:
@@ -161,6 +166,8 @@ def _parse_source(value: JsonValue) -> SourceMetadata:
         _source_name(_field(document, "source")),
         _optional_timestamp(_field(document, "lastSuccess"), "source.lastSuccess"),
         _optional_timestamp(_field(document, "backoffUntil"), "source.backoffUntil"),
+        _source_failure_count(document),
+        _source_permanent_failure(document),
     )
 
 
@@ -187,6 +194,8 @@ def _source_value(source: SourceMetadata) -> JsonObject:
         "source": source.source.value,
         "lastSuccess": _optional_timestamp_value(source.last_success),
         "backoffUntil": _optional_timestamp_value(source.backoff_until),
+        "failureCount": source.failure_count,
+        "permanentFailure": source.permanent_failure,
     }
 
 
@@ -254,6 +263,25 @@ def _timestamp(value: JsonValue, path: str) -> datetime:
 
 def _optional_timestamp(value: JsonValue, path: str) -> datetime | None:
     return None if value is None else _timestamp(value, path)
+
+
+def _source_failure_count(document: JsonObject) -> int:
+    if "failureCount" not in document:
+        return 0
+    return _nonnegative_integer(document["failureCount"], "source.failureCount")
+
+
+def _source_permanent_failure(document: JsonObject) -> bool:
+    if "permanentFailure" not in document:
+        return False
+    return _boolean(document["permanentFailure"], "source.permanentFailure")
+
+
+def _nonnegative_integer(value: JsonValue, path: str) -> int:
+    integer = _integer(value, path)
+    if integer < 0:
+        _corrupt(f"{path} must be non-negative")
+    return integer
 
 
 def _watch_mode(value: JsonValue) -> WatchMode:
