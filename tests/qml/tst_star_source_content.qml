@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Window 2.15
 import QtTest 1.3
 import "../../qml/components"
+import "../../qml/models/ProtocolValidator.js" as ProtocolValidator
 
 TestCase {
   id: root
@@ -16,7 +17,7 @@ TestCase {
       visible: true
       width: 160
       height: 192
-      property var snapshot: root.snapshotFor("generation-1", "off", "ok")
+      property var snapshot: null
 
       QtObject {
         id: service
@@ -83,31 +84,48 @@ TestCase {
     }
   }
 
-  function snapshotFor(generationId, watchMode, sourceStatus) {
-    return {
+  function source(name, archStatus) {
+    var status = name === "arch" ? archStatus : "ok"
+    var health = {
+      source: name,
+      status: status,
+      provenance: status === "stale" ? "last_good" : "live",
+      observedAt: "2026-08-26T00:00:00.000Z",
+      freshUntil: "2026-08-26T00:05:00.000Z",
+      cause: status === "stale" ? { code: "SOURCE_UNAVAILABLE", message: "Arch update evidence is last known." } : null
+    }
+    if (name === "flatpak") health.scopes = ["user", "system"].map(function(scope) {
+      return { scope: scope, status: "ok", provenance: "live", observedAt: health.observedAt, freshUntil: health.freshUntil, cause: null }
+    })
+    return health
+  }
+
+  function snapshotFor(generationId, watchMode, archStatus) {
+    var stale = archStatus === "stale"
+    var itemProvenance = stale ? "last_good" : "live"
+    return ProtocolValidator.parseResponse(JSON.stringify({
+      protocolVersion: 1,
+      kind: "snapshot",
+      generatedAt: "2026-08-26T00:00:00.000Z",
       generationId: generationId,
       payload: {
-        sources: [{
-          source: "arch",
-          status: sourceStatus,
-          provenance: sourceStatus === "stale" ? "last_good" : "live"
+        scanState: stale ? "partial" : "complete",
+        sources: ProtocolValidator.SOURCE_NAMES.map(function(name) { return source(name, archStatus) }),
+        summary: { totalUpdates: 1, watchedUpdates: watchMode === "off" ? 0 : 1, securityFindings: 1, degradedSources: stale ? 1 : 0 },
+        items: [{ id: "arch:demo", source: "arch", label: "Demo", installed: "1.0", candidate: "2.0", watchMode: watchMode, watchArmed: false, watchable: true, provenance: itemProvenance }],
+        findings: [{
+          itemId: "arch:demo",
+          findings: [{ id: "AVG-1", itemId: "arch:demo", advisoryId: "AVG-1", cveIds: ["CVE-2026-0001"], severity: "high", fixedVersion: "2.0", installedVersion: "1.0", knownExploited: false, kevStatus: "unavailable", kevProvenance: null, provenance: "live", status: "Fixed", type: "security" }]
         }],
-        items: [{
-          id: "arch:demo",
-          source: "arch",
-          label: "Demo",
-          installed: "1.0",
-          candidate: "2.0",
-          watchMode: watchMode,
-          watchArmed: false,
-          watchable: true
-        }]
+        notifications: [{ fingerprint: "watch:arch:demo", status: "delivered" }]
       }
-    }
+    }))
   }
 
   function test_source_content_reconciles_real_same_target_buttons_and_retains_stale_watched_rows() {
-    const view = sourceContentComponent.createObject(root)
+    const initial = snapshotFor("generation-1", "off", "ok")
+    verify(initial.ok)
+    const view = sourceContentComponent.createObject(root, { snapshot: initial.value })
     verify(view.sourceContent.starState !== null)
     compare(view.first.starState, view.sourceContent.starState)
     compare(view.second.starState, view.sourceContent.starState)
@@ -128,12 +146,16 @@ TestCase {
     compare(view.second.view.mode, "temporary")
     compare(view.other.view.mode, "off")
 
-    view.snapshot = snapshotFor("generation-2", "off", "ok")
+    const newer = snapshotFor("generation-2", "off", "ok")
+    verify(newer.ok)
+    view.snapshot = newer.value
     compare(view.first.view.mode, "off")
     compare(view.second.view.mode, "off")
     compare(view.other.view.mode, "off")
 
-    view.snapshot = snapshotFor("generation-3", "permanent", "stale")
+    const stale = snapshotFor("generation-3", "permanent", "stale")
+    verify(stale.ok)
+    view.snapshot = stale.value
     view.sourceContent.watchedOnly = true
     compare(view.sourceContent.displayedRows.length, 1)
     compare(view.sourceContent.displayedRows[0].target, "arch:demo")
