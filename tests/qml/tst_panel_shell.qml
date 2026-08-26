@@ -31,6 +31,18 @@ TestCase {
   }
 
   Component {
+    id: browseModeComponent
+
+    BrowseModeState { }
+  }
+
+  Component {
+    id: rowPresentationComponent
+
+    UpdateRowPresentation { }
+  }
+
+  Component {
     id: inventoryServiceComponent
 
     QtObject {
@@ -242,4 +254,37 @@ TestCase {
     state.destroy()
     service.destroy()
   }
+
+  function test_browse_mode_resets_when_the_tab_identity_changes() {
+    const state = browseModeComponent.createObject(root, { "tab": "System", "browsing": true })
+
+    state.tab = "AUR"
+
+    compare(state.browsing, false)
+    state.destroy()
+  }
+
+  function test_update_row_presentation_keeps_hostile_model_text_plain_and_bounded() {
+    const nullCharacter = String.fromCharCode(0)
+    const hostile = "$(touch /tmp/opatchy-injection-sentinel)\n\u202e\u4f60\u597d \u0645\u0631\u062d\u0628\u0627" + nullCharacter + "x".repeat(2000)
+    const presentation = rowPresentationComponent.createObject(root)
+    presentation.row = {
+      id: "arch:hostile",
+      source: "arch",
+      label: hostile,
+      installed: hostile,
+      candidate: hostile,
+      watchable: true,
+      watchMode: hostile
+    }
+
+    verify(presentation.label.indexOf("\n") === -1)
+    verify(presentation.label.indexOf(nullCharacter) === -1)
+    verify(presentation.label.length <= 256)
+    verify(presentation.detailsText.indexOf("opatchy-injection-sentinel") !== -1)
+    verify(presentation.detailsText.indexOf("\n") === -1)
+    verify(presentation.metaText.indexOf(nullCharacter) === -1)
+    presentation.destroy()
+  }
+
 }
