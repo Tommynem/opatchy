@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -365,3 +366,6 @@ def _write_transport_body(storage: Storage, feed: FeedName, body: bytes) -> None
     transport = storage.endpoint_cache(feed)
     transport.body_path.parent.mkdir(parents=True, exist_ok=True)
     _ = transport.body_path.write_bytes(body)
+    _ = transport.metadata_path.write_bytes(
+        f'"fixture"\nTue, 01 Jan 2030 00:00:00 GMT\n{hashlib.sha256(body).hexdigest()}\n'.encode()
+    )

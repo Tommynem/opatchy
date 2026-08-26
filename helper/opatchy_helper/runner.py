@@ -11,6 +11,7 @@ from email.message import Message
 from pathlib import Path
 from typing import IO, Protocol, TypeAlias, override
 
+from .cache_metadata import read_cache_validators, serialize_cache_metadata
 from .runner_process import run_spec
 from .runner_registry import COMMAND_SPECS, ENDPOINT_SPECS
 from .runner_types import (
@@ -91,7 +92,7 @@ def run_command(name: CommandName, arguments: tuple[str, ...] = ()) -> CommandRe
 
 def fetch_endpoint(name: EndpointName, cache: EndpointCache) -> EndpointResult:
     spec = ENDPOINT_SPECS[name]
-    headers = _conditional_headers(cache)
+    headers, conditional = _conditional_headers(cache)
     url = spec.url
     for _ in range(spec.redirect_limit + 1):
         if not _valid_url(url, spec):
@@ -104,7 +105,7 @@ def fetch_endpoint(name: EndpointName, cache: EndpointCache) -> EndpointResult:
         except urllib.error.HTTPError as error:
             try:
                 if error.code == 304:
-                    return EndpointNotModified()
+                    return _not_modified_result(conditional)
                 location = error.headers.get("Location")
                 if 300 <= error.code < 400 and location is not None:
                     url = urllib.parse.urljoin(url, location)
@@ -123,7 +124,7 @@ def fetch_endpoint(name: EndpointName, cache: EndpointCache) -> EndpointResult:
                 url = urllib.parse.urljoin(url, location)
                 continue
             if status == 304:
-                return EndpointNotModified()
+                return _not_modified_result(conditional)
             if status != 200:
                 return EndpointFailed(f"unexpected HTTPS status {status}")
             body = _read_body(response, spec.body_limit)
@@ -219,18 +220,26 @@ def _read_body(response: HttpsResponse, limit: int) -> bytes | None:
         remaining -= len(chunk)
 
 
-def _conditional_headers(cache: EndpointCache) -> dict[str, str]:
+def _conditional_headers(cache: EndpointCache) -> tuple[dict[str, str], bool]:
     try:
-        etag, last_modified = cache.metadata_path.read_text(
-            encoding="utf-8"
-        ).splitlines()[:2]
-    except FileNotFoundError, OSError, UnicodeError, ValueError:
-        return {"User-Agent": "Opatchy/1"}
-    return {
-        "User-Agent": "Opatchy/1",
-        "If-None-Match": etag,
-        "If-Modified-Since": last_modified,
-    }
+        body = cache.body_path.read_bytes()
+    except OSError:
+        return {"User-Agent": "Opatchy/1"}, False
+    validators = read_cache_validators(cache, body)
+    if validators is None:
+        return {"User-Agent": "Opatchy/1"}, False
+    headers = {"User-Agent": "Opatchy/1"}
+    if validators.etag:
+        headers["If-None-Match"] = validators.etag
+    if validators.last_modified:
+        headers["If-Modified-Since"] = validators.last_modified
+    return headers, True
+
+
+def _not_modified_result(conditional: bool) -> EndpointResult:
+    if conditional:
+        return EndpointNotModified()
+    return EndpointFailed("unsolicited HTTPS 304 response")
 
 
 def _replace_cache(
@@ -239,7 +248,7 @@ def _replace_cache(
     cache.body_path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write(cache.body_path, body)
     _atomic_write(
-        cache.metadata_path, f"{etag or ''}\n{last_modified or ''}\n".encode()
+        cache.metadata_path, serialize_cache_metadata(body, etag, last_modified)
     )
 
 

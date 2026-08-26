@@ -1,4 +1,5 @@
 import fcntl
+import hashlib
 import multiprocessing
 import os
 import stat
@@ -351,6 +352,36 @@ def test_valid_feed_cache_reads_and_state_update_is_locked(storage: Storage) -> 
 
     assert storage.read_last_good_feed(FeedName.ARCH_SECURITY, lambda _: True) == b"{}"
     assert updated.state.watches == (watch("arch:updated"),)
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    (
+        None,
+        b'"tag"\nTue, 01 Jan 2030 00:00:00 GMT\n',
+        b'"tag"\nTue, 01 Jan 2030 00:00:00 GMT\nnot-a-digest\n',
+        (
+            f'"tag"\nTue, 01 Jan 2030 00:00:00 GMT\n{hashlib.sha256(b"other").hexdigest()}\n'.encode()
+        ),
+    ),
+)
+def test_confirmed_feed_requires_digest_bound_transport_metadata(
+    storage: Storage, metadata: bytes | None
+) -> None:
+    # Given: matching semantic and transport bytes without trustworthy metadata.
+    body = b"{}"
+    assert storage.write_last_good_feed(FeedName.ARCH_SECURITY, body, lambda _: True)
+    transport = storage.endpoint_cache(FeedName.ARCH_SECURITY)
+    transport.body_path.parent.mkdir(parents=True, exist_ok=True)
+    _ = transport.body_path.write_bytes(body)
+    if metadata is not None:
+        _ = transport.metadata_path.write_bytes(metadata)
+
+    # When: 304 recovery reads current cache evidence.
+    confirmed = storage.read_confirmed_feed(FeedName.ARCH_SECURITY, lambda _: True)
+
+    # Then: unbound metadata prevents current-cache promotion.
+    assert confirmed is None
 
 
 def test_malformed_inventory_cache_is_discarded(storage: Storage) -> None:

@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, Final, Protocol, TypeAlias, final
 
+from .cache_metadata import read_cache_validators
 from .models import InventoryResponse, ItemSource, ProtocolError, SnapshotResponse
 from .protocol import decode_response, encode_response
 from .runner_types import EndpointCache
@@ -136,11 +137,16 @@ class Storage:
             )
             if semantic is None:
                 return None
+            cache = self.endpoint_cache(feed)
             try:
-                transport = self.endpoint_cache(feed).body_path.read_bytes()
+                transport = cache.body_path.read_bytes()
             except OSError:
                 return None
-            if transport != semantic or not validator(transport):
+            if (
+                read_cache_validators(cache, transport) is None
+                or transport != semantic
+                or not validator(transport)
+            ):
                 return None
             return semantic
 

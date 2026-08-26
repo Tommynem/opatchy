@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import ssl
@@ -35,6 +36,10 @@ class FakeResponse:
 
     def close(self) -> None:
         self._body.close()
+
+
+def _metadata(body: bytes, etag: str, last_modified: str) -> bytes:
+    return f"{etag}\n{last_modified}\n{hashlib.sha256(body).hexdigest()}\n".encode()
 
 
 def _fake_command(tmp_path: Path, source: str) -> Path:
@@ -204,8 +209,8 @@ def test_fetch_endpoint_uses_validators_and_replaces_cache_after_complete_body(
     # Given: a previously cached validator and an HTTPS response with a complete replacement body.
     cache = runner.EndpointCache(tmp_path / "body", tmp_path / "metadata")
     _ = cache.body_path.write_bytes(b"old")
-    _ = cache.metadata_path.write_text(
-        '"prior"\nTue, 01 Jan 2030 00:00:00 GMT\n', encoding="utf-8"
+    _ = cache.metadata_path.write_bytes(
+        _metadata(b"old", '"prior"', "Tue, 01 Jan 2030 00:00:00 GMT")
     )
     seen_headers: dict[str, str | None] = {}
 
@@ -236,7 +241,92 @@ def test_fetch_endpoint_uses_validators_and_replaces_cache_after_complete_body(
     assert cache.metadata_path.read_text(encoding="utf-8").splitlines() == [
         '"next"',
         "Wed, 02 Jan 2030 00:00:00 GMT",
+        hashlib.sha256(b"new").hexdigest(),
     ]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "conditional"),
+    (
+        (None, False),
+        (b'"tag"\nTue, 01 Jan 2030 00:00:00 GMT\n', False),
+        (b'"tag"\nTue, 01 Jan 2030 00:00:00 GMT\nnot-a-digest\n', False),
+        (
+            f"\n\n{hashlib.sha256(b'cached').hexdigest()}\n".encode(),
+            False,
+        ),
+        (
+            _metadata(b"different", '"tag"', "Tue, 01 Jan 2030 00:00:00 GMT"),
+            False,
+        ),
+        (_metadata(b"cached", '"tag"', "Tue, 01 Jan 2030 00:00:00 GMT"), True),
+    ),
+)
+def test_fetch_endpoint_accepts_304_only_after_digest_bound_conditional_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    metadata: bytes | None,
+    conditional: bool,
+) -> None:
+    # Given: cached bytes with metadata of a known conditional-validity state.
+    cache = runner.EndpointCache(tmp_path / "body", tmp_path / "metadata")
+    _ = cache.body_path.write_bytes(b"cached")
+    if metadata is not None:
+        _ = cache.metadata_path.write_bytes(metadata)
+    seen_headers: dict[str, str | None] = {}
+
+    def fake_open(
+        request: runner.HttpsRequest, timeout: float, context: ssl.SSLContext
+    ) -> FakeResponse:
+        del timeout, context
+        seen_headers["etag"] = request.get_header("If-none-match")
+        seen_headers["modified"] = request.get_header("If-modified-since")
+        return FakeResponse(304, {})
+
+    monkeypatch.setattr(runner, "_open_https", fake_open)
+
+    # When: the endpoint returns status 304.
+    result = runner.fetch_endpoint(runner.EndpointName.ARCH_SECURITY, cache)
+
+    # Then: only a digest-bound conditional request can become not-modified.
+    assert isinstance(result, runner.EndpointNotModified) is conditional
+    assert seen_headers["etag"] == ('"tag"' if conditional else None)
+    assert seen_headers["modified"] == (
+        "Tue, 01 Jan 2030 00:00:00 GMT" if conditional else None
+    )
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    (
+        None,
+        _metadata(b"cached", '"tag"', "Tue, 01 Jan 2030 00:00:00 GMT"),
+    ),
+)
+def test_http_error_304_uses_the_same_conditional_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, metadata: bytes | None
+) -> None:
+    # Given: a response path that represents 304 as urllib HTTPError.
+    cache = runner.EndpointCache(tmp_path / "body", tmp_path / "metadata")
+    _ = cache.body_path.write_bytes(b"cached")
+    if metadata is not None:
+        _ = cache.metadata_path.write_bytes(metadata)
+
+    def fake_open(
+        request: runner.HttpsRequest, timeout: float, context: ssl.SSLContext
+    ) -> FakeResponse:
+        del timeout, context
+        raise urllib.error.HTTPError(
+            request.full_url, 304, "not modified", Message(), None
+        )
+
+    monkeypatch.setattr(runner, "_open_https", fake_open)
+
+    # When: urllib signals 304 through its error path.
+    result = runner.fetch_endpoint(runner.EndpointName.ARCH_SECURITY, cache)
+
+    # Then: its classification matches the response-status path.
+    assert isinstance(result, runner.EndpointNotModified) is (metadata is not None)
 
 
 def test_fetch_endpoint_preserves_cache_when_response_is_oversized(
