@@ -84,7 +84,7 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       focus: true
-      Keys.priority: Keys.BeforeItem
+      Keys.priority: Keys.AfterItem
       Keys.onPressed: function(event) {
         if (tabState.handleKey(event.key, event.modifiers)) {
           event.accepted = true
@@ -195,7 +195,6 @@ Panel {
       PanelTabState {
         id: tabState
         onSelectionRequested: root.persistSelectedTab(tab)
-        onActivationRequested: root.requestRefresh()
         onCloseRequested: root.close()
       }
     }

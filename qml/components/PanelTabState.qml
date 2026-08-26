@@ -6,7 +6,6 @@ QtObject {
 
   property string selectedTab: "Security"
   signal selectionRequested(string tab)
-  signal activationRequested()
   signal closeRequested()
 
   function restore(storedTab, urgentSecurity) {
@@ -43,10 +42,6 @@ QtObject {
     }
     if (key === Qt.Key_Escape) {
       closeRequested()
-      return true
-    }
-    if (key === Qt.Key_Return || key === Qt.Key_Enter) {
-      activationRequested()
       return true
     }
     return false
