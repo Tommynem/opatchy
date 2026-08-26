@@ -8,6 +8,7 @@ QtObject {
   property string snapshotGeneration: ""
   property bool notifyPermanent: true
   property bool reducedMotion: false
+  readonly property int feedbackDuration: reducedMotion ? 0 : 100
   property bool pending: false
   property string pendingTarget: ""
   property string pendingMode: ""
@@ -19,6 +20,7 @@ QtObject {
   property string errorTarget: ""
 
   signal reconcileRequested(string target)
+  signal feedbackRequested()
 
   onSnapshotGenerationChanged: {
     if (overrideGeneration !== "" && snapshotGeneration !== overrideGeneration) clearOverride()
@@ -69,6 +71,7 @@ QtObject {
     errorText = ""
     errorTarget = ""
     reconcileRequested(overrideTarget)
+    feedbackRequested()
   }
 
   function acceptFailure(operation, message) {
@@ -81,10 +84,12 @@ QtObject {
   }
 
   function clearOverride() {
+    var hadOverride = overrideTarget !== ""
     overrideTarget = ""
     overrideMode = ""
     overrideGeneration = ""
     overrideArmed = false
+    if (hadOverride) feedbackRequested()
   }
 
 }

@@ -19,15 +19,21 @@ Button {
   tooltipText: view.tooltip
   accessibleName: view.accessibleName
   enabled: view.enabled
-  opacity: view.pending ? 0.72 : 1
+  opacity: 1
   focusable: true
   bordered: true
   onClicked: if (starState) starState.request(target, confirmedMode, watchable)
 
-  Behavior on opacity {
-    NumberAnimation {
-      duration: root.starState && root.starState.reducedMotion ? 0 : 100
-    }
+  SequentialAnimation {
+    id: feedback
+    running: false
+    NumberAnimation { target: root; property: "opacity"; to: 0.72; duration: root.starState ? root.starState.feedbackDuration / 2 : 50 }
+    NumberAnimation { target: root; property: "opacity"; to: 1; duration: root.starState ? root.starState.feedbackDuration / 2 : 50 }
+  }
+
+  Connections {
+    target: root.starState
+    function onFeedbackRequested() { feedback.restart() }
   }
 
   Text {

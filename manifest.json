@@ -23,6 +23,7 @@
     "defaults": {
       "refreshIntervalSec": 21600,
       "notifyPermanent": true,
+      "reducedMotion": false,
       "notifySecurity": true,
       "securityMinimumSeverity": "high",
       "enableCisaKev": true,
@@ -43,6 +44,12 @@
         "type": "boolean",
         "label": "Notify for permanent watches",
         "defaultValue": true
+      },
+      {
+        "key": "reducedMotion",
+        "type": "boolean",
+        "label": "Reduce star feedback motion",
+        "defaultValue": false
       },
       {
         "key": "notifySecurity",

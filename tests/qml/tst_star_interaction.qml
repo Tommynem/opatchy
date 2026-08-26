@@ -95,11 +95,25 @@ TestCase {
     state.destroy()
   }
 
-  function test_reduced_motion_is_one_shared_star_state_preference() {
+  function test_reduced_motion_controls_the_shared_feedback_duration() {
     const state = stateComponent.createObject(root)
-    compare(state.reducedMotion, false)
+    compare(state.feedbackDuration, 100)
     state.reducedMotion = true
-    compare(state.reducedMotion, true)
+    compare(state.feedbackDuration, 0)
+    state.destroy()
+  }
+
+  function test_shared_consumers_reconcile_authoritative_armed_state() {
+    const state = stateComponent.createObject(root)
+    state.service = { setStar: function() { return true } }
+    state.snapshotGeneration = "generation-1"
+    verify(state.request("arch:demo", "off", true))
+    state.acceptResult({ payload: { itemId: "arch:demo", mode: "temporary", watchArmed: true } }, { kind: "set-star", itemId: "arch:demo", mode: "temporary" })
+    compare(state.stateFor("arch:demo", "off", true, false, false).shortLabel, "Armed")
+    compare(state.stateFor("arch:demo", "off", true, false, false).shortLabel, "Armed")
+    state.snapshotGeneration = "generation-2"
+    compare(state.stateFor("arch:demo", "temporary", true, false, false).shortLabel, "Waiting")
+    compare(state.stateFor("arch:demo", "temporary", true, false, false).shortLabel, "Waiting")
     state.destroy()
   }
 
