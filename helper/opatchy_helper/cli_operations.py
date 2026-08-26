@@ -172,42 +172,15 @@ def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
                 for item in cached.payload.items
             )
         )
-        current = next(
-            (watch.mode for watch in state.watches if watch.item_id == command.item_id),
+        updated = transition(state, StarClick(command.item_id, inventory, True))
+        watch = next(
+            (watch for watch in updated.watches if watch.item_id == command.item_id),
             None,
         )
-        match current:
-            case None:
-                if command.mode is not WatchMode.TEMPORARY:
-                    raise WatchTransitionError(
-                        "watch mode does not match the transition"
-                    )
-                if not any(
-                    item.item_id == command.item_id and item.watchable
-                    for item in inventory.items
-                ):
-                    raise WatchTransitionError("item is not a current watchable item")
-                return transition(state, StarClick(command.item_id, inventory))
-            case WatchMode.TEMPORARY:
-                if command.mode is not WatchMode.PERMANENT:
-                    raise WatchTransitionError(
-                        "watch mode does not match the transition"
-                    )
-                if not any(
-                    item.item_id == command.item_id and item.watchable
-                    for item in inventory.items
-                ):
-                    raise WatchTransitionError("item is not a current watchable item")
-                return transition(state, StarClick(command.item_id, inventory))
-            case WatchMode.PERMANENT:
-                if command.mode is not WatchMode.OFF:
-                    raise WatchTransitionError(
-                        "watch mode does not match the transition"
-                    )
-                return transition(state, StarClick(command.item_id, inventory))
-            case WatchMode.OFF:
-                raise WatchTransitionError("off watches are not durable")
-        assert_never(current)
+        mode = WatchMode.OFF if watch is None else watch.mode
+        if mode is not command.mode:
+            raise WatchTransitionError("watch mode does not match the transition")
+        return updated
 
     updated = storage.update_state_with_inventories(_sources(), mutate).state
     watch = next(

@@ -33,6 +33,7 @@ class CachedInventory:
 class StarClick:
     item_id: ItemId
     inventory: CachedInventory
+    require_current_inventory: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,14 +149,24 @@ def _star_click(state: PersistentState, event: StarClick) -> PersistentState:
             )
             return PersistentState((*state.watches, watch), state.ledger, state.sources)
         case watch:
-            return _click_existing_watch(state, watch)
+            return _click_existing_watch(
+                state, watch, event.inventory, event.require_current_inventory
+            )
 
 
 def _click_existing_watch(
-    state: PersistentState, watch: WatchRecord
+    state: PersistentState,
+    watch: WatchRecord,
+    inventory: CachedInventory,
+    require_current_inventory: bool,
 ) -> PersistentState:
     match str(watch.mode):
         case "temporary":
+            if require_current_inventory and not any(
+                item.item_id == watch.item_id and item.watchable
+                for item in inventory.items
+            ):
+                raise WatchTransitionError("item is not a cached watchable item")
             permanent = WatchRecord(
                 watch.item_id, WatchMode.PERMANENT, None, None, False
             )
