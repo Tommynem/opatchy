@@ -19,6 +19,8 @@ from opatchy_helper.storage import Storage, SystemAtomicOperations
 from opatchy_helper.storage_types import PersistentState, SourceMetadata, WatchRecord
 
 from tests.python.cli_support import NOW, item, storage, write_inventory
+from tests.python.scan_support import FakeCollector, collector, run
+from tests.python.scan_support import store as scan_store
 
 
 def test_inventory_reads_valid_cache_and_adds_missing_permanent_id(
@@ -140,6 +142,66 @@ def test_snapshot_uses_only_validated_cached_response_or_reports_unavailable(
 
     # Then: it returns the precise validated cache object without a scan.
     assert result == snapshot
+
+
+def test_fresh_scan_overlays_durable_armed_watch_and_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: collected item data defaults to off while durable state is armed.
+    store = scan_store(tmp_path)
+    store.save_state(
+        PersistentState(
+            (WatchRecord(ItemId("arch:linux"), WatchMode.TEMPORARY, "1", "2", True),),
+            (),
+            (),
+        )
+    )
+
+    def runtime_collector(_: Storage) -> FakeCollector:
+        return collector()
+
+    monkeypatch.setattr(cli_operations, "RuntimeScanCollector", runtime_collector)
+
+    # When: the CLI operation creates its fresh snapshot.
+    result = cli_operations.scan(store, True)
+
+    # Then: durable mode and armed truth replace collected metadata and its count.
+    linux = next(
+        item for item in result.payload.items if item.item_id == ItemId("arch:linux")
+    )
+    assert (linux.watch_mode, linux.watch_armed) == (WatchMode.TEMPORARY, True)
+    assert result.payload.summary.watched_updates == 1
+
+
+def test_restart_snapshot_overlays_durable_armed_watch_and_summary(
+    tmp_path: Path,
+) -> None:
+    # Given: a persisted scan cache says off before durable state becomes armed.
+    initial = scan_store(tmp_path)
+    _ = run(initial, collector(), 1, force=True)
+    initial.save_state(
+        PersistentState(
+            (WatchRecord(ItemId("arch:linux"), WatchMode.TEMPORARY, "1", "2", True),),
+            (),
+            (),
+        )
+    )
+    restarted = Storage(
+        tmp_path / "state" / "state.json",
+        tmp_path / "cache",
+        lambda: NOW,
+        SystemAtomicOperations(),
+    )
+
+    # When: a new operation context loads the persisted snapshot.
+    result = cli_operations.snapshot(restarted)
+
+    # Then: durable mode and armed truth replace scanned metadata and its stale count.
+    linux = next(
+        item for item in result.payload.items if item.item_id == ItemId("arch:linux")
+    )
+    assert (linux.watch_mode, linux.watch_armed) == (WatchMode.TEMPORARY, True)
+    assert result.payload.summary.watched_updates == 1
 
 
 def test_set_star_uses_the_existing_three_state_transition(tmp_path: Path) -> None:
