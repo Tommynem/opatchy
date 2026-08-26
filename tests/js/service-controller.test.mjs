@@ -6,6 +6,7 @@ import vm from "node:vm";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const controllerPath = resolve(repositoryRoot, "qml/models/ServiceController.js");
+const validatorPath = resolve(repositoryRoot, "qml/models/ProtocolValidator.js");
 
 function loadController() {
   const source = readFileSync(controllerPath, "utf8").replace(".pragma library", "");
@@ -14,33 +15,93 @@ function loadController() {
   return context.createController;
 }
 
-function snapshot(generationId, freshUntil = "2026-08-26T00:05:00.000Z") {
-  return JSON.stringify({
+function loadValidator() {
+  const source = readFileSync(validatorPath, "utf8").replace(".pragma library", "");
+  const context = vm.createContext({ JSON, Math, Number, Object, String });
+  vm.runInContext(source, context, { filename: validatorPath });
+  return context.parseResponse;
+}
+
+function source(name, freshUntil) {
+  const health = {
+    source: name,
+    status: "ok",
+    provenance: "live",
+    observedAt: "2026-08-26T00:00:00.000Z",
+    freshUntil,
+    cause: null,
+  };
+  if (name === "flatpak") {
+    health.scopes = ["user", "system"].map((scope) => ({
+      scope,
+      status: "ok",
+      provenance: "live",
+      observedAt: "2026-08-26T00:00:00.000Z",
+      freshUntil,
+      cause: null,
+    }));
+  }
+  return health;
+}
+
+function snapshotDocument(generationId, freshUntil = "2026-08-26T00:05:00.000Z") {
+  return {
     protocolVersion: 1,
     kind: "snapshot",
     generatedAt: "2026-08-26T00:00:00.000Z",
     generationId,
     payload: {
       scanState: "complete",
-      sources: [{
-        source: "arch",
-        status: "ok",
-        provenance: "current",
-        observedAt: "2026-08-26T00:00:00.000Z",
-        freshUntil,
-        cause: null,
-      }],
+      sources: ["security", "cisa-kev", "omarchy", "arch", "aur", "flatpak", "mise"].map(
+        (name) => source(name, freshUntil),
+      ),
       summary: {
         totalUpdates: 1,
         watchedUpdates: 0,
-        securityFindings: 0,
+        securityFindings: 1,
         degradedSources: 0,
       },
-      items: [],
-      findings: [],
-      notifications: [],
+      items: [{
+        id: "arch:demo",
+        source: "arch",
+        label: "demo",
+        installed: "1.0",
+        candidate: "2.0",
+        watchMode: "off",
+        watchable: true,
+        provenance: "live",
+      }],
+      findings: [{
+        itemId: "arch:demo",
+        findings: [{
+          id: "AVG-1",
+          itemId: "arch:demo",
+          advisoryId: "AVG-1",
+          cveIds: ["CVE-2026-1"],
+          severity: "high",
+          fixedVersion: "2.0",
+          installedVersion: "1.0",
+          knownExploited: false,
+          kevStatus: "unavailable",
+          kevProvenance: null,
+          provenance: "live",
+          status: "Fixed",
+          type: "security",
+        }],
+      }],
+      notifications: [{ fingerprint: "watch:arch:demo", status: "delivered" }],
     },
-  });
+  };
+}
+
+function snapshot(generationId, freshUntil) {
+  return JSON.stringify(snapshotDocument(generationId, freshUntil));
+}
+
+function invalidSnapshot(mutate) {
+  const document = snapshotDocument("invalid");
+  mutate(document);
+  return JSON.stringify(document);
 }
 
 function inventory(generationId) {
@@ -73,6 +134,7 @@ function fixture(now = 0) {
     onStart: (operation) => starts.push(operation),
     onState: (state) => states.push(state),
     onResponse: () => {},
+    parseResponse: loadValidator(),
   });
   return { controller, starts, states };
 }
@@ -166,6 +228,53 @@ test("keeps last valid state for transport and protocol failures", () => {
     assert.equal(controller.state.lastSnapshot.generationId, "valid", failure.name);
     assert.notEqual(controller.state.lastError, "", failure.name);
   }
+});
+
+test("rejects every malformed typed snapshot field while retaining the last valid snapshot", () => {
+  const cases = [
+    ["unknown scan state", (document) => { document.payload.scanState = "unknown"; }],
+    ["unknown source", (document) => { document.payload.sources[0].source = "unknown"; }],
+    ["unknown source status", (document) => { document.payload.sources[0].status = "unknown"; }],
+    ["unknown source provenance", (document) => { document.payload.sources[0].provenance = "unknown"; }],
+    ["malformed source scope", (document) => { document.payload.sources[5].scopes[0].scope = "unknown"; }],
+    ["malformed source cause", (document) => { document.payload.sources[0].cause = { code: "UNKNOWN", message: "x" }; }],
+    ["malformed item", (document) => { document.payload.items[0].watchable = "true"; }],
+    ["duplicate item", (document) => { document.payload.items.push({ ...document.payload.items[0] }); }],
+    ["malformed finding", (document) => { document.payload.findings[0].findings[0].severity = "unknown-value"; }],
+    ["duplicate finding group", (document) => { document.payload.findings.push({ ...document.payload.findings[0] }); }],
+    ["duplicate finding", (document) => { document.payload.findings[0].findings.push({ ...document.payload.findings[0].findings[0] }); }],
+    ["malformed notification", (document) => { document.payload.notifications[0].status = "unknown"; }],
+    ["duplicate notification", (document) => { document.payload.notifications.push({ ...document.payload.notifications[0] }); }],
+    ["wrong summary fields", (document) => { document.payload.summary.extra = 1; }],
+  ];
+
+  for (const [name, mutate] of cases) {
+    const { controller, starts } = fixture();
+    controller.start();
+    complete(controller, starts[0], snapshot("valid"));
+    controller.requestRefresh();
+    complete(controller, starts[1], invalidSnapshot(mutate));
+
+    assert.equal(controller.state.lastSnapshot.generationId, "valid", name);
+    assert.notEqual(controller.state.lastError, "", name);
+  }
+});
+
+test("rejects helper requests outside the exact CLI bounds", () => {
+  const { controller } = fixture();
+  const invalidInventoryRequests = [
+    { source: "omarchy", query: "", limit: 1, offset: 0 },
+    { source: "security", query: "", limit: 1, offset: 0 },
+    { source: "arch", query: "", limit: 101, offset: 0 },
+    { source: "arch", query: "", limit: 1, offset: 100_001 },
+    { source: "arch", query: "x".repeat(129), limit: 1, offset: 0 },
+  ];
+
+  for (const request of invalidInventoryRequests) {
+    assert.equal(controller.requestInventory(request), false, JSON.stringify(request));
+  }
+  assert.equal(controller.setStar({ itemId: "x".repeat(129), mode: "temporary" }), false);
+  assert.equal(controller.setStar({ itemId: "arch:demo", mode: "unknown" }), false);
 });
 
 test("schedules initial, earliest-source, and post-handoff scans deterministically", () => {

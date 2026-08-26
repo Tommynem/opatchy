@@ -1,9 +1,7 @@
 .pragma library
 
-var MAX_PROTOCOL_BYTES = 5 * 1024 * 1024
 var INITIAL_SCAN_DELAY_MS = 30 * 1000
 var POST_HANDOFF_SCAN_DELAY_MS = 10 * 60 * 1000
-var RESPONSE_KINDS = ["snapshot", "inventory", "star-result", "error"]
 
 function createController(options) {
   var controller = {}
@@ -162,12 +160,12 @@ function createController(options) {
     var completed = active
     if (result.timedOut === true) {
       setError("helper operation timed out")
-    } else if (result.outputTooLarge === true || utf8Length(result.stdout) >= MAX_PROTOCOL_BYTES) {
+    } else if (result.outputTooLarge === true) {
       setError("helper output exceeded the five MiB limit")
     } else if (result.exitCode !== 0) {
       setError("helper exited with status " + result.exitCode)
     } else {
-      var parsed = parseResponse(result.stdout)
+      var parsed = options.parseResponse(result.stdout)
       if (!parsed.ok) {
         setError(parsed.error)
       } else if (parsed.value.kind === "error") {
@@ -193,95 +191,6 @@ function createController(options) {
   return controller
 }
 
-function parseResponse(text) {
-  if (typeof text !== "string") return failure("helper output is not text")
-  var value
-  try {
-    value = JSON.parse(text)
-  } catch (error) {
-    return failure("helper output is not valid JSON")
-  }
-  if (!isObject(value) || !exactEnvelope(value)) return failure("helper response envelope is invalid")
-  if (value.protocolVersion !== 1) return failure("helper protocol version is unsupported")
-  if (RESPONSE_KINDS.indexOf(value.kind) === -1) return failure("helper response kind is unsupported")
-  if (!timestamp(value.generatedAt) || typeof value.generationId !== "string") return failure("helper response metadata is invalid")
-  if (value.kind === "error") return validError(value) ? success(value) : failure("helper error response is invalid")
-  if (value.kind === "snapshot") return validSnapshot(value) ? success(value) : failure("helper snapshot is invalid")
-  if (value.kind === "inventory") return validInventory(value) ? success(value) : failure("helper inventory is invalid")
-  return validStarResult(value) ? success(value) : failure("helper star result is invalid")
-}
-
-function exactEnvelope(value) {
-  var keys = value.kind === "error"
-    ? ["protocolVersion", "kind", "generatedAt", "generationId", "error"]
-    : ["protocolVersion", "kind", "generatedAt", "generationId", "payload"]
-  return exactKeys(value, keys)
-}
-
-function validSnapshot(value) {
-  var payload = value.payload
-  if (!isObject(payload) || !exactKeys(payload, ["scanState", "sources", "summary", "items", "findings", "notifications"])) return false
-  if (typeof payload.scanState !== "string" || !Array.isArray(payload.sources) || !Array.isArray(payload.items) || !Array.isArray(payload.findings) || !Array.isArray(payload.notifications)) return false
-  if (!isObject(payload.summary)) return false
-  return validSummary(payload.summary) && payload.sources.every(validSource)
-}
-
-function validSummary(value) {
-  var keys = ["totalUpdates", "watchedUpdates", "securityFindings", "degradedSources"]
-  if (!exactKeys(value, keys)) return false
-  return keys.every(function(key) { return nonnegativeInteger(value[key]) })
-}
-
-function validSource(value) {
-  var allowed = ["source", "status", "provenance", "observedAt", "freshUntil", "cause", "scopes"]
-  if (!isObject(value) || !allowedKeys(value, allowed)) return false
-  var required = ["source", "status", "provenance", "observedAt", "freshUntil", "cause"]
-  if (!required.every(function(key) { return key in value })) return false
-  if (typeof value.source !== "string" || typeof value.status !== "string" || typeof value.provenance !== "string") return false
-  if (!timestamp(value.observedAt) || !timestamp(value.freshUntil)) return false
-  return !("scopes" in value) || Array.isArray(value.scopes)
-}
-
-function validInventory(value) {
-  var payload = value.payload
-  return isObject(payload) && exactKeys(payload, ["source", "total", "items"])
-    && typeof payload.source === "string" && nonnegativeInteger(payload.total) && Array.isArray(payload.items)
-}
-
-function validStarResult(value) {
-  var payload = value.payload
-  return isObject(payload) && exactKeys(payload, ["itemId", "mode"])
-    && typeof payload.itemId === "string" && ["off", "temporary", "permanent"].indexOf(payload.mode) !== -1
-}
-
-function validError(value) {
-  return isObject(value.error) && exactKeys(value.error, ["code", "message"])
-    && typeof value.error.code === "string" && typeof value.error.message === "string"
-}
-
-function validInventoryRequest(value) {
-  return isObject(value) && typeof value.source === "string" && typeof value.query === "string"
-    && nonnegativeInteger(value.offset) && nonnegativeInteger(value.limit) && value.limit > 0
-}
-
-function validStarRequest(value) {
-  return isObject(value) && typeof value.itemId === "string" && value.itemId.length > 0
-    && ["off", "temporary", "permanent"].indexOf(value.mode) !== -1
-}
-
-function timestamp(value) {
-  return typeof value === "string" && value.length >= 21 && value.charAt(10) === "T"
-    && value.charAt(value.length - 1) === "Z" && !isNaN(Date.parse(value))
-}
-
-function exactKeys(value, keys) {
-  return allowedKeys(value, keys) && Object.keys(value).length === keys.length
-}
-
-function allowedKeys(value, keys) {
-  return Object.keys(value).every(function(key) { return keys.indexOf(key) !== -1 })
-}
-
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
 }
@@ -290,20 +199,13 @@ function nonnegativeInteger(value) {
   return typeof value === "number" && isFinite(value) && Math.floor(value) === value && value >= 0
 }
 
-function utf8Length(value) {
-  var length = 0
-  for (var index = 0; index < value.length; index += 1) {
-    var code = value.charCodeAt(index)
-    if (code < 0x80) length += 1
-    else if (code < 0x800) length += 2
-    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length
-      && value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff) {
-      length += 4
-      index += 1
-    } else length += 3
-  }
-  return length
+function validInventoryRequest(value) {
+  return isObject(value) && ["arch", "aur", "flatpak", "mise"].indexOf(value.source) !== -1
+    && typeof value.query === "string" && value.query.length <= 128 && nonnegativeInteger(value.offset)
+    && value.offset <= 100000 && nonnegativeInteger(value.limit) && value.limit >= 1 && value.limit <= 100
 }
 
-function success(value) { return { ok: true, value: value } }
-function failure(error) { return { ok: false, error: error } }
+function validStarRequest(value) {
+  return isObject(value) && typeof value.itemId === "string" && value.itemId.length > 0 && value.itemId.length <= 128
+    && ["off", "temporary", "permanent"].indexOf(value.mode) !== -1
+}

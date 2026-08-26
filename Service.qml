@@ -1,5 +1,6 @@
 import QtQuick
 import "qml/models/ServiceController.js" as ServiceController
+import "qml/models/ProtocolValidator.js" as ProtocolValidator
 import "qml/models" as Models
 
 Item {
@@ -118,7 +119,8 @@ Item {
       refreshIntervalMs: 21600 * 1000,
       onStart: function(operation) { return root.startOperation(operation) },
       onState: function(state) { root.applyState(state) },
-      onResponse: function(operation, response) { root.applyResponse(operation, response) }
+      onResponse: function(operation, response) { root.applyResponse(operation, response) },
+      parseResponse: ProtocolValidator.parseResponse
     })
     _controller.start()
   }
