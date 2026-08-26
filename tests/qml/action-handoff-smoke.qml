@@ -13,14 +13,36 @@ ShellRoot {
     property bool failNext: false
     property double successfulHandoffAt: 0
     property string snapshotBeforeActions: ""
+    property string sentinelPath: "/tmp/opatchy-injection-sentinel"
+    property string hostileValue: "$(touch /tmp/opatchy-injection-sentinel)"
+    property int exitStatus: -1
 
     function fail(message) {
       console.error("action-handoff-smoke: " + message)
-      Qt.exit(1)
+      finish(1)
     }
 
     function check(condition, message) {
-      if (!condition) fail(message)
+      if (condition) return true
+      fail(message)
+      return false
+    }
+
+    function finish(status) {
+      if (exitStatus !== -1) return
+      exitStatus = status
+      if (service !== null) {
+        service.destroy()
+        service = null
+      }
+      if (fakeLauncher.fakeProcess.running) fakeLauncher.fakeProcess.running = false
+      if (sentinelCheck.running) sentinelCheck.running = false
+      if (!sentinelCleanup.running) sentinelCleanup.running = true
+    }
+
+    function succeed() {
+      console.log("action-handoff-smoke: hostile fixture stayed out of fake Process argv and the sentinel")
+      finish(0)
     }
 
     function health(name) {
@@ -58,9 +80,9 @@ ShellRoot {
           "sources": [health("security"), health("cisa-kev"), health("omarchy"), health("arch"), health("aur"), health("flatpak"), health("mise")],
           "summary": { "totalUpdates": 3, "watchedUpdates": 0, "securityFindings": 0, "degradedSources": 0 },
           "items": [
-            { "id": "omarchy:omarchy", "source": "omarchy", "label": "Omarchy", "installed": "1", "candidate": "2", "watchMode": "off", "watchable": true, "provenance": "live" },
-            { "id": "flatpak:user:app/org.example.App/x86_64/stable", "source": "flatpak", "label": "Example App", "installed": "1", "candidate": "2", "watchMode": "off", "watchable": true, "provenance": "live" },
-            { "id": "flatpak:system:app/org.example.Tool/x86_64/stable", "source": "flatpak", "label": "Example Tool", "installed": "1", "candidate": "2", "watchMode": "off", "watchable": true, "provenance": "live" }
+            { "id": "omarchy:" + hostileValue, "source": "omarchy", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchable": true, "provenance": "live" },
+            { "id": "flatpak:user:app/" + hostileValue + "/x86_64/stable", "source": "flatpak", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchable": true, "provenance": "live" },
+            { "id": "flatpak:system:app/" + hostileValue + "/x86_64/stable", "source": "flatpak", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchable": true, "provenance": "live" }
           ],
           "findings": [],
           "notifications": []
@@ -95,7 +117,8 @@ ShellRoot {
         "timedOut": false,
         "outputTooLarge": false
       })
-      check(service.lastSnapshot !== null, "fixture snapshot was not accepted")
+      if (!check(service.lastSnapshot !== null, "fixture snapshot was not accepted")) return
+      if (!check(JSON.stringify(service.lastSnapshot).indexOf(hostileValue) !== -1, "hostile fixture was not accepted")) return
       snapshotBeforeActions = JSON.stringify(service.lastSnapshot)
       service.operationFailed.connect(function() {
         failureTimer.restart()
@@ -105,17 +128,18 @@ ShellRoot {
 
     function startNext() {
       if (stage === 0) {
-        check(service.openOmarchyUpdate(), "Omarchy handoff was not accepted")
-        check(!service.openOmarchyUpdate(), "repeat click started a second handoff")
+        if (!check(service.openOmarchyUpdate(), "Omarchy handoff was not accepted")) return
+        if (!check(!service.openOmarchyUpdate(), "repeat click started a second handoff")) return
       }
       else if (stage === 1) check(service.openFlatpakUserUpdate(), "user Flatpak handoff was not accepted")
       else if (stage === 2) check(service.openFlatpakSystemUpdate(), "system Flatpak handoff was not accepted")
       else if (stage === 3) {
-        check(launches.length === 3, "exactly three terminal handoffs were started")
-        check(JSON.stringify(launches[0]) === JSON.stringify(["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/omarchy-update"]), "Omarchy argv changed")
-        check(JSON.stringify(launches[1]) === JSON.stringify(["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--user", "update"]), "user Flatpak argv changed")
-        check(JSON.stringify(launches[2]) === JSON.stringify(["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--system", "update"]), "system Flatpak argv changed")
-        check(service.handoffAt > 0, "successful start did not record handoffAt")
+        if (!check(launches.length === 3, "exactly three terminal handoffs were started")) return
+        if (!check(JSON.stringify(launches[0]) === JSON.stringify(["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/omarchy-update"]), "Omarchy argv changed")) return
+        if (!check(JSON.stringify(launches[1]) === JSON.stringify(["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--user", "update"]), "user Flatpak argv changed")) return
+        if (!check(JSON.stringify(launches[2]) === JSON.stringify(["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--system", "update"]), "system Flatpak argv changed")) return
+        if (!check(JSON.stringify(launches).indexOf(hostileValue) === -1, "hostile fixture reached fake Process argv")) return
+        if (!check(service.handoffAt > 0, "successful start did not record handoffAt")) return
         successfulHandoffAt = service.handoffAt
         failNext = true
         check(service.openOmarchyUpdate(), "failure fixture was not accepted")
@@ -143,7 +167,8 @@ ShellRoot {
           return false
         }
         running = true
-        root.launches.push(argv)
+        fakeProcess.command = ["/usr/bin/true"].concat(argv)
+        root.launches.push(fakeProcess.command.slice(1))
         if (root.failNext) {
           root.failNext = false
           Qt.callLater(function() {
@@ -171,6 +196,35 @@ ShellRoot {
       }
     }
 
+    Process {
+      id: sentinelCheck
+      command: ["/usr/bin/test", "!", "-e", root.sentinelPath]
+      onExited: function(exitCode) {
+        if (exitCode !== 0) {
+          root.fail("hostile fixture created " + root.sentinelPath)
+          return
+        }
+        root.succeed()
+      }
+    }
+
+    Process {
+      id: sentinelCleanup
+      command: ["/usr/bin/rm", "-f", root.sentinelPath]
+      onExited: function(exitCode) {
+        if (exitCode !== 0) {
+          console.error("action-handoff-smoke: could not remove " + root.sentinelPath)
+          Qt.exit(1)
+          return
+        }
+        if (root.exitStatus !== -1) {
+          Qt.exit(root.exitStatus)
+          return
+        }
+        root.begin()
+      }
+    }
+
     Connections {
       target: fakeLauncher
       function onStarted() {
@@ -186,17 +240,16 @@ ShellRoot {
       interval: 50
       repeat: false
       onTriggered: {
-        root.check(root.service.handoffAt === root.successfulHandoffAt, "failed launch recorded a handoff")
-        root.check(root.launches.length === 4, "failure fixture did not attempt exactly one launch")
-        root.check(root.service.lastError.indexOf("Open update terminal") !== -1, "launcher failure was not visible")
-        root.check(JSON.stringify(root.service.lastSnapshot) === root.snapshotBeforeActions, "action attempt changed the snapshot")
-        console.log("action-handoff-smoke: fake launcher recorded fixed argv and start-only handoffs")
-        root.service.destroy()
-        Qt.exit(0)
+        if (!root.check(root.service.handoffAt === root.successfulHandoffAt, "failed launch recorded a handoff")) return
+        if (!root.check(root.launches.length === 4, "failure fixture did not attempt exactly one launch")) return
+        if (!root.check(JSON.stringify(root.launches).indexOf(root.hostileValue) === -1, "hostile fixture reached fake Process argv")) return
+        if (!root.check(root.service.lastError.indexOf("Open update terminal") !== -1, "launcher failure was not visible")) return
+        if (!root.check(JSON.stringify(root.service.lastSnapshot) === root.snapshotBeforeActions, "action attempt changed the snapshot")) return
+        sentinelCheck.running = true
       }
     }
 
-    Component.onCompleted: Qt.callLater(begin)
+    Component.onCompleted: sentinelCleanup.running = true
 
     Timer {
       interval: 3000
