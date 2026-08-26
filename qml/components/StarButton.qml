@@ -24,6 +24,20 @@ Button {
   bordered: true
   onClicked: if (starState) starState.request(target, confirmedMode, watchable)
 
+  StarFeedbackConsumer {
+    id: feedbackConsumer
+    starState: root.starState
+    target: root.target
+    confirmedMode: root.confirmedMode
+    temporaryArmed: root.temporaryArmed
+    onActivated: feedback.restart()
+  }
+
+  Connections {
+    target: root.starState
+    function onFeedbackRequested(target) { feedbackConsumer.acceptFeedback(target) }
+  }
+
   SequentialAnimation {
     id: feedback
     running: false
@@ -31,10 +45,6 @@ Button {
     NumberAnimation { target: root; property: "opacity"; to: 1; duration: root.starState ? root.starState.feedbackDuration / 2 : 50 }
   }
 
-  Connections {
-    target: root.starState
-    function onFeedbackRequested() { feedback.restart() }
-  }
 
   Text {
     visible: root.view.errorText !== ""

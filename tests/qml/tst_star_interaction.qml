@@ -15,6 +15,11 @@ TestCase {
   }
 
   Component {
+    id: consumerComponent
+    StarFeedbackConsumer { }
+  }
+
+  Component {
     id: buttonComponent
     Window {
       id: window
@@ -103,17 +108,27 @@ TestCase {
     state.destroy()
   }
 
-  function test_shared_consumers_reconcile_authoritative_armed_state() {
+  function test_shared_consumers_receive_target_scoped_confirmed_feedback() {
     const state = stateComponent.createObject(root)
-    state.service = { setStar: function() { return true } }
-    state.snapshotGeneration = "generation-1"
-    verify(state.request("arch:demo", "off", true))
-    state.acceptResult({ payload: { itemId: "arch:demo", mode: "temporary", watchArmed: true } }, { kind: "set-star", itemId: "arch:demo", mode: "temporary" })
-    compare(state.stateFor("arch:demo", "off", true, false, false).shortLabel, "Armed")
-    compare(state.stateFor("arch:demo", "off", true, false, false).shortLabel, "Armed")
-    state.snapshotGeneration = "generation-2"
-    compare(state.stateFor("arch:demo", "temporary", true, false, false).shortLabel, "Waiting")
-    compare(state.stateFor("arch:demo", "temporary", true, false, false).shortLabel, "Waiting")
+    const first = consumerComponent.createObject(root, { starState: state, target: "arch:demo" })
+    const second = consumerComponent.createObject(root, { starState: state, target: "arch:demo" })
+    const other = consumerComponent.createObject(root, { starState: state, target: "arch:other" })
+    state.feedbackRequested.connect(function(target) {
+      first.acceptFeedback(target)
+      second.acceptFeedback(target)
+      other.acceptFeedback(target)
+    })
+    first.confirmedMode = "temporary"
+    compare(first.activations, 1)
+    compare(second.activations, 1)
+    compare(other.activations, 0)
+    first.temporaryArmed = true
+    compare(first.activations, 2)
+    compare(second.activations, 2)
+    compare(other.activations, 0)
+    first.destroy()
+    second.destroy()
+    other.destroy()
     state.destroy()
   }
 

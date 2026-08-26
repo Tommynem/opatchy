@@ -18,9 +18,10 @@ QtObject {
   property string overrideGeneration: ""
   property string errorText: ""
   property string errorTarget: ""
+  property var observedStates: ({})
 
   signal reconcileRequested(string target)
-  signal feedbackRequested()
+  signal feedbackRequested(string target)
 
   onSnapshotGenerationChanged: {
     if (overrideGeneration !== "" && snapshotGeneration !== overrideGeneration) clearOverride()
@@ -71,7 +72,7 @@ QtObject {
     errorText = ""
     errorTarget = ""
     reconcileRequested(overrideTarget)
-    feedbackRequested()
+    feedbackRequested(overrideTarget)
   }
 
   function acceptFailure(operation, message) {
@@ -84,12 +85,24 @@ QtObject {
   }
 
   function clearOverride() {
-    var hadOverride = overrideTarget !== ""
+    var target = overrideTarget
     overrideTarget = ""
     overrideMode = ""
     overrideGeneration = ""
     overrideArmed = false
-    if (hadOverride) feedbackRequested()
+    if (target !== "") feedbackRequested(target)
+  }
+
+  function observeConfirmed(target, mode, armed) {
+    var current = mode + ":" + (armed === true)
+    if (observedStates[target] === undefined) {
+      observedStates[target] = current
+      return
+    }
+    if (observedStates[target] !== current) {
+      observedStates[target] = current
+      feedbackRequested(target)
+    }
   }
 
 }
