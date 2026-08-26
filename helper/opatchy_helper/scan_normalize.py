@@ -48,7 +48,7 @@ def security_outcomes(result: SecurityResult) -> tuple[SourceOutcome, SourceOutc
                         SourceStatus.ERROR,
                         diagnostic,
                         False,
-                        False,
+                        True,
                     )
         case SecurityArchUnavailable(diagnostic=diagnostic):
             return (
@@ -79,7 +79,7 @@ def _flatpak_scope(scope: FlatpakScopeResult) -> SourceOutcome:
                 SourceStatus.MISSING_DEPENDENCY,
                 scope.diagnostic or "Flatpak is unavailable",
                 True,
-                False,
+                True,
                 mapped_scope,
                 items,
             )
@@ -89,7 +89,7 @@ def _flatpak_scope(scope: FlatpakScopeResult) -> SourceOutcome:
                 SourceStatus.TIMEOUT,
                 scope.diagnostic or "Flatpak timed out",
                 False,
-                False,
+                True,
                 mapped_scope,
                 items,
             )
@@ -99,7 +99,7 @@ def _flatpak_scope(scope: FlatpakScopeResult) -> SourceOutcome:
                 SourceStatus.ERROR,
                 scope.diagnostic or "Flatpak failed",
                 False,
-                False,
+                True,
                 mapped_scope,
                 items,
             )
@@ -109,7 +109,7 @@ def _flatpak_scope(scope: FlatpakScopeResult) -> SourceOutcome:
                 SourceStatus.INVALID,
                 scope.diagnostic or "Flatpak evidence is invalid",
                 True,
-                False,
+                True,
                 mapped_scope,
                 items,
             )

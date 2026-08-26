@@ -108,19 +108,13 @@ def summary(
 
 
 def scan_state(resolved: tuple[ResolvedOutcome, ...]) -> ScanState:
-    mandatory = tuple(
-        value
-        for value in resolved
-        if value.outcome.source
-        in {SourceName.OMARCHY, SourceName.ARCH, SourceName.SECURITY}
-        or (value.outcome.source is SourceName.AUR and value.outcome.applicable)
-    )
+    applicable = tuple(value for value in resolved if value.outcome.applicable)
     if all(
         successful(value.outcome) and value.health.status is SourceStatus.OK
-        for value in mandatory
+        for value in applicable
     ):
         return ScanState.COMPLETE
-    if any(value.usable for value in mandatory):
+    if any(value.usable for value in applicable):
         return ScanState.PARTIAL
     return ScanState.FAILED
 
@@ -142,7 +136,7 @@ def inventories(
             ItemSource.FLATPAK,
             ItemSource.MISE,
         )
-        if (source_items := tuple(item for item in items if item.source is source))
+        for source_items in (tuple(item for item in items if item.source is source),)
     )
 
 
@@ -235,10 +229,11 @@ def _fingerprinted(item: NormalizedItem) -> NormalizedItem:
     )
 
 
-def _fingerprint(item: NormalizedItem, value: str | None) -> str:
-    evidence = "<none>" if value is None else value
+def _fingerprint(item: NormalizedItem, value: str | None) -> str | None:
+    if value is None:
+        return None
     return hashlib.sha256(
-        f"{item.source.value}\0{item.item_id}\0{evidence}".encode()
+        f"{item.source.value}\0{item.item_id}\0{value}".encode()
     ).hexdigest()
 
 
@@ -257,6 +252,8 @@ def _next_metadata(
     failure = next(outcome for outcome in attempted if not successful(outcome))
     count = old.failure_count + 1
     if failure.permanent:
-        return SourceMetadata(source, old.last_success, None, count, True)
+        return SourceMetadata(
+            source, old.last_success, now + RETRY_DELAYS[-1], count, True
+        )
     delay = RETRY_DELAYS[min(count, len(RETRY_DELAYS)) - 1]
     return SourceMetadata(source, old.last_success, now + delay, count, False)

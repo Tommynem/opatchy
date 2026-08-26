@@ -7,14 +7,14 @@ from pathlib import Path
 from typing import Final, override
 
 from opatchy_helper.adapters.arch import ArchDegraded, ArchUpdates
-from opatchy_helper.adapters.aur import AurNotApplicable
+from opatchy_helper.adapters.aur import AurNotApplicable, AurResult
 from opatchy_helper.adapters.flatpak import (
     FlatpakResult,
     FlatpakScope,
     FlatpakScopeResult,
     FlatpakScopeStatus,
 )
-from opatchy_helper.adapters.mise import MiseNotApplicable
+from opatchy_helper.adapters.mise import MiseNotApplicable, MiseResult
 from opatchy_helper.adapters.omarchy import OmarchyAvailability
 from opatchy_helper.adapters.security import SecurityArchUnavailable, SecurityCollected
 from opatchy_helper.adapters.security_kev import KevCatalog
@@ -61,7 +61,7 @@ class FakeCollector(ScanCollector):
     omarchy: OmarchyAvailability
     arch: ArchUpdates | ArchDegraded
     security: SecurityCollected | SecurityArchUnavailable
-    aur: AurNotApplicable = AurNotApplicable()
+    aur: AurResult = AurNotApplicable()
     flatpak: FlatpakResult = FlatpakResult(
         (
             FlatpakScopeResult(
@@ -72,7 +72,7 @@ class FakeCollector(ScanCollector):
             ),
         )
     )
-    mise: MiseNotApplicable = MiseNotApplicable()
+    mise: MiseResult = MiseNotApplicable()
 
     @override
     def collect_omarchy(self) -> OmarchyAvailability:
@@ -83,7 +83,7 @@ class FakeCollector(ScanCollector):
         return self.arch
 
     @override
-    def collect_aur(self) -> AurNotApplicable:
+    def collect_aur(self) -> AurResult:
         return self.aur
 
     @override
@@ -91,7 +91,7 @@ class FakeCollector(ScanCollector):
         return self.flatpak
 
     @override
-    def collect_mise(self) -> MiseNotApplicable:
+    def collect_mise(self) -> MiseResult:
         return self.mise
 
     @override

@@ -57,8 +57,6 @@ class ScanInputs:
 def due(metadata: SourceMetadata | None, now: datetime, force: bool) -> bool:
     if force or metadata is None:
         return True
-    if metadata.permanent_failure:
-        return False
     if metadata.backoff_until is not None and now < metadata.backoff_until:
         return False
     if metadata.last_success is None:

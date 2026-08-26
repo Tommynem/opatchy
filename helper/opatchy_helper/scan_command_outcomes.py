@@ -89,11 +89,11 @@ def mise_outcome(result: MiseResult) -> SourceOutcome:
             return not_applicable(SourceName.MISE)
         case MiseInvalid(diagnostic=diagnostic):
             return failure(
-                SourceName.MISE, SourceStatus.INVALID, diagnostic, True, False
+                SourceName.MISE, SourceStatus.INVALID, diagnostic, True, True
             )
         case MiseTimedOut():
             return failure(
-                SourceName.MISE, SourceStatus.TIMEOUT, "mise timed out", False, False
+                SourceName.MISE, SourceStatus.TIMEOUT, "mise timed out", False, True
             )
         case MiseOutputExceeded(stream=stream):
             return failure(
@@ -101,7 +101,7 @@ def mise_outcome(result: MiseResult) -> SourceOutcome:
                 SourceStatus.ERROR,
                 f"mise {stream} output exceeded",
                 False,
-                False,
+                True,
             )
         case MiseCommandFailed(returncode=returncode):
             return failure(
@@ -109,7 +109,7 @@ def mise_outcome(result: MiseResult) -> SourceOutcome:
                 SourceStatus.ERROR,
                 f"mise exited {returncode}",
                 False,
-                False,
+                True,
             )
         case MiseCommandRejected(diagnostic=diagnostic):
-            return failure(SourceName.MISE, SourceStatus.ERROR, diagnostic, True, False)
+            return failure(SourceName.MISE, SourceStatus.ERROR, diagnostic, True, True)
