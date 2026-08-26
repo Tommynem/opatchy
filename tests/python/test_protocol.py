@@ -174,7 +174,7 @@ class ProtocolCliTests(unittest.TestCase):
 
         self.assertEqual(
             encoded,
-            b'{"generatedAt":"2026-08-25T12:34:56.000000Z","generationId":"generation-0001","kind":"inventory","payload":{"items":[{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchMode":"off","watchable":true}],"source":"arch","total":1},"protocolVersion":1}\n',
+            b'{"generatedAt":"2026-08-25T12:34:56.000000Z","generationId":"generation-0001","kind":"inventory","payload":{"items":[{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchArmed":false,"watchMode":"off","watchable":true}],"source":"arch","total":1},"protocolVersion":1}\n',
         )
         self.assertEqual(decode_response(encoded), inventory_response())
         self.assertFalse(sentinel.exists())
@@ -202,7 +202,7 @@ class ProtocolCliTests(unittest.TestCase):
                 self.assertEqual(decode_response(encode_response(response)), response)
 
     def test_duplicate_item_ids_are_rejected_when_inventory_is_decoded(self) -> None:
-        item = b'{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchMode":"off","watchable":true}'
+        item = b'{"candidate":"1.1","id":"arch:demo","installed":"1.0","label":"$(touch /tmp/opatchy-injection-sentinel) https://example.invalid","provenance":"live","source":"arch","watchArmed":false,"watchMode":"off","watchable":true}'
         raw = (
             encode_response(inventory_response())
             .replace(item, b",".join((item, item)))

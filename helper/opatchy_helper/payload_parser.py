@@ -197,6 +197,7 @@ def _item(value: JsonValue, path: str) -> NormalizedItem:
                 "installed",
                 "candidate",
                 "watchMode",
+                "watchArmed",
                 "watchable",
                 "provenance",
                 "installedFingerprint",
@@ -229,6 +230,7 @@ def _item(value: JsonValue, path: str) -> NormalizedItem:
         enum(Provenance, reader_value.field("provenance"), f"{path}.provenance"),
         installed_fingerprint,
         candidate_fingerprint,
+        boolean(reader_value.field("watchArmed"), f"{path}.watchArmed"),
     )
 
 

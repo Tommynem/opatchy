@@ -23,6 +23,7 @@ from .models import (
     SourceName,
     SourceScope,
     StarResultResponse,
+    WatchMode,
 )
 
 MAX_IDENTIFIER_LENGTH: Final = 128
@@ -126,6 +127,8 @@ def _validate_items(items: tuple[NormalizedItem, ...]) -> None:
     if len(item_ids) != len(items):
         _fail(ErrorCode.DUPLICATE_ITEM_ID, "item IDs must be unique")
     for item in items:
+        if item.watch_armed and item.watch_mode is not WatchMode.TEMPORARY:
+            _fail(ErrorCode.INVALID_ENVELOPE, "only temporary watches can be armed")
         _validate_identifier(str(item.item_id), "item.id")
         _validate_identifier(item.label, "item.label")
         if item.installed_fingerprint is not None:

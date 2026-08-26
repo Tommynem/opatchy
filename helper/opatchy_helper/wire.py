@@ -177,6 +177,7 @@ def _item(item: NormalizedItem) -> JsonObject:
         "provenance": item.provenance,
         "source": item.source,
         "watchMode": item.watch_mode,
+        "watchArmed": item.watch_armed,
         "watchable": item.watchable,
     }
     if item.installed_fingerprint is not None:

@@ -66,7 +66,14 @@ def snapshot(storage: Storage) -> SnapshotResponse:
     snapshot = storage.load_snapshot()
     if snapshot is None:
         raise CliUnavailableError("validated snapshot storage is unavailable")
-    return snapshot
+    state = storage.load_state().state
+    return replace(
+        snapshot,
+        payload=replace(
+            snapshot.payload,
+            items=_watched_items(snapshot.payload.items, state.watches),
+        ),
+    )
 
 
 def inventory_response(
@@ -93,11 +100,7 @@ def _inventory_items(
     watches: tuple[WatchRecord, ...],
     source: ItemSource,
 ) -> tuple[NormalizedItem, ...]:
-    modes = {watch.item_id: watch.mode for watch in watches}
-    cached_items = tuple(
-        replace(item, watch_mode=modes.get(item.item_id, WatchMode.OFF))
-        for item in cached.payload.items
-    )
+    cached_items = _watched_items(cached.payload.items, watches)
     present = frozenset(item.item_id for item in cached_items)
     missing = tuple(
         NormalizedItem(
@@ -115,7 +118,23 @@ def _inventory_items(
         and watch.item_id not in present
         and str(watch.item_id).startswith(f"{source.value}:")
     )
-    return cached_items + missing
+    return missing + cached_items
+
+
+def _watched_items(
+    items: tuple[NormalizedItem, ...], watches: tuple[WatchRecord, ...]
+) -> tuple[NormalizedItem, ...]:
+    records = {watch.item_id: watch for watch in watches}
+    return tuple(
+        replace(
+            item,
+            watch_mode=record.mode,
+            watch_armed=record.armed if record.mode is WatchMode.TEMPORARY else False,
+        )
+        if (record := records.get(item.item_id)) is not None
+        else replace(item, watch_mode=WatchMode.OFF, watch_armed=False)
+        for item in items
+    )
 
 
 def _matches(item: NormalizedItem, query: str) -> bool:

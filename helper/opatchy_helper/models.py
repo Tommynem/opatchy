@@ -192,6 +192,7 @@ class NormalizedItem:
     provenance: Provenance
     installed_fingerprint: str | None = None
     candidate_fingerprint: str | None = None
+    watch_armed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
