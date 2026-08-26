@@ -260,6 +260,8 @@ def test_not_modified_reuses_only_complete_semantic_caches(tmp_path: Path) -> No
     assert storage.write_last_good_feed(
         FeedName.CISA_KEV, _fixture("cisa-kev.json"), _valid_kev
     )
+    _write_transport_body(storage, FeedName.ARCH_SECURITY, _fixture("tracker-all.json"))
+    _write_transport_body(storage, FeedName.CISA_KEV, _fixture("cisa-kev.json"))
     run, _ = _command_runner(
         (
             CommandSucceeded(b"linux 1:6.12.2-1\n", b""),
@@ -276,6 +278,59 @@ def test_not_modified_reuses_only_complete_semantic_caches(tmp_path: Path) -> No
     assert isinstance(result, SecurityCollected)
     assert result.arch_provenance is Provenance.CACHE
     assert result.groups[0].findings[0].kev_provenance is Provenance.CACHE
+
+
+def test_not_modified_tracker_rejects_unrelated_semantic_bytes(tmp_path: Path) -> None:
+    # Given: last-good Tracker bytes and a newer malformed transport body.
+    storage = Storage(
+        tmp_path / "state.json",
+        tmp_path / "cache",
+        lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        SystemAtomicOperations(),
+    )
+    assert storage.write_last_good_feed(
+        FeedName.ARCH_SECURITY, _fixture("tracker-all.json"), _valid_tracker
+    )
+    _write_transport_body(storage, FeedName.ARCH_SECURITY, b"{}")
+    run, _ = _command_runner(
+        (CommandSucceeded(b"linux 1:6.12.2-1\n", b""), CommandSucceeded(b"{}", b""))
+    )
+    fetch, _ = _fetcher((EndpointNotModified(),))
+
+    # When: the endpoint confirms the newer transport body is unchanged.
+    result = collect_security(run, fetch, storage)
+
+    # Then: unrelated semantic bytes cannot become current Tracker evidence.
+    assert isinstance(result, SecurityArchUnavailable)
+
+
+def test_not_modified_kev_rejects_unrelated_semantic_bytes(tmp_path: Path) -> None:
+    # Given: last-good KEV bytes and a newer malformed transport body.
+    storage = Storage(
+        tmp_path / "state.json",
+        tmp_path / "cache",
+        lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        SystemAtomicOperations(),
+    )
+    assert storage.write_last_good_feed(
+        FeedName.CISA_KEV, _fixture("cisa-kev.json"), _valid_kev
+    )
+    _write_transport_body(storage, FeedName.CISA_KEV, b"{}")
+    run, _ = _command_runner(
+        (
+            CommandSucceeded(b"linux 1:6.12.2-1\n", b""),
+            CommandSucceeded(_fixture("arch-audit.json"), b""),
+            CommandSucceeded(b"-1", b""),
+        )
+    )
+    fetch, _ = _fetcher((EndpointNotModified(),))
+
+    # When: the endpoint confirms the newer transport body is unchanged.
+    result = collect_security(run, fetch, storage)
+
+    # Then: current Arch findings survive, but stale KEV semantics do not revive.
+    assert isinstance(result, SecurityCollected)
+    assert isinstance(result.kev, KevUnavailable)
 
 
 def test_semantic_cache_discards_json_that_fails_its_source_parser(
@@ -304,3 +359,9 @@ def _valid_tracker(body: bytes) -> bool:
 
 def _valid_kev(body: bytes) -> bool:
     return isinstance(parse_kev(body), KevCatalog)
+
+
+def _write_transport_body(storage: Storage, feed: FeedName, body: bytes) -> None:
+    transport = storage.endpoint_cache(feed)
+    transport.body_path.parent.mkdir(parents=True, exist_ok=True)
+    _ = transport.body_path.write_bytes(body)

@@ -52,6 +52,10 @@ class SemanticFeedStore(Protocol):
         self, feed: FeedName, validator: Callable[[bytes], bool], /
     ) -> bytes | None: ...
 
+    def read_confirmed_feed(
+        self, feed: FeedName, validator: Callable[[bytes], bool], /
+    ) -> bytes | None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class SecurityCollected:
@@ -141,7 +145,7 @@ def _fallback(
         case EndpointNotModified():
             if store is None:
                 return ArchFeedInvalid("Arch Security Tracker has no semantic cache")
-            cached = store.read_last_good_feed(FeedName.ARCH_SECURITY, _is_tracker)
+            cached = store.read_confirmed_feed(FeedName.ARCH_SECURITY, _is_tracker)
             if cached is None:
                 return ArchFeedInvalid("Arch Security Tracker has no semantic cache")
             parsed = parse_tracker(cached)
@@ -172,7 +176,7 @@ def _kev(
         case EndpointNotModified():
             if store is None:
                 return KevUnavailable("CISA KEV has no semantic cache")
-            cached = store.read_last_good_feed(FeedName.CISA_KEV, _is_kev)
+            cached = store.read_confirmed_feed(FeedName.CISA_KEV, _is_kev)
             if cached is None:
                 return KevUnavailable("CISA KEV has no semantic cache")
             parsed = parse_kev(cached, Provenance.CACHE)

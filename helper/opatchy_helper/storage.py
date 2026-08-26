@@ -126,6 +126,24 @@ class Storage:
         with self._state_lock():
             return read_last_good_feed(self._cache_path, feed, validator, self._discard)
 
+    def read_confirmed_feed(
+        self, feed: FeedName, validator: Callable[[bytes], bool]
+    ) -> bytes | None:
+        """Read semantic data only when it equals the validated transport body."""
+        with self._state_lock():
+            semantic = read_last_good_feed(
+                self._cache_path, feed, validator, self._discard
+            )
+            if semantic is None:
+                return None
+            try:
+                transport = self.endpoint_cache(feed).body_path.read_bytes()
+            except OSError:
+                return None
+            if transport != semantic or not validator(transport):
+                return None
+            return semantic
+
     def endpoint_cache(self, feed: FeedName) -> EndpointCache:
         """Return dedicated transport paths that cannot overwrite semantic feed data."""
         return transport_endpoint_cache(self._cache_path, feed)

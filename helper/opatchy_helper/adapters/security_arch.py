@@ -13,6 +13,7 @@ _MAX_ISSUES = 128
 _MAX_IDENTIFIER = 60
 _MAX_STRING = 128
 _AVG: Final = re.compile(r"AVG-[0-9]+")
+_ASA: Final = re.compile(r"ASA-[0-9]{4}-[0-9]+")
 _PRIMARY_REQUIRED = frozenset(
     {"name", "packages", "status", "type", "severity", "fixed", "issues"}
 )
@@ -119,7 +120,7 @@ def _parse_record(
 def _tracker_fields(value: dict[str, JsonValue]) -> bool:
     affected = _identifier(value["affected"])
     ticket = _optional_string(value["ticket"])
-    advisories = _avg_identifiers(value["advisories"], _MAX_ISSUES)
+    advisories = _asa_identifiers(value["advisories"], _MAX_ISSUES)
     match ticket:
         case ArchFeedInvalid():
             return False
@@ -173,10 +174,10 @@ def _identifiers(value: JsonValue, maximum: int) -> tuple[str, ...] | None:
     return identifiers if len(set(identifiers)) == len(identifiers) else None
 
 
-def _avg_identifiers(value: JsonValue, maximum: int) -> tuple[str, ...] | None:
+def _asa_identifiers(value: JsonValue, maximum: int) -> tuple[str, ...] | None:
     identifiers = _identifiers(value, maximum)
     if identifiers is None or any(
-        _AVG.fullmatch(identifier) is None for identifier in identifiers
+        _ASA.fullmatch(identifier) is None for identifier in identifiers
     ):
         return None
     return identifiers

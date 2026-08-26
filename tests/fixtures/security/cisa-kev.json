@@ -13,7 +13,7 @@
       "requiredAction": "Apply updates.",
       "dueDate": "2026-02-03",
       "knownRansomwareCampaignUse": "Unknown",
-      "notes": "Fixture only.",
+      "notes": "See https://www.cisa.gov/known-exploited-vulnerabilities-catalog.",
       "cwes": ["CWE-20"]
     }
   ]

@@ -22,7 +22,7 @@ from opatchy_helper.adapters.security_correlation import (
     ArchFindings,
     correlate_arch,
 )
-from opatchy_helper.adapters.security_kev import KevFeedInvalid, parse_kev
+from opatchy_helper.adapters.security_kev import KevCatalog, KevFeedInvalid, parse_kev
 from opatchy_helper.models import KevStatus, Provenance
 from opatchy_helper.runner_types import CommandName, CommandResult, CommandSucceeded
 
@@ -182,8 +182,7 @@ def test_tracker_discards_not_affected_and_kev_exact_joins_only_valid_cves() -> 
     # Then: primary evidence has no not-affected group, and KEV parsing is exact.
     assert isinstance(correlated, ArchFindings)
     assert len(correlated.groups) == 2
-    assert not isinstance(kev, KevFeedInvalid)
-    assert kev.cve_ids == frozenset({"CVE-2026-0001"})
+    assert kev == KevCatalog(frozenset({"CVE-2026-0001"}), Provenance.LIVE)
     assert correlated.groups[0].findings[0].kev_status is KevStatus.UNAVAILABLE
 
 
@@ -191,7 +190,8 @@ def test_tracker_discards_not_affected_and_kev_exact_joins_only_valid_cves() -> 
     "payload",
     (
         b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":["CVE-2026-0001","CVE-2026-0001"]}]',
-        b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":[],"affected":"pkg","ticket":null,"advisories":["AVG-1","AVG-1"]}]',
+        b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":[],"affected":"pkg","ticket":null,"advisories":["ASA-2026-0001","ASA-2026-0001"]}]',
+        b'[{"name":"AVG-1","packages":["pkg"],"status":"Vulnerable","type":"security","severity":"High","fixed":null,"issues":[],"affected":"pkg","ticket":null,"advisories":["AVG-20260001"]}]',
     ),
 )
 def test_arch_parsers_reject_duplicate_normalized_array_values(payload: bytes) -> None:
@@ -230,4 +230,22 @@ def test_kev_parser_requires_documented_dates_and_cwe_identifiers(
     result = parse_kev(payload)
 
     # Then: invalid documented formats are not retained.
+    assert isinstance(result, KevFeedInvalid)
+
+
+def test_kev_parser_requires_timezone_aware_release_dates() -> None:
+    # Given: a complete catalog with a valid date-time that omits its timezone.
+    payload = (
+        b'{"catalogVersion":"1","dateReleased":"2026-01-02T00:00:00",'
+        b'"count":1,"vulnerabilities":[{"cveID":"CVE-2026-0001",'
+        b'"vendorProject":"Vendor","product":"Product",'
+        b'"vulnerabilityName":"Name","dateAdded":"2026-01-02",'
+        b'"shortDescription":"Description","requiredAction":"Act",'
+        b'"dueDate":"2026-02-02","cwes":["CWE-20"]}]}'
+    )
+
+    # When: the catalog is parsed.
+    result = parse_kev(payload)
+
+    # Then: an ambiguous release instant is rejected.
     assert isinstance(result, KevFeedInvalid)

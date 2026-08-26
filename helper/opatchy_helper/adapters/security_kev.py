@@ -58,7 +58,9 @@ def parse_kev(
     required = {"catalogVersion", "dateReleased", "count", "vulnerabilities"}
     if not required.issubset(decoded):
         return KevFeedInvalid("KEV root omits a required field")
-    if not _string(decoded["catalogVersion"]) or not _datetime(decoded["dateReleased"]):
+    if not _schema_string(decoded["catalogVersion"]) or not _datetime(
+        decoded["dateReleased"]
+    ):
         return KevFeedInvalid("KEV metadata has an invalid type")
     count = decoded["count"]
     vulnerabilities = decoded["vulnerabilities"]
@@ -79,36 +81,38 @@ def _record_cve(value: JsonValue) -> str | None:
     if type(value) is not dict or not _REQUIRED.issubset(value):
         return None
     for field in _REQUIRED - frozenset({"dateAdded", "dueDate"}):
-        if not _string(value[field]):
+        if not _schema_string(value[field]):
             return None
     if not _date(value["dateAdded"]) or not _date(value["dueDate"]):
         return None
     for field in _OPTIONAL_STRINGS:
-        if field in value and not _string(value[field]):
+        if field in value and not _schema_string(value[field]):
             return None
     if "cwes" in value and _cwes(value["cwes"]) is None:
         return None
-    cve_id = value["cveID"]
-    if type(cve_id) is not str or _CVE.fullmatch(cve_id) is None:
+    cve_id = _retained_identifier(value["cveID"])
+    if cve_id is None or _CVE.fullmatch(cve_id) is None:
         return None
     return cve_id
 
 
-def _string(value: JsonValue) -> str | None:
-    if (
-        type(value) is str
-        and 0 < len(value) <= _MAX_STRING
-        and value.isprintable()
-        and "://" not in value
-    ):
+def _schema_string(value: JsonValue) -> str | None:
+    if type(value) is str and 0 < len(value) <= _MAX_STRING and value.isprintable():
         return value
     return None
+
+
+def _retained_identifier(value: JsonValue) -> str | None:
+    string = _schema_string(value)
+    if string is None or "://" in string:
+        return None
+    return string
 
 
 def _cwes(value: JsonValue) -> tuple[str, ...] | None:
     if type(value) is not list or len(value) > _MAX_RECORDS:
         return None
-    values = tuple(_string(entry) for entry in value)
+    values = tuple(_schema_string(entry) for entry in value)
     if any(entry is None or _CWE.fullmatch(entry) is None for entry in values):
         return None
     cwes = tuple(entry for entry in values if entry is not None)
@@ -116,7 +120,7 @@ def _cwes(value: JsonValue) -> tuple[str, ...] | None:
 
 
 def _date(value: JsonValue) -> str | None:
-    string = _string(value)
+    string = _schema_string(value)
     if string is None or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", string) is None:
         return None
     try:
@@ -127,11 +131,13 @@ def _date(value: JsonValue) -> str | None:
 
 
 def _datetime(value: JsonValue) -> str | None:
-    string = _string(value)
+    string = _schema_string(value)
     if string is None or "T" not in string:
         return None
     try:
-        _ = datetime.fromisoformat(string.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(string.replace("Z", "+00:00"))
     except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
     return string
