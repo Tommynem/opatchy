@@ -72,7 +72,7 @@ class NotificationCoordinator:
                 self._storage,
                 kind,
                 tuple(candidate for candidate in candidates if candidate.kind is kind),
-                now,
+                self._clock(),
             )
             if batch is None:
                 continue

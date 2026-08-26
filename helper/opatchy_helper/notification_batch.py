@@ -58,15 +58,20 @@ def claim_batch(
 def complete_batch(
     storage: Storage, batch: NotificationBatch, result: CommandResult
 ) -> tuple[NotificationOutcome, ...]:
-    state = storage.update_state(
-        lambda current: _complete_batch(current, batch, result)
-    ).state
+    completed: frozenset[NotificationFingerprint] = frozenset()
+
+    def complete(current: PersistentState) -> PersistentState:
+        nonlocal completed
+        state, completed = _complete_batch(current, batch, result)
+        return state
+
+    _ = storage.update_state(complete)
     return tuple(
         NotificationOutcome(
             candidate.fingerprint, _delivery_status(result, candidate.change)
         )
         for candidate in batch.candidates
-        if _completed(_entry(state, candidate.fingerprint), batch.lease_token)
+        if candidate.fingerprint in completed
     )
 
 
@@ -127,13 +132,18 @@ def _reserve_batch(
 
 def _complete_batch(
     state: PersistentState, batch: NotificationBatch, result: CommandResult
-) -> PersistentState:
+) -> tuple[PersistentState, frozenset[NotificationFingerprint]]:
     if not _owns_owner(state, batch.kind, batch.lease_token):
-        return state
+        return state, frozenset()
     updates = {
         candidate.fingerprint: _delivery_status(result, candidate.change)
         for candidate in batch.candidates
     }
+    completed = frozenset(
+        entry.fingerprint
+        for entry in state.ledger
+        if entry.fingerprint in updates and _owned_by(entry, batch.lease_token)
+    )
     ledger = tuple(
         replace(
             entry,
@@ -146,7 +156,7 @@ def _complete_batch(
         for entry in state.ledger
         if entry.fingerprint != _owner_fingerprint(batch.kind)
     )
-    return PersistentState(state.watches, ledger, state.sources)
+    return PersistentState(state.watches, ledger, state.sources), completed
 
 
 def _suppress_superseded(
@@ -189,10 +199,6 @@ def _owns_owner(state: PersistentState, kind: NotificationKind, token: str) -> b
 
 def _owned_by(entry: LedgerEntry | None, token: str) -> bool:
     return entry is not None and entry.lease_token == token
-
-
-def _completed(entry: LedgerEntry | None, token: str) -> bool:
-    return entry is not None and entry.lease_token != token
 
 
 def _live_lease(entry: LedgerEntry, now: datetime) -> bool:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import multiprocessing
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta, timezone
 from multiprocessing.queues import Queue
 from multiprocessing.synchronize import Event
@@ -57,6 +57,7 @@ from opatchy_helper.storage_state import prune_ledger
 from opatchy_helper.storage_types import LedgerEntry, PersistentState, WatchRecord
 
 NOW: Final = datetime(2026, 8, 26, 12, tzinfo=timezone.utc)
+FOREIGN_OWNER: Final = "-".join(("other", "owner"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +79,62 @@ class BlockingProcessRunner:
         _ = name, arguments
         self.entered.put("entered")
         assert self.release.wait(timeout=5)
+        return CommandSucceeded(b"", b"")
+
+
+@dataclass(slots=True)
+class AdvancingClock:
+    now: datetime
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+@dataclass(slots=True)
+class FirstKindAdvancingRunner:
+    clock: AdvancingClock
+    storage: Storage
+    lease_expirations: list[datetime]
+    calls: int = 0
+
+    def __call__(self, name: CommandName, arguments: tuple[str, ...]) -> CommandResult:
+        _ = name, arguments
+        self.calls += 1
+        if self.calls == 1:
+            self.clock.now += timedelta(seconds=15)
+        else:
+            self.lease_expirations.extend(
+                entry.lease_expires_at
+                for entry in self.storage.load_state().state.ledger
+                if entry.lease_expires_at is not None
+            )
+        return CommandSucceeded(b"", b"")
+
+
+@dataclass(slots=True)
+class LeaseReplacingRunner:
+    storage: Storage
+    calls: int = 0
+
+    def __call__(self, name: CommandName, arguments: tuple[str, ...]) -> CommandResult:
+        _ = name, arguments
+        self.calls += 1
+        _ = self.storage.update_state(
+            lambda state: PersistentState(
+                state.watches,
+                tuple(
+                    replace(
+                        entry,
+                        lease_token=FOREIGN_OWNER,
+                        lease_expires_at=NOW + timedelta(seconds=30),
+                    )
+                    if entry.status is NotificationStatus.PENDING
+                    else entry
+                    for entry in state.ledger
+                ),
+                state.sources,
+            )
+        )
         return CommandSucceeded(b"", b"")
 
 
@@ -118,6 +175,7 @@ def _item(
 def _finding(
     *,
     advisory: str = "AVG-20260001",
+    cve_ids: tuple[str, ...] = (),
     fixed: str | None = "2.0",
     severity: Severity = Severity.HIGH,
     provenance: Provenance = Provenance.LIVE,
@@ -127,7 +185,7 @@ def _finding(
         finding_id=FindingId(f"arch:demo:{advisory}"),
         item_id=ItemId("arch:demo"),
         advisory_id=advisory,
-        cve_ids=(),
+        cve_ids=cve_ids,
         severity=severity,
         fixed_version=fixed,
         known_exploited=False,
@@ -336,6 +394,57 @@ def test_security_fix_and_severity_escalation_create_new_identities() -> None:
     assert len({first.fingerprint, changed_fix.fingerprint, escalated.fingerprint}) == 3
 
 
+def test_security_cve_evidence_is_canonical_and_creates_new_identity() -> None:
+    # Given: a delivered advisory with two CVE identifiers in one source order.
+    first_snapshot = _snapshot(
+        findings=(
+            SecurityFindingGroup(
+                ItemId("arch:demo"),
+                (_finding(cve_ids=("CVE-2026-2", "CVE-2026-1")),),
+            ),
+        ),
+        sources=(_health(SourceName.SECURITY),),
+    )
+    first = notification_candidates(PersistentState.empty(), first_snapshot, NOW)[0]
+    state = PersistentState(
+        (), (LedgerEntry(first.fingerprint, NotificationStatus.DELIVERED, NOW),), ()
+    )
+
+    # When: equivalent evidence is reordered and then one CVE changes.
+    unchanged = notification_candidates(
+        state,
+        _snapshot(
+            findings=(
+                SecurityFindingGroup(
+                    ItemId("arch:demo"),
+                    (_finding(cve_ids=("CVE-2026-1", "CVE-2026-2")),),
+                ),
+            ),
+            sources=(_health(SourceName.SECURITY),),
+        ),
+        NOW,
+    )[0]
+    changed = notification_candidates(
+        state,
+        _snapshot(
+            findings=(
+                SecurityFindingGroup(
+                    ItemId("arch:demo"),
+                    (_finding(cve_ids=("CVE-2026-1", "CVE-2026-3")),),
+                ),
+            ),
+            sources=(_health(SourceName.SECURITY),),
+        ),
+        NOW,
+    )[0]
+
+    # Then: ordering deduplicates, while changed CVE evidence is a new advisory state.
+    assert unchanged.change is NotificationChange.UNCHANGED
+    assert unchanged.fingerprint == first.fingerprint
+    assert changed.change is NotificationChange.NEW
+    assert changed.fingerprint != first.fingerprint
+
+
 def test_watch_identity_changes_when_adapter_installed_evidence_changes() -> None:
     # Given: a permanent watch with a delivered candidate fingerprint.
     state = _state(_permanent())
@@ -438,6 +547,97 @@ def test_coordinator_keeps_failure_pending_for_one_retry_then_marks_failed(
     assert second[0].status is NotificationStatus.FAILED
     assert store.load_state().state.ledger[0].status is NotificationStatus.FAILED
     assert len(runner.calls) == 2
+
+
+def test_coordinator_refreshes_each_kind_lease_after_runner_time(
+    tmp_path: Path,
+) -> None:
+    # Given: watch and security batches with a runner that consumes half a lease.
+    store = _store(tmp_path)
+    store.save_state(_state(_permanent()))
+    clock = AdvancingClock(NOW)
+    runner = FirstKindAdvancingRunner(clock, store, [])
+    snapshot = _snapshot(
+        items=(_item(),),
+        findings=(SecurityFindingGroup(ItemId("arch:demo"), (_finding(),)),),
+        sources=(_health(SourceName.ARCH), _health(SourceName.SECURITY)),
+    )
+
+    # When: the first kind advances time before the second kind is reserved.
+    outcomes = NotificationCoordinator(store, runner, clock).dispatch(snapshot)
+
+    # Then: the second kind receives its own full 30-second lease.
+    assert [outcome.status for outcome in outcomes] == [
+        NotificationStatus.DELIVERED,
+        NotificationStatus.DELIVERED,
+    ]
+    assert runner.lease_expirations == [NOW + timedelta(seconds=45)] * 2
+
+
+def test_coordinator_reports_nothing_after_runner_replaces_batch_leases(
+    tmp_path: Path,
+) -> None:
+    # Given: a claimed watch batch whose leases are reclaimed while its runner returns.
+    store = _store(tmp_path)
+    store.save_state(_state(_permanent()))
+    runner = LeaseReplacingRunner(store)
+    snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+
+    # When: completion observes a foreign owner and candidate token after the runner.
+    outcomes = NotificationCoordinator(store, runner, lambda: NOW).dispatch(snapshot)
+
+    # Then: the old batch neither reports nor overwrites the reclaimed pending leases.
+    assert outcomes == ()
+    assert runner.calls == 1
+    assert all(
+        entry.status is NotificationStatus.PENDING
+        and entry.lease_token == FOREIGN_OWNER
+        and entry.lease_expires_at == NOW + timedelta(seconds=30)
+        for entry in store.load_state().state.ledger
+    )
+
+
+def test_coordinator_reports_nothing_for_foreign_committed_candidate(
+    tmp_path: Path,
+) -> None:
+    # Given: a runner whose candidate lease is finalized differently by another owner.
+    store = _store(tmp_path)
+    store.save_state(_state(_permanent()))
+    snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+
+    def foreign_completion(
+        name: CommandName, arguments: tuple[str, ...]
+    ) -> CommandResult:
+        _ = name, arguments
+        _ = store.update_state(
+            lambda state: PersistentState(
+                state.watches,
+                tuple(
+                    replace(
+                        entry,
+                        status=NotificationStatus.FAILED,
+                        lease_token=None,
+                        lease_expires_at=None,
+                    )
+                    if str(entry.fingerprint).startswith("watch-v1:")
+                    else entry
+                    for entry in state.ledger
+                ),
+                state.sources,
+            )
+        )
+        return CommandSucceeded(b"", b"")
+
+    # When: the old batch completes after the foreign failed state is committed.
+    outcomes = NotificationCoordinator(store, foreign_completion, lambda: NOW).dispatch(
+        snapshot
+    )
+
+    # Then: it does not overwrite or report the other owner’s failed completion.
+    assert outcomes == ()
+    assert (
+        next(iter(store.load_state().state.ledger)).status is NotificationStatus.FAILED
+    )
 
 
 def test_coordinator_default_clock_records_utc_delivery(tmp_path: Path) -> None:
@@ -785,6 +985,38 @@ def test_coordinator_does_not_run_when_another_owner_holds_candidate_lease(
     outcomes = NotificationCoordinator(store, runner, lambda: NOW).dispatch(snapshot)
 
     # Then: it cannot claim the lease and never invokes the notification runner.
+    assert outcomes == ()
+    assert runner.calls == []
+
+
+def test_coordinator_does_not_run_when_another_owner_holds_kind_lease(
+    tmp_path: Path,
+) -> None:
+    # Given: a fresh watch candidate and another coordinator's live watch batch owner.
+    store = _store(tmp_path)
+    state = _state(_permanent())
+    store.save_state(
+        PersistentState(
+            state.watches,
+            (
+                LedgerEntry(
+                    NotificationFingerprint("notification-owner-v1:watch"),
+                    NotificationStatus.PENDING,
+                    NOW,
+                    "other-owner",
+                    NOW + timedelta(seconds=30),
+                ),
+            ),
+            (),
+        )
+    )
+    runner = RecordingRunner([], [])
+    snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
+
+    # When: this coordinator reaches the live owner sentinel before reserving entries.
+    outcomes = NotificationCoordinator(store, runner, lambda: NOW).dispatch(snapshot)
+
+    # Then: it skips the entire kind without entering the notification runner.
     assert outcomes == ()
     assert runner.calls == []
 

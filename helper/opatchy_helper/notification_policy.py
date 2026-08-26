@@ -113,7 +113,7 @@ def _security_candidates(
             )
             reference = f"security-v1:{reference_hash}:"
             fingerprint = NotificationFingerprint(
-                f"{reference}{_digest((fixed, finding.severity.value))}"
+                f"{reference}{_digest((fixed, finding.severity.value, *sorted(finding.cve_ids)))}"
             )
             candidates.append(
                 NotificationCandidate(
