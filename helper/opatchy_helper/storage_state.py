@@ -1,15 +1,13 @@
 import json
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Final, NoReturn, assert_never
+from typing import Final, NoReturn
 
 from .json_value import JsonObject, JsonValue, decode_json
 from .models import (
-    ItemId,
     NotificationFingerprint,
     NotificationStatus,
     SourceName,
-    WatchMode,
 )
 from .storage_types import (
     LedgerEntry,
@@ -17,8 +15,8 @@ from .storage_types import (
     SourceMetadata,
     StateCorruptError,
     StateSchemaIncompatible,
-    WatchRecord,
 )
+from .storage_watches import parse_v0_watch, parse_watch, validate_watch, watch_value
 
 STATE_SCHEMA_VERSION: Final = 1
 MAX_INACTIVE_LEDGER_ENTRIES: Final = 5_000
@@ -30,7 +28,7 @@ def encode_state(state: PersistentState, now: datetime) -> bytes:
     normalized = prune_ledger(state, now)
     value: JsonObject = {
         "schemaVersion": STATE_SCHEMA_VERSION,
-        "watches": [_watch_value(watch) for watch in normalized.watches],
+        "watches": [watch_value(watch) for watch in normalized.watches],
         "ledger": [_ledger_value(entry) for entry in normalized.ledger],
         "sources": [_source_value(source) for source in normalized.sources],
     }
@@ -76,7 +74,7 @@ def validate_state(state: PersistentState) -> None:
         if type(source.permanent_failure) is not bool:
             _corrupt("source permanent failure is invalid")
     for watch in state.watches:
-        _validate_watch(watch)
+        validate_watch(watch)
 
 
 def prune_ledger(state: PersistentState, now: datetime) -> PersistentState:
@@ -96,7 +94,7 @@ def prune_ledger(state: PersistentState, now: datetime) -> PersistentState:
 
 def _migrate_v0(document: JsonObject) -> PersistentState:
     watches = tuple(
-        _parse_v0_watch(value)
+        parse_v0_watch(value)
         for value in _array(_field(document, "watches"), "watches")
     )
     state = PersistentState(watches, (), ())
@@ -106,7 +104,7 @@ def _migrate_v0(document: JsonObject) -> PersistentState:
 
 def _parse_v1(document: JsonObject) -> PersistentState:
     watches = tuple(
-        _parse_watch(value) for value in _array(_field(document, "watches"), "watches")
+        parse_watch(value) for value in _array(_field(document, "watches"), "watches")
     )
     ledger = tuple(
         _parse_ledger(value) for value in _array(_field(document, "ledger"), "ledger")
@@ -117,54 +115,6 @@ def _parse_v1(document: JsonObject) -> PersistentState:
     state = PersistentState(watches, ledger, sources)
     validate_state(state)
     return state
-
-
-def _parse_v0_watch(value: JsonValue) -> WatchRecord:
-    document = _object(value, "watch")
-    item_id = ItemId(_string(_field(document, "itemId"), "watch.itemId"))
-    mode = _watch_mode(_field(document, "mode"))
-    match mode:
-        case WatchMode.PERMANENT | WatchMode.TEMPORARY:
-            return WatchRecord(item_id, WatchMode.PERMANENT, None, None, False)
-        case WatchMode.OFF:
-            _corrupt("v0 off watches are not durable")
-    assert_never(mode)
-
-
-def _parse_watch(value: JsonValue) -> WatchRecord:
-    document = _object(value, "watch")
-    return WatchRecord(
-        ItemId(_string(_field(document, "itemId"), "watch.itemId")),
-        _watch_mode(_field(document, "mode")),
-        _optional_string(
-            _field(document, "installedFingerprint"), "watch.installedFingerprint"
-        ),
-        _optional_string(
-            _field(document, "candidateFingerprint"), "watch.candidateFingerprint"
-        ),
-        _boolean(_field(document, "armed"), "watch.armed"),
-    )
-
-
-def _validate_watch(watch: WatchRecord) -> None:
-    match watch.mode:
-        case WatchMode.PERMANENT:
-            if (
-                watch.installed_fingerprint is not None
-                or watch.candidate_fingerprint is not None
-                or watch.armed
-            ):
-                _corrupt("permanent watches must not retain temporary internals")
-            return
-        case WatchMode.TEMPORARY:
-            if watch.installed_fingerprint is None:
-                _corrupt("temporary watches require an installed baseline")
-            if watch.armed != (watch.candidate_fingerprint is not None):
-                _corrupt("temporary watch candidate and arming are inconsistent")
-            return
-        case WatchMode.OFF:
-            _corrupt("off watches are not durable")
-    assert_never(watch.mode)
 
 
 def _parse_ledger(value: JsonValue) -> LedgerEntry:
@@ -187,16 +137,6 @@ def _parse_source(value: JsonValue) -> SourceMetadata:
         _source_failure_count(document),
         _source_permanent_failure(document),
     )
-
-
-def _watch_value(watch: WatchRecord) -> JsonObject:
-    return {
-        "itemId": str(watch.item_id),
-        "mode": watch.mode.value,
-        "installedFingerprint": watch.installed_fingerprint,
-        "candidateFingerprint": watch.candidate_fingerprint,
-        "armed": watch.armed,
-    }
 
 
 def _ledger_value(entry: LedgerEntry) -> JsonObject:
@@ -252,10 +192,6 @@ def _string(value: JsonValue, path: str) -> str:
     _corrupt(f"{path} must be a string")
 
 
-def _optional_string(value: JsonValue, path: str) -> str | None:
-    return None if value is None else _string(value, path)
-
-
 def _integer(value: JsonValue, path: str) -> int:
     if type(value) is int:
         return value
@@ -300,13 +236,6 @@ def _nonnegative_integer(value: JsonValue, path: str) -> int:
     if integer < 0:
         _corrupt(f"{path} must be non-negative")
     return integer
-
-
-def _watch_mode(value: JsonValue) -> WatchMode:
-    try:
-        return WatchMode(_string(value, "watch.mode"))
-    except ValueError:
-        _corrupt("watch.mode is invalid")
 
 
 def _notification_status(value: JsonValue) -> NotificationStatus:
