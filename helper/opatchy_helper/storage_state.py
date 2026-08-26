@@ -1,7 +1,7 @@
 import json
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Final, NoReturn
+from typing import Final, NoReturn, assert_never
 
 from .json_value import JsonObject, JsonValue, decode_json
 from .models import (
@@ -75,6 +75,8 @@ def validate_state(state: PersistentState) -> None:
             _corrupt("source failure count is invalid")
         if type(source.permanent_failure) is not bool:
             _corrupt("source permanent failure is invalid")
+    for watch in state.watches:
+        _validate_watch(watch)
 
 
 def prune_ledger(state: PersistentState, now: datetime) -> PersistentState:
@@ -97,8 +99,9 @@ def _migrate_v0(document: JsonObject) -> PersistentState:
         _parse_v0_watch(value)
         for value in _array(_field(document, "watches"), "watches")
     )
-    _unique((str(watch.item_id) for watch in watches), "state has duplicate watches")
-    return PersistentState(watches, (), ())
+    state = PersistentState(watches, (), ())
+    validate_state(state)
+    return state
 
 
 def _parse_v1(document: JsonObject) -> PersistentState:
@@ -111,27 +114,21 @@ def _parse_v1(document: JsonObject) -> PersistentState:
     sources = tuple(
         _parse_source(value) for value in _array(_field(document, "sources"), "sources")
     )
-    _unique((str(watch.item_id) for watch in watches), "state has duplicate watches")
-    _unique(
-        (str(entry.fingerprint) for entry in ledger),
-        "state has duplicate ledger entries",
-    )
-    _unique(
-        (str(source.source) for source in sources),
-        "state has duplicate source metadata",
-    )
-    return PersistentState(watches, ledger, sources)
+    state = PersistentState(watches, ledger, sources)
+    validate_state(state)
+    return state
 
 
 def _parse_v0_watch(value: JsonValue) -> WatchRecord:
     document = _object(value, "watch")
-    return WatchRecord(
-        ItemId(_string(_field(document, "itemId"), "watch.itemId")),
-        _watch_mode(_field(document, "mode")),
-        None,
-        None,
-        False,
-    )
+    item_id = ItemId(_string(_field(document, "itemId"), "watch.itemId"))
+    mode = _watch_mode(_field(document, "mode"))
+    match mode:
+        case WatchMode.PERMANENT | WatchMode.TEMPORARY:
+            return WatchRecord(item_id, WatchMode.PERMANENT, None, None, False)
+        case WatchMode.OFF:
+            _corrupt("v0 off watches are not durable")
+    assert_never(mode)
 
 
 def _parse_watch(value: JsonValue) -> WatchRecord:
@@ -147,6 +144,27 @@ def _parse_watch(value: JsonValue) -> WatchRecord:
         ),
         _boolean(_field(document, "armed"), "watch.armed"),
     )
+
+
+def _validate_watch(watch: WatchRecord) -> None:
+    match watch.mode:
+        case WatchMode.PERMANENT:
+            if (
+                watch.installed_fingerprint is not None
+                or watch.candidate_fingerprint is not None
+                or watch.armed
+            ):
+                _corrupt("permanent watches must not retain temporary internals")
+            return
+        case WatchMode.TEMPORARY:
+            if watch.installed_fingerprint is None:
+                _corrupt("temporary watches require an installed baseline")
+            if watch.armed != (watch.candidate_fingerprint is not None):
+                _corrupt("temporary watch candidate and arming are inconsistent")
+            return
+        case WatchMode.OFF:
+            _corrupt("off watches are not durable")
+    assert_never(watch.mode)
 
 
 def _parse_ledger(value: JsonValue) -> LedgerEntry:

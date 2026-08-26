@@ -307,6 +307,80 @@ def test_v0_state_migrates_deterministically_to_v1(storage: Storage) -> None:
     assert b'"schemaVersion":1' in storage.state_path.read_bytes()
 
 
+def test_v0_temporary_watch_migrates_conservatively_to_permanent(
+    storage: Storage,
+) -> None:
+    storage.state_path.parent.mkdir(parents=True)
+    _ = storage.state_path.write_bytes(
+        b'{"schemaVersion":0,"watches":[{"itemId":"arch:demo","mode":"temporary"}]}'
+    )
+
+    loaded = storage.load_state()
+
+    assert loaded.warning is None
+    assert loaded.state.watches == (watch(),)
+
+
+@pytest.mark.parametrize(
+    "invalid_watch",
+    (
+        WatchRecord(ItemId("arch:demo"), WatchMode.OFF, None, None, False),
+        WatchRecord(ItemId("arch:demo"), WatchMode.PERMANENT, "base", None, False),
+        WatchRecord(ItemId("arch:demo"), WatchMode.TEMPORARY, None, None, False),
+        WatchRecord(ItemId("arch:demo"), WatchMode.TEMPORARY, "base", None, True),
+        WatchRecord(
+            ItemId("arch:demo"), WatchMode.TEMPORARY, "base", "candidate", False
+        ),
+    ),
+)
+def test_impossible_watch_caller_state_preserves_last_good_bytes(
+    storage: Storage, invalid_watch: WatchRecord
+) -> None:
+    storage.save_state(PersistentState.empty())
+    before = storage.state_path.read_bytes()
+
+    with pytest.raises(StateCorruptError):
+        storage.save_state(PersistentState((invalid_watch,), (), ()))
+
+    assert storage.state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "invalid_watch",
+    (
+        WatchRecord(ItemId("arch:demo"), WatchMode.OFF, None, None, False),
+        WatchRecord(ItemId("arch:demo"), WatchMode.TEMPORARY, None, None, False),
+    ),
+)
+def test_impossible_watch_update_preserves_last_good_bytes(
+    storage: Storage, invalid_watch: WatchRecord
+) -> None:
+    storage.save_state(PersistentState.empty())
+    before = storage.state_path.read_bytes()
+
+    with pytest.raises(StateCorruptError):
+        _ = storage.update_state(lambda _: PersistentState((invalid_watch,), (), ()))
+
+    assert storage.state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "raw",
+    (
+        b'{"ledger":[],"schemaVersion":1,"sources":[],"watches":[{"armed":false,"candidateFingerprint":null,"installedFingerprint":null,"itemId":"arch:demo","mode":"off"}]}',
+        b'{"ledger":[],"schemaVersion":1,"sources":[],"watches":[{"armed":true,"candidateFingerprint":null,"installedFingerprint":"base","itemId":"arch:demo","mode":"temporary"}]}',
+    ),
+)
+def test_impossible_persisted_watch_combinations_are_quarantined(
+    storage: Storage, raw: bytes
+) -> None:
+    storage.state_path.parent.mkdir(parents=True)
+    _ = storage.state_path.write_bytes(raw)
+
+    assert storage.load_state().warning is StorageWarning.STATE_CORRUPT
+    assert not storage.state_path.exists()
+
+
 def test_duplicate_v0_watches_are_quarantined(storage: Storage) -> None:
     storage.state_path.parent.mkdir(parents=True)
     _ = storage.state_path.write_bytes(
