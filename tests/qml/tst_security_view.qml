@@ -17,6 +17,11 @@ TestCase {
     SecurityFindingPresentation { }
   }
 
+  Component {
+    id: clockComponent
+    SecurityClock { refreshInterval: 10 }
+  }
+
   function source(name, status, provenance) {
     return {
       source: name,
@@ -93,5 +98,21 @@ TestCase {
     verify(presentation.statusText.length <= 530)
     verify(presentation.coverageText.indexOf("opatchy-injection-sentinel") !== -1)
     presentation.destroy()
+  }
+
+  function test_security_clock_updates_only_while_active() {
+    const clock = clockComponent.createObject(root)
+    const initialTime = clock.currentTime
+
+    compare(clock.interval, 10)
+    wait(30)
+    compare(clock.currentTime, initialTime)
+    clock.active = true
+    tryVerify(function() { return clock.currentTime > initialTime }, 100)
+    const activeTime = clock.currentTime
+    clock.active = false
+    wait(30)
+    compare(clock.currentTime, activeTime)
+    clock.destroy()
   }
 }

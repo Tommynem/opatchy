@@ -216,7 +216,7 @@ test("security presentation stays plain text and contains no assurance or local-
   const link = readFileSync(resolve(repositoryRoot, "qml/components/SafeExternalLink.qml"), "utf8");
 
   assert.match(source, /textFormat:\s*Text\.PlainText/g);
-  assert.match(source, /Timer\s*\{[\s\S]*interval:\s*60000[\s\S]*running:\s*root\.visible/);
+  assert.match(source, /SecurityClock\s*\{/);
   assert.match(row, /textFormat:\s*Text\.PlainText/g);
   assert.match(integration, /SecurityView\s*\{/);
   assert.match(link, /SecurityLinkPolicy\.linkFor\(linkKind, identifier\)/);

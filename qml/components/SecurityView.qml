@@ -5,18 +5,16 @@ Item {
   id: root
 
   property var snapshot: null
-  property double currentTime: Date.now()
+  readonly property double currentTime: clock.currentTime
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
   readonly property var view: presentation.view
 
   implicitHeight: content.implicitHeight
 
-  Timer {
-    interval: 60000
-    repeat: true
-    running: root.visible
-    onTriggered: root.currentTime = Date.now()
+  SecurityClock {
+    id: clock
+    active: root.visible
   }
 
   Column {
