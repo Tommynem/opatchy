@@ -37,6 +37,9 @@ RETRY_DELAYS: Final = (
 _OMARCHY_SYSTEM_IDS: Final = frozenset(
     (ItemId("arch:omarchy"), ItemId("arch:omarchy-dev"))
 )
+_MANDATORY_SOURCES: Final = frozenset(
+    (SourceName.OMARCHY, SourceName.ARCH, SourceName.SECURITY)
+)
 type SourceOutcomeGroups = tuple[
     tuple[SourceName, tuple[SourceOutcome | None, ...]], ...
 ]
@@ -108,7 +111,15 @@ def summary(
 
 
 def scan_state(resolved: tuple[ResolvedOutcome, ...]) -> ScanState:
-    applicable = tuple(value for value in resolved if value.outcome.applicable)
+    mandatory = tuple(
+        value
+        for value in resolved
+        if value.outcome.source in _MANDATORY_SOURCES
+        or (value.outcome.source is SourceName.AUR and value.outcome.applicable)
+    )
+    if not any(value.usable for value in mandatory):
+        return ScanState.FAILED
+    applicable = tuple(value for value in resolved if _is_applicable(value))
     if all(
         successful(value.outcome) and value.health.status is SourceStatus.OK
         for value in applicable
@@ -172,6 +183,8 @@ def metadata(
 
 def _scope_health(resolved: ResolvedOutcome) -> ScopeHealth:
     match resolved.health:
+        case ScopeHealth(status=SourceStatus.MISSING_DEPENDENCY) as health:
+            return replace(health, status=SourceStatus.NOT_APPLICABLE, cause=None)
         case ScopeHealth() as health:
             return health
         case SourceHealth():
@@ -188,6 +201,13 @@ def _source_health(resolved: ResolvedOutcome) -> SourceHealth:
             raise ProtocolError(
                 ErrorInfo(ErrorCode.INVALID_ENVELOPE, "source health is scoped")
             )
+
+
+def _is_applicable(resolved: ResolvedOutcome) -> bool:
+    return resolved.outcome.applicable and not (
+        resolved.outcome.source is SourceName.FLATPAK
+        and resolved.outcome.status is SourceStatus.MISSING_DEPENDENCY
+    )
 
 
 def _flatpak_status(user: ScopeHealth, system: ScopeHealth) -> SourceStatus:

@@ -11,6 +11,7 @@ from opatchy_helper.adapters.flatpak import (
     FlatpakScopeStatus,
 )
 from opatchy_helper.adapters.mise import (
+    MiseCollected,
     MiseCommandFailed,
     MiseCommandRejected,
     MiseInvalid,
@@ -18,7 +19,8 @@ from opatchy_helper.adapters.mise import (
     MiseResult,
     MiseTimedOut,
 )
-from opatchy_helper.adapters.security import SecurityCollected
+from opatchy_helper.adapters.omarchy import OmarchyAvailability
+from opatchy_helper.adapters.security import SecurityArchUnavailable, SecurityCollected
 from opatchy_helper.adapters.security_kev import KevUnavailable
 from opatchy_helper.models import (
     FindingId,
@@ -68,6 +70,56 @@ def test_scan_is_partial_when_an_applicable_flatpak_scope_times_out(
 
     # Then: parent Flatpak degradation and snapshot state agree.
     assert generated.snapshot.payload.scan_state is ScanState.PARTIAL
+
+
+def test_scan_fails_when_no_mandatory_source_is_usable(tmp_path: Path) -> None:
+    # Given: Omarchy, Arch, and security are unusable while mise is current.
+    source = FakeCollector(
+        OmarchyAvailability(SourceStatus.ERROR, (), "unavailable"),
+        ArchDegraded(ArchFailure.COMMAND_TIMED_OUT, "timed out"),
+        SecurityArchUnavailable("unavailable"),
+        mise=MiseCollected(()),
+    )
+
+    # When: the coordinator assembles this generation.
+    generated = run(store(tmp_path), source, 1)
+
+    # Then: optional evidence cannot rescue mandatory source failure.
+    assert generated.snapshot.payload.scan_state is ScanState.FAILED
+
+
+def test_scan_is_complete_when_flatpak_is_not_installed(tmp_path: Path) -> None:
+    # Given: all mandatory evidence is current and the Flatpak executable is absent.
+    base = collector()
+    flatpak = FlatpakResult(
+        (
+            FlatpakScopeResult(
+                FlatpakScope.USER,
+                FlatpakScopeStatus.MISSING_DEPENDENCY,
+                (),
+                "missing",
+            ),
+            FlatpakScopeResult(
+                FlatpakScope.SYSTEM,
+                FlatpakScopeStatus.MISSING_DEPENDENCY,
+                (),
+                "missing",
+            ),
+        )
+    )
+    source = FakeCollector(base.omarchy, base.arch, base.security, flatpak=flatpak)
+
+    # When: the coordinator normalizes source availability.
+    generated = run(store(tmp_path), source, 1)
+
+    # Then: absent optional Flatpak is informational rather than degraded.
+    flatpak_health = next(
+        health
+        for health in generated.snapshot.payload.sources
+        if health.source is SourceName.FLATPAK
+    )
+    assert generated.snapshot.payload.scan_state is ScanState.COMPLETE
+    assert flatpak_health.status is SourceStatus.NOT_APPLICABLE
 
 
 @pytest.mark.parametrize(
