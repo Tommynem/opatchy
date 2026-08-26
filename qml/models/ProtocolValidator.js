@@ -1,5 +1,7 @@
 .pragma library
 
+.import "StrictJson.js" as StrictJson
+
 var RESPONSE_KINDS = ["snapshot", "inventory", "star-result", "error"]
 var SCAN_STATES = ["complete", "partial", "failed"]
 var SOURCE_NAMES = ["security", "cisa-kev", "omarchy", "arch", "aur", "flatpak", "mise"]
@@ -17,6 +19,7 @@ var ERROR_CODES = ["CLI_USAGE", "STATE_UNAVAILABLE", "INVALID_UTF8", "PAYLOAD_TO
 
 function parseResponse(text) {
   if (typeof text !== "string") return failure("helper output is not text")
+  if (StrictJson.hasDuplicateObjectKey(text)) return failure("helper output contains duplicate object keys")
   var value
   try { value = JSON.parse(text) } catch (error) { return failure("helper output is not valid JSON") }
   if (!object(value) || !envelope(value)) return failure("helper response envelope is invalid")

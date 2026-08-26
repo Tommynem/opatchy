@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -6,6 +7,7 @@ import vm from "node:vm";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const controllerPath = resolve(repositoryRoot, "qml/models/ServiceController.js");
+const strictJsonPath = resolve(repositoryRoot, "qml/models/StrictJson.js");
 const validatorPath = resolve(repositoryRoot, "qml/models/ProtocolValidator.js");
 
 function loadController() {
@@ -16,10 +18,32 @@ function loadController() {
 }
 
 function loadValidator() {
-  const source = readFileSync(validatorPath, "utf8").replace(".pragma library", "");
   const context = vm.createContext({ JSON, Math, Number, Object, String });
+  const strictJson = readFileSync(strictJsonPath, "utf8").replace(".pragma library", "");
+  vm.runInContext(strictJson, context, { filename: strictJsonPath });
+  context.StrictJson = { hasDuplicateObjectKey: context.hasDuplicateObjectKey };
+  const source = readFileSync(validatorPath, "utf8")
+    .replace(".pragma library", "")
+    .replace('.import "StrictJson.js" as StrictJson', "");
   vm.runInContext(source, context, { filename: validatorPath });
   return context.parseResponse;
+}
+
+function pythonAccepts(raw) {
+  const result = spawnSync("/usr/bin/python3", ["-c", [
+    "import sys",
+    "from opatchy_helper.models import ProtocolError",
+    "from opatchy_helper.protocol import decode_response",
+    "try:",
+    "    decode_response(sys.stdin.buffer.read())",
+    "except ProtocolError:",
+    "    raise SystemExit(1)",
+  ].join("\n")], {
+    input: raw,
+    encoding: "utf8",
+    env: { ...process.env, PYTHONPATH: resolve(repositoryRoot, "helper") },
+  });
+  return result.status === 0;
 }
 
 function source(name, freshUntil) {
@@ -156,6 +180,24 @@ test("Service lifecycle trusts only the injected source directory and owns valid
   assert.match(service, /manifest\.__sourceDir/);
   assert.doesNotMatch(service, /Qt\.createComponent|ensureService/);
   assert.match(service, /readonly property var lastSnapshot/);
+});
+
+test("rejects duplicate JSON keys with Python decoder parity", () => {
+  const parseResponse = loadValidator();
+  const base = '"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"generation","error":{"code":"STATE_UNAVAILABLE","message":"x"}';
+  const cases = [
+    `{"protocolVersion":1,"protocolVersion":1,${base}}`,
+    `{"protocolVersion":1,${base.replace('"code":"STATE_UNAVAILABLE"', '"code":"STATE_UNAVAILABLE","code":"STATE_UNAVAILABLE"')}}`,
+    `{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generationId":"generation","error":{"code":"STATE_UNAVAILABLE","message":"x","\\u006dessage":"x"}}`,
+  ];
+  const validEscapes = '{"protocolVersion":1,"kind":"error","generatedAt":"2026-08-26T00:00:00.000Z","generation\\u0049d":"\\u0067eneration","error":{"code":"STATE_UNAVAILABLE","message":"quote: \\" slash: \\/ unicode: \\uD83D\\uDE00"}}';
+
+  for (const raw of cases) {
+    assert.equal(parseResponse(raw).ok, pythonAccepts(raw), raw);
+    assert.equal(parseResponse(raw).ok, false, raw);
+  }
+  assert.equal(parseResponse(validEscapes).ok, pythonAccepts(validEscapes));
+  assert.equal(parseResponse(validEscapes).ok, true);
 });
 
 test("coalesces simultaneous refreshes into one queued rescan", () => {
