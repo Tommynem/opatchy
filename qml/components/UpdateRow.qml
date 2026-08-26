@@ -19,7 +19,7 @@ Item {
 
     Text {
       width: parent.width
-      text: root.row.label || "Not recorded"
+      text: presentation.label
       textFormat: Text.PlainText
       color: root.foreground
       font.family: root.fontFamily
@@ -30,7 +30,7 @@ Item {
 
     Text {
       width: parent.width
-      text: (root.row.source || "Unknown source") + " | " + (root.row.installed || "Not recorded") + " -> " + (root.row.candidate || "Not recorded")
+      text: presentation.detailsText
       textFormat: Text.PlainText
       color: Qt.darker(root.foreground, 1.4)
       font.family: root.fontFamily
@@ -41,7 +41,7 @@ Item {
 
     Text {
       width: parent.width
-      text: (root.row.watchText || "Watch: unavailable") + " | " + (root.row.healthText || "Source health: unavailable")
+      text: presentation.metaText
       textFormat: Text.PlainText
       color: Qt.darker(root.foreground, 1.4)
       font.family: root.fontFamily
@@ -52,7 +52,7 @@ Item {
 
     Text {
       width: parent.width
-      text: root.row.identity || "Unknown identity"
+      text: presentation.identity
       textFormat: Text.PlainText
       color: Qt.darker(root.foreground, 1.4)
       font.family: root.fontFamily
@@ -60,5 +60,10 @@ Item {
       elide: Text.ElideRight
       maximumLineCount: 1
     }
+  }
+
+  UpdateRowPresentation {
+    id: presentation
+    row: root.row
   }
 }

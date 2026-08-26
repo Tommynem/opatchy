@@ -10,7 +10,7 @@ Item {
   property var snapshot: null
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
-  property bool browsing: false
+  property alias browsing: browseMode.browsing
   readonly property var rows: UpdateViewModel.updateRows(snapshot, tab)
   readonly property var actions: UpdateViewModel.footerActions(snapshot, tab, {
     canOpenOmarchyUpdate: service && service.canOpenOmarchyUpdate === true,
@@ -107,6 +107,11 @@ Item {
     id: browseState
     service: root.service
     generationId: root.snapshot && typeof root.snapshot.generationId === "string" ? root.snapshot.generationId : ""
+  }
+
+  BrowseModeState {
+    id: browseMode
+    tab: root.tab
   }
 
   Connections {
