@@ -13,7 +13,8 @@ function securityView(snapshot, currentTime) {
   var kevCoverage = coverage("CISA KEV data", kev, currentTime)
   if (!isRetainedOrCurrent(security, currentTime)) return unknownView(archCoverage, kevCoverage)
 
-  var groups = groupsFor(payload ? payload.findings : [], security, archCoverage, kevCoverage)
+  var groups = groupsFor(payload ? payload.findings : [], archCoverage, kevCoverage)
+  if (groups === null) return unknownView(archCoverage, kevCoverage)
   if (!isCurrent(security, currentTime)) return lastKnownView(groups, archCoverage, kevCoverage)
   if (groups.length === 0) return cleanView(archCoverage, kevCoverage)
   return findingsView(groups, archCoverage, kevCoverage)
@@ -39,14 +40,17 @@ function state(kind, statusText, groups, archCoverage, kevCoverage) {
   return { kind: kind, statusText: statusText, groups: groups, archCoverage: archCoverage, kevCoverage: kevCoverage }
 }
 
-function groupsFor(values, security, archCoverage, kevCoverage) {
-  if (!Array.isArray(values)) return []
-  var groups = values.filter(validGroup).map(function(group) {
-    var rows = group.findings.filter(validFinding).map(function(finding) {
+function groupsFor(values, archCoverage, kevCoverage) {
+  if (!Array.isArray(values)) return null
+  var groups = []
+  for (var index = 0; index < values.length; index += 1) {
+    var group = values[index]
+    if (!validGroup(group) || !group.findings.every(function(finding) { return validFinding(finding, group.itemId) })) return null
+    var rows = group.findings.map(function(finding) {
       return findingRow(finding, archCoverage, kevCoverage)
     }).sort(compareFindings)
-    return { watchTarget: group.itemId, packageName: presentationText(group.itemId.slice(5)), findings: rows }
-  }).filter(function(group) { return group.findings.length > 0 })
+    groups.push({ watchTarget: group.itemId, packageName: presentationText(group.itemId.slice(5)), findings: rows })
+  }
   return groups.sort(compareGroups)
 }
 
@@ -135,10 +139,11 @@ function sourceFresh(source, currentTime) {
   var freshUntil = typeof source.freshUntil === "string" ? Date.parse(source.freshUntil) : NaN
   return !isNaN(freshUntil) && typeof currentTime === "number" && isFinite(currentTime) && freshUntil > currentTime
 }
-function validGroup(group) { return group && typeof group.itemId === "string" && group.itemId.indexOf("arch:") === 0 && Array.isArray(group.findings) }
-function validFinding(finding) { return finding && canonicalAverage(finding.id) && finding.advisoryId === finding.id && Array.isArray(finding.cveIds) && typeof finding.severity === "string" && SEVERITIES.indexOf(finding.severity) !== -1 }
-function canonicalAverage(value) { return typeof value === "string" && /^AVG-[0-9]+$/.test(value) }
-function canonicalCve(value) { return typeof value === "string" && /^CVE-[0-9]{4}-[0-9]{4,}$/.test(value) }
+function validGroup(group) { return group && canonicalArchItem(group.itemId) && Array.isArray(group.findings) && group.findings.length > 0 }
+function validFinding(finding, groupItemId) { return finding && finding.itemId === groupItemId && canonicalAverage(finding.id) && finding.advisoryId === finding.id && Array.isArray(finding.cveIds) && finding.cveIds.every(canonicalCve) && typeof finding.severity === "string" && SEVERITIES.indexOf(finding.severity) !== -1 }
+function canonicalArchItem(value) { return typeof value === "string" && value.length <= 128 && /^arch:[A-Za-z0-9@._+-]+$/.test(value) }
+function canonicalAverage(value) { return typeof value === "string" && value.length <= 128 && /^AVG-[0-9]+$/.test(value) }
+function canonicalCve(value) { return typeof value === "string" && value.length <= 128 && /^CVE-[0-9]{4}-[0-9]{4,19}$/.test(value) }
 function presentationText(value) {
   var text = value === null || value === undefined ? "Not recorded" : String(value)
   text = text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")

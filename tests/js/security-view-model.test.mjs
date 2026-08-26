@@ -163,15 +163,25 @@ test("uses only canonical Arch finding groups and inert bounded external text", 
   const model = load(modelPath, "Todo 22 security view model must exist");
   const hostile = "$(touch /tmp/opatchy-injection-sentinel)\n\u202e\u4f60\u597d\u0000" + "x".repeat(2_000);
   const view = model.securityView(snapshot([
-    group("aur:openssl", [finding("AVG-9", { itemId: "aur:openssl" })]),
-    group("arch:openssl", [finding("AVG-10", { type: hostile, status: hostile, cveIds: ["CVE-2026-9999", hostile] })]),
+    group("arch:openssl", [finding("AVG-10", { type: hostile, status: hostile })]),
   ]), Date.parse("2026-08-26T00:02:00.000Z"));
 
   assert.equal(view.groups.length, 1);
   assert.equal(view.groups[0].watchTarget, "arch:openssl");
   assert.equal(view.groups[0].findings[0].status.length <= 256, true);
   assert.equal(view.groups[0].findings[0].status.includes("\n"), false);
-  assert.deepEqual(JSON.parse(JSON.stringify(view.groups[0].findings[0].cveIds)), ["CVE-2026-9999"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(view.groups[0].findings[0].cveIds)), ["CVE-2026-1000"]);
+});
+
+test("rejects malformed current Arch groups and findings instead of showing clean", () => {
+  const model = load(modelPath, "Todo 22 security view model must exist");
+  const currentTime = Date.parse("2026-08-26T00:02:00.000Z");
+  const invalidGroups = ["aur:openssl", "arch:", "arch:bad\npkg", "arch:bad pkg", "arch:../pkg", "arch:https://example.invalid", "arch:" + "a".repeat(124)];
+
+  for (const itemId of invalidGroups) assert.equal(model.securityView(snapshot([group(itemId, [finding("AVG-1", { itemId })])]), currentTime).kind, "unknown", itemId);
+  for (const overrides of [{ itemId: "arch:other" }, { id: "AVG-" + "1".repeat(125), advisoryId: "AVG-" + "1".repeat(125) }, { cveIds: ["CVE-2026-" + "1".repeat(20)] }]) {
+    assert.equal(model.securityView(snapshot([group("arch:openssl", [finding("AVG-1", overrides)])]), currentTime).kind, "unknown");
+  }
 });
 
 test("sorts known-exploited, severity, fix availability, and canonical identities deterministically", () => {
@@ -191,7 +201,7 @@ test("constructs allowlisted HTTPS links solely from canonical AVG and CVE ident
 
   assert.equal(links.linkFor("arch-advisory", "AVG-123"), "https://security.archlinux.org/AVG-123");
   assert.equal(links.linkFor("cve", "CVE-2026-12345"), "https://www.cve.org/CVERecord?id=CVE-2026-12345");
-  for (const value of ["AVG-1#fragment", "https://security.archlinux.org/AVG-1", "AVG-1@evil", "CVE-2026-1", "CVE-2026-1234#x", "CVE-2026-1234@evil", "$(touch /tmp/opatchy-injection-sentinel)"]) {
+  for (const value of ["AVG-1#fragment", "https://security.archlinux.org/AVG-1", "AVG-1@evil", "AVG-" + "1".repeat(125), "CVE-2026-1", "CVE-2026-1234#x", "CVE-2026-1234@evil", "CVE-2026-" + "1".repeat(20), "$(touch /tmp/opatchy-injection-sentinel)"]) {
     assert.equal(links.linkFor("arch-advisory", value), null);
     assert.equal(links.linkFor("cve", value), null);
   }
