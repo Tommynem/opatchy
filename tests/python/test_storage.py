@@ -4,10 +4,13 @@ import multiprocessing
 import os
 import stat
 import sys
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from queue import Empty
+from threading import Event, Lock, Thread
 from typing import BinaryIO, Final, final, override
 
 import pytest
@@ -39,8 +42,10 @@ from opatchy_helper.storage import (
     Storage,
     StoragePathError,
     StorageWarning,
+    SystemAtomicOperations,
     WatchRecord,
 )
+from opatchy_helper.storage_locked_state import state_lock
 from opatchy_helper.storage_types import SourceMetadata, StateCorruptError
 
 NOW: Final = datetime(2026, 8, 25, 12, tzinfo=timezone.utc)
@@ -646,3 +651,68 @@ def test_concurrent_writers_serialize_with_flock(storage: Storage) -> None:
     except Empty as error:
         pytest.fail(str(error))
     assert storage.load_state().state.watches == (watch("arch:child"),)
+
+
+def test_locked_mutations_reject_simultaneous_read_modify_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: the first mutation is held after lock acquisition and before its write.
+    first_entered = Event()
+    second_requested = Event()
+    second_entered = Event()
+    release_first = Event()
+    requests = 0
+    requests_lock = Lock()
+
+    def hold_first_mutation() -> None:
+        if first_entered.is_set():
+            second_entered.set()
+            return
+        first_entered.set()
+        assert release_first.wait(timeout=5)
+
+    store = Storage(
+        tmp_path / "state" / "opatchy" / "state.json",
+        tmp_path / "cache" / "opatchy",
+        lambda: NOW,
+        SystemAtomicOperations(),
+        before_mutation=hold_first_mutation,
+    )
+
+    @contextmanager
+    def observed_state_lock(instance: Storage) -> Generator[None, None, None]:
+        nonlocal requests
+        with requests_lock:
+            requests += 1
+            if requests == 2:
+                second_requested.set()
+        with state_lock(instance.state_path):
+            yield
+
+    monkeypatch.setattr(Storage, "_state_lock", observed_state_lock)
+
+    def add_watch(item_id: str) -> None:
+        _ = store.update_state(
+            lambda state: replace(state, watches=(*state.watches, watch(item_id)))
+        )
+
+    # When: a second read-modify-write reaches the lock while the first remains held.
+    first = Thread(target=add_watch, args=("arch:first",))
+    first.start()
+    assert first_entered.wait(timeout=5)
+    second = Thread(target=add_watch, args=("arch:second",))
+    second.start()
+    assert second_requested.wait(timeout=5)
+
+    # Then: it cannot enter the mutation until release; a lockless path would enter.
+    assert not second_entered.is_set()
+    release_first.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert second_entered.is_set()
+    assert {record.item_id for record in store.load_state().state.watches} == {
+        ItemId("arch:first"),
+        ItemId("arch:second"),
+    }

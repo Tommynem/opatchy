@@ -147,6 +147,30 @@ def test_set_star_rejects_inventory_removed_before_locked_mutation(
     assert store.load_state().state == PersistentState.empty()
 
 
+def test_set_star_rejects_stale_temporary_promotion_from_legacy_inventory(
+    tmp_path: Path,
+) -> None:
+    # Given: a temporary watch whose legacy cached inventory is later removed.
+    store = storage(tmp_path)
+    write_inventory(store, ItemSource.ARCH, item("arch:demo", ItemSource.ARCH, "Demo"))
+    _ = cli_operations.set_star(
+        store, SetStarCommand(ItemId("arch:demo"), WatchMode.TEMPORARY)
+    )
+    before = store.load_state().state
+    before_bytes = store.state_path.read_bytes()
+    (store.cache_path / "inventory-arch.json").unlink()
+
+    # When: the temporary watch is promoted after its current evidence disappears.
+    with pytest.raises(WatchTransitionError):
+        _ = cli_operations.set_star(
+            store, SetStarCommand(ItemId("arch:demo"), WatchMode.PERMANENT)
+        )
+
+    # Then: rejected stale promotion leaves durable state exactly unchanged.
+    assert store.state_path.read_bytes() == before_bytes
+    assert store.load_state().state == before
+
+
 def test_set_star_reads_generation_inventory_inside_transaction(tmp_path: Path) -> None:
     # Given: a completed fresh generation with a watchable cached inventory item.
     store = storage(tmp_path)
@@ -166,6 +190,37 @@ def test_set_star_reads_generation_inventory_inside_transaction(tmp_path: Path) 
 
     # Then: generation-backed evidence creates the exact temporary watch.
     assert result.payload.mode is WatchMode.TEMPORARY
+
+
+def test_set_star_rejects_stale_temporary_promotion_from_generation_inventory(
+    tmp_path: Path,
+) -> None:
+    # Given: a temporary watch whose generation-backed inventory is later removed.
+    store = storage(tmp_path)
+    now = datetime.now(timezone.utc)
+    store.save_state(
+        PersistentState(
+            (), (), tuple(SourceMetadata(source, now, None) for source in SourceName)
+        )
+    )
+    _ = cli_operations.scan(store, False)
+    write_inventory(store, ItemSource.ARCH, item("arch:demo", ItemSource.ARCH, "Demo"))
+    _ = cli_operations.set_star(
+        store, SetStarCommand(ItemId("arch:demo"), WatchMode.TEMPORARY)
+    )
+    before = store.load_state().state
+    before_bytes = store.state_path.read_bytes()
+    store.generation_path.unlink()
+
+    # When: promotion is requested without current generation evidence.
+    with pytest.raises(WatchTransitionError):
+        _ = cli_operations.set_star(
+            store, SetStarCommand(ItemId("arch:demo"), WatchMode.PERMANENT)
+        )
+
+    # Then: rejection preserves the exact durable temporary watch.
+    assert store.state_path.read_bytes() == before_bytes
+    assert store.load_state().state == before
 
 
 def test_scan_uses_runtime_coordinator_without_collecting_not_due_sources(
