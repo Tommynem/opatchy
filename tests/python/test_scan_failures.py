@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 from opatchy_helper.adapters.arch import ArchDegraded, ArchFailure, ArchUpdates
@@ -7,9 +8,20 @@ from opatchy_helper.adapters.flatpak import (
     FlatpakScopeResult,
     FlatpakScopeStatus,
 )
-from opatchy_helper.models import ItemSource, SourceName, SourceScope, SourceStatus
+from opatchy_helper.adapters.omarchy import OmarchyAvailability
+from opatchy_helper.adapters.security import SecurityArchUnavailable, SecurityCollected
+from opatchy_helper.adapters.security_kev import KevCatalog
+from opatchy_helper.models import (
+    ItemSource,
+    Provenance,
+    ScanState,
+    SourceName,
+    SourceScope,
+    SourceStatus,
+)
+from opatchy_helper.scan_resolution import resolve
 
-from tests.python.scan_support import FakeCollector, collector, run, store
+from tests.python.scan_support import NOW, FakeCollector, collector, run, store
 
 
 def test_scan_reports_flatpak_scope_failure_without_hiding_healthy_scope(
@@ -70,6 +82,64 @@ def test_scan_marks_an_empty_last_good_slice_stale_instead_of_current(
     assert all(
         value.source is not ItemSource.ARCH for value in failed.snapshot.payload.items
     )
+
+
+def test_scan_keeps_empty_mandatory_last_good_slices_usable_during_backoff(
+    tmp_path: Path,
+) -> None:
+    # Given: every mandatory source first returns validated, empty current evidence.
+    storage = store(tmp_path)
+    initial = run(
+        storage,
+        collector(
+            ArchUpdates(()),
+            OmarchyAvailability(SourceStatus.OK, (), None),
+            SecurityCollected(
+                (), Provenance.LIVE, KevCatalog(frozenset(), Provenance.LIVE)
+            ),
+        ),
+        1,
+    )
+    failed_source = FakeCollector(
+        OmarchyAvailability(SourceStatus.ERROR, (), "unavailable"),
+        ArchDegraded(ArchFailure.COMMAND_TIMED_OUT, "checkupdates"),
+        SecurityArchUnavailable("unavailable"),
+    )
+
+    # When: failures commit and the next scan skips them inside retry backoff.
+    failed = run(storage, failed_source, 2, force=True)
+    skipped = run(storage, collector(), 3)
+
+    # Then: validated empty stale slices retain mandatory usability.
+    assert tuple(
+        result.snapshot.payload.scan_state for result in (initial, failed, skipped)
+    ) == (ScanState.COMPLETE, ScanState.PARTIAL, ScanState.PARTIAL)
+    health_by_source = {
+        health.source: health for health in skipped.snapshot.payload.sources
+    }
+    for source in (SourceName.OMARCHY, SourceName.ARCH, SourceName.SECURITY):
+        assert health_by_source[source].status is SourceStatus.STALE
+        assert health_by_source[source].provenance is Provenance.LAST_GOOD
+
+
+def test_cached_source_without_a_validated_last_good_key_is_unusable(
+    tmp_path: Path,
+) -> None:
+    # Given: cached Arch health exists but its validated identity key is absent.
+    storage = store(tmp_path)
+    _ = run(storage, collector(ArchUpdates(())), 1)
+    generation = storage.load_generation()
+    assert generation is not None
+    without_arch = replace(
+        generation,
+        last_good_keys=tuple(key for key in generation.last_good_keys if key != "arch"),
+    )
+
+    # When: cached Arch evidence is resolved without its validation proof.
+    cached = resolve(None, SourceName.ARCH, None, without_arch, NOW)
+
+    # Then: a health entry alone cannot make cache evidence usable.
+    assert not cached.usable
 
 
 def test_scan_skips_permanent_failure_until_force_requests_recovery(

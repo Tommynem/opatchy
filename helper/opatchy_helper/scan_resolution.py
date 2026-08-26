@@ -111,7 +111,7 @@ def _cached(
     items = _last_good_items(previous.snapshot, source, scope)
     findings = _last_good_findings(previous.snapshot, source)
     return ResolvedOutcome(
-        outcome, health, items, findings, bool(items or findings) or successful(outcome)
+        outcome, health, items, findings, outcome.key in previous.last_good_keys
     )
 
 
