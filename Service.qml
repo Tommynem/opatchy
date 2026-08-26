@@ -23,6 +23,9 @@ Item {
     "inventories": {},
     "lastStarResult": null,
     "lastError": "",
+    "lastFailureKind": "",
+    "lastAttemptAt": null,
+    "lastSuccessAt": null,
     "handoffAt": null,
     "activeOperation": null,
     "queuedOperations": 0,
@@ -33,6 +36,9 @@ Item {
   readonly property var inventories: _state.inventories
   readonly property var lastStarResult: _state.lastStarResult
   readonly property string lastError: _state.lastError
+  readonly property string lastFailureKind: _state.lastFailureKind
+  readonly property var lastAttemptAt: _state.lastAttemptAt
+  readonly property var lastSuccessAt: _state.lastSuccessAt
   readonly property var handoffAt: _state.handoffAt
   readonly property var activeOperation: _state.activeOperation
   readonly property int queuedOperations: _state.queuedOperations

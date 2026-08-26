@@ -21,7 +21,8 @@ function createController(options) {
   }
   function emptyState() {
     return {
-      lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "", handoffAt: null,
+      lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "", lastFailureKind: "",
+      lastAttemptAt: null, lastSuccessAt: null, handoffAt: null,
       activeOperation: null, queuedOperations: 0, nextWakeAt: null
     }
   }
@@ -54,16 +55,18 @@ function createController(options) {
     if (!accepting || active || queue.length === 0) return
     active = queue.shift()
     if (active.kind === "scan") refreshQueued = false
+    if (active.kind === "snapshot" || active.kind === "scan") state.lastAttemptAt = now()
     updateQueueState()
     publish()
     if (options.onStart(active) !== false) return
-    state.lastError = "helper transport is unavailable"
+    setError("transport", "helper transport is unavailable")
     active = null
     updateQueueState()
     publish()
     startNext()
   }
-  function setError(message) {
+  function setError(kind, message) {
+    state.lastFailureKind = kind
     state.lastError = message
   }
   function refresh() {
@@ -104,8 +107,10 @@ function createController(options) {
   }
   function accept(response) {
     state.lastError = ""
+    state.lastFailureKind = ""
     if (response.kind === "snapshot") {
       state.lastSnapshot = response
+      state.lastSuccessAt = now()
       configureSnapshotSchedule(response)
     } else if (response.kind === "inventory") {
       var inventories = copy(state.inventories)
@@ -164,19 +169,19 @@ function createController(options) {
     if (!accepting || !active || active.id !== operationId) return
     var completed = active
     if (result.timedOut === true) {
-      setError("helper operation timed out")
+      setError("timeout", "helper operation timed out")
     } else if (result.outputTooLarge === true) {
-      setError("helper output exceeded the five MiB limit")
+      setError("output", "helper output exceeded the five MiB limit")
     } else if (result.exitCode !== 0) {
-      setError("helper exited with status " + result.exitCode)
+      setError("command", "helper exited with status " + result.exitCode)
     } else {
       var parsed = options.parseResponse(result.stdout)
       if (!parsed.ok) {
-        setError(parsed.error)
+        setError("incompatible", parsed.error)
       } else if (parsed.value.kind === "error") {
-        setError(parsed.value.error.code + ": " + parsed.value.error.message)
+        setError("helper", parsed.value.error.code + ": " + parsed.value.error.message)
       } else if (parsed.value.kind !== completed.expectedKind) {
-        setError("helper response kind does not match the operation")
+        setError("incompatible", "helper response kind does not match the operation")
       } else {
         accept(parsed.value)
       }
