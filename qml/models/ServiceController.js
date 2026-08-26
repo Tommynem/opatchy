@@ -21,7 +21,7 @@ function createController(options) {
   }
   function emptyState() {
     return {
-      lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "",
+      lastSnapshot: null, inventories: {}, lastStarResult: null, lastError: "", handoffAt: null,
       activeOperation: null, queuedOperations: 0, nextWakeAt: null
     }
   }
@@ -154,6 +154,11 @@ function createController(options) {
     schedules.handoff = at + POST_HANDOFF_SCAN_DELAY_MS
     updateQueueState()
     publish()
+  }
+  controller.recordHandoff = function(at) {
+    if (!accepting) return
+    state.handoffAt = at
+    controller.schedulePostHandoffScan(at)
   }
   controller.complete = function(operationId, result) {
     if (!accepting || !active || active.id !== operationId) return
