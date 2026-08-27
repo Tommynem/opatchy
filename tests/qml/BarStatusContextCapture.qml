@@ -22,13 +22,13 @@ Item {
   BarStatusPresentation { id: presentation; serviceAvailable: true }
   Rectangle {
     id: stage; anchors.fill: root
-    color: root.currentFixture.transparent ? "#aeb9c8" : (root.currentFixture.dark ? "#1a1d23" : (root.currentFixture.contrast ? "#050505" : "#f3f5f7"))
+    color: root.currentFixture.transparent ? "transparent" : (root.currentFixture.dark ? "#1a1d23" : (root.currentFixture.contrast ? "#050505" : "#f3f5f7"))
     Rectangle {
       id: bar
       property bool vertical: root.currentFixture.vertical
       x: 28; y: 18
       width: vertical ? 27 : stage.width - 56; height: vertical ? stage.height - 36 : 27
-      radius: 6; color: root.currentFixture.dark || root.currentFixture.transparent || root.currentFixture.contrast ? "#343a46" : "#d9dee7"
+      radius: 6; color: root.currentFixture.transparent ? "#cc343a46" : (root.currentFixture.dark || root.currentFixture.contrast ? "#343a46" : "#d9dee7")
       Repeater { model: 4; Rectangle { width: 16; height: 16; radius: 4; color: root.currentFixture.dark || root.currentFixture.contrast ? "#b7c0cd" : "#4d5969"; x: bar.vertical ? 6 : 16 + index * 32; y: bar.vertical ? 12 + index * 28 : 6 } }
       Rectangle { width: 1; height: bar.vertical ? 1 : 16; color: root.currentFixture.dark || root.currentFixture.contrast ? "#687386" : "#8c98a8"; x: bar.vertical ? 0 : bar.width - 59; y: bar.vertical ? bar.height - 27 : 5 }
       Item {

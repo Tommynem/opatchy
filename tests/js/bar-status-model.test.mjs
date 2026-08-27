@@ -194,15 +194,18 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
   assert.match(contextCaptureSource, /name: "security-stale-refresh-transparent-horizontal", state: "security", transparent: true, vertical: false, stale: true, refreshing: true/);
   assert.match(contextCaptureSource, /snapshot\(currentFixture\.state, currentFixture\.stale === true\)/);
   assert.match(contextCaptureScript, /context\.sha256/);
+  assert.match(contextCaptureScript, /\*transparent\*\.png/);
+  assert.match(contextCaptureScript, /expected transparent pixels/);
   assert.match(contextCaptureScript, /sha256sum .*BarStatusIcon\.qml.*BarStatusPresentation\.qml.*BarStatusModel\.js.*BarStatusContextCapture\.qml/);
-  assert.match(contextCaptureSource, /root\.currentFixture\.dark \|\| root\.currentFixture\.transparent \|\| root\.currentFixture\.contrast \? "#343a46" : "#d9dee7"/);
+  assert.match(contextCaptureSource, /root\.currentFixture\.transparent \? "transparent"/);
+  assert.match(contextCaptureSource, /root\.currentFixture\.transparent \? "#cc343a46"/);
 });
 
 test("keeps one-digit badges legible and separated from the primary glyph", () => {
   const iconSource = readFileSync(iconPath, "utf8");
 
   assert.match(iconSource, /readonly property real badgeFontSize: Math\.max\(9, root\.fontSize \* \.69\)/);
-  assert.match(iconSource, /anchors\.rightMargin: -4/);
-  assert.match(iconSource, /anchors\.bottomMargin: -3/);
+  assert.match(iconSource, /anchors\.rightMargin: -4\.5/);
+  assert.match(iconSource, /anchors\.bottomMargin: -4\.5/);
   assert.match(iconSource, /font\.pixelSize: root\.badgeFontSize/);
 });
