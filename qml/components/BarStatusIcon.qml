@@ -52,8 +52,8 @@ Item {
     visible: root.badge !== ""
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    anchors.rightMargin: -4
-    anchors.bottomMargin: -3
+    anchors.rightMargin: -4.5
+    anchors.bottomMargin: -4.5
     text: root.badge
     color: root.foreground
     font.family: root.fontFamily
@@ -66,7 +66,7 @@ Item {
     visible: root.stale
     anchors.left: parent.left
     anchors.top: parent.top
-    anchors.leftMargin: -4
+    anchors.leftMargin: -5.25
     anchors.topMargin: -5
     text: "󰅐"
     color: root.foreground
@@ -81,7 +81,7 @@ Item {
     visible: root.refreshing
     anchors.right: parent.right
     anchors.top: parent.top
-    anchors.rightMargin: -4
+    anchors.rightMargin: -4.5
     anchors.topMargin: -5
     rotation: root.refreshing && !root.reducedMotion ? root.refreshAngle : 0
     text: "󰑐"

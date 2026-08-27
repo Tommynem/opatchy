@@ -13,6 +13,11 @@ TestCase {
     BarStatusPresentation { }
   }
 
+  TextMetrics { id: shieldMetrics; font.family: "monospace"; font.pixelSize: 13; text: "󰻌" }
+  TextMetrics { id: staleMetrics; font.family: "monospace"; font.pixelSize: 9; text: "󰅐" }
+  TextMetrics { id: refreshMetrics; font.family: "monospace"; font.pixelSize: 9; text: "󰑐" }
+  TextMetrics { id: badgeMetrics; font.family: "monospace"; font.pixelSize: 9; font.bold: true; text: "1" }
+
   Component {
     id: iconComponent
     BarStatusIcon {
@@ -61,6 +66,22 @@ TestCase {
         ]
       }
     }
+  }
+
+  function inkBounds(position, textItem, metrics) {
+    return {
+      x: position.x + metrics.tightBoundingRect.x,
+      y: position.y + textItem.baselineOffset + metrics.tightBoundingRect.y,
+      width: metrics.tightBoundingRect.width,
+      height: metrics.tightBoundingRect.height
+    }
+  }
+
+  function boundsOverlap(first, second) {
+    return first.x < second.x + second.width
+      && first.x + first.width > second.x
+      && first.y < second.y + second.height
+      && first.y + first.height > second.y
   }
 
   function test_presentation_keeps_glyph_badge_tooltip_and_spinner_in_one_view() {
@@ -183,6 +204,12 @@ TestCase {
     verify(refreshPosition.y + refreshIndicator.height / 2 < glyphCenterY)
     verify(badgePosition.x + statusBadge.width / 2 > glyphCenterX)
     verify(badgePosition.y + statusBadge.height / 2 > glyphCenterY)
+    const primaryBounds = inkBounds(glyphPosition, primaryGlyph, shieldMetrics)
+    verify(!boundsOverlap(primaryBounds, inkBounds(badgePosition, statusBadge, badgeMetrics)))
+    const staleBounds = inkBounds(stalePosition, staleMarker, staleMetrics)
+    verify(!boundsOverlap(primaryBounds, staleBounds))
+    const refreshBounds = inkBounds(refreshPosition, refreshIndicator, refreshMetrics)
+    verify(!boundsOverlap(primaryBounds, refreshBounds))
     slot.destroy()
   }
 
