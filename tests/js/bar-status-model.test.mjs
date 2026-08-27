@@ -179,3 +179,12 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
   assert.doesNotMatch(contextCaptureSource, /text: "Opatchy"/);
   assert.match(contextCaptureSource, /root\.currentFixture\.dark \|\| root\.currentFixture\.transparent \|\| root\.currentFixture\.contrast \? "#343a46" : "#d9dee7"/);
 });
+
+test("keeps one-digit badges legible and separated from the primary glyph", () => {
+  const iconSource = readFileSync(iconPath, "utf8");
+
+  assert.match(iconSource, /readonly property real badgeFontSize: Math\.max\(9, root\.fontSize \* \.69\)/);
+  assert.match(iconSource, /anchors\.rightMargin: -3/);
+  assert.match(iconSource, /anchors\.bottomMargin: -2/);
+  assert.match(iconSource, /font\.pixelSize: root\.badgeFontSize/);
+});

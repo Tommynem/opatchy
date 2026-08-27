@@ -13,6 +13,7 @@ Item {
   readonly property string glyph: glyphFor(icon)
   readonly property color glyphColor: icon === "shield" ? root.urgent : root.foreground
   readonly property int renderedFontSize: Math.max(1, Math.round(fontSize))
+  readonly property real badgeFontSize: Math.max(9, root.fontSize * .69)
   readonly property real tightWidth: Math.max(1, glyphMetrics.tightBoundingRect.width)
   readonly property real horizontalCorrection: primaryGlyph.implicitWidth / 2 - (glyphMetrics.tightBoundingRect.x + tightWidth / 2)
 
@@ -42,6 +43,6 @@ Item {
     renderType: Text.NativeRendering
   }
 
-  Text { visible: root.badge !== ""; anchors.right: parent.right; anchors.bottom: parent.bottom; text: root.badge; color: root.foreground; font.family: root.fontFamily; font.bold: true; font.pixelSize: Math.max(7, root.fontSize * .54) }
+  Text { visible: root.badge !== ""; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.rightMargin: -3; anchors.bottomMargin: -2; text: root.badge; color: root.foreground; font.family: root.fontFamily; font.bold: true; font.pixelSize: root.badgeFontSize }
   Text { visible: root.refreshing || root.stale; anchors.left: parent.left; anchors.top: parent.top; text: root.refreshing ? "…" : "↶"; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Math.max(6, root.fontSize * .4) }
 }
