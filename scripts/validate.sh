@@ -18,7 +18,9 @@ readonly -a node_test_files=(
     tests/js/update-view-model.test.mjs
 )
 readonly -a qml_test_files=(
+    tests/qml/tst_bar_status.qml
     tests/qml/tst_lifecycle.qml
+    tests/qml/tst_panel_layout.qml
     tests/qml/tst_panel_shell.qml
     tests/qml/tst_security_view.qml
     tests/qml/tst_star_interaction.qml
