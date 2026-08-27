@@ -4,7 +4,7 @@ import "../../qml/components"
 
 Item {
   id: root
-  width: 680; height: 280
+  width: 680; height: 220
   property int captureIndex: 0
   property string outputDirectory: ".omo/evidence/task-24-opatchy/visual-qa/context"
   property var fixtures: [
@@ -22,23 +22,27 @@ Item {
     Rectangle {
       id: bar
       property bool vertical: root.currentFixture.vertical
-      x: vertical ? 28 : 28; y: vertical ? 18 : 24
-      width: vertical ? 68 : stage.width - 56; height: vertical ? stage.height - 36 : 58
-      radius: 10; color: root.currentFixture.dark || root.currentFixture.transparent ? "#343a46" : "#d9dee7"
-      Repeater { model: 4; Rectangle { width: 26; height: 26; radius: 7; color: root.currentFixture.dark ? "#b7c0cd" : "#4d5969"; x: bar.vertical ? 21 : 22 + index * 52; y: bar.vertical ? 18 + index * 48 : 16 } }
-      Rectangle { width: 1; height: bar.vertical ? 1 : 30; color: root.currentFixture.dark ? "#687386" : "#8c98a8"; x: bar.vertical ? 0 : bar.width - 106; y: bar.vertical ? bar.height - 78 : 14 }
-      BarStatusIcon {
-        id: statusIcon; width: 28; height: 28
-        x: bar.vertical ? 20 : bar.width - 82; y: bar.vertical ? bar.height - 58 : 15
+      x: 28; y: 18
+      width: vertical ? 27 : stage.width - 56; height: vertical ? stage.height - 36 : 27
+      radius: 6; color: root.currentFixture.dark || root.currentFixture.transparent ? "#343a46" : "#d9dee7"
+      Repeater { model: 4; Rectangle { width: 16; height: 16; radius: 4; color: root.currentFixture.dark ? "#b7c0cd" : "#4d5969"; x: bar.vertical ? 6 : 16 + index * 32; y: bar.vertical ? 12 + index * 28 : 6 } }
+      Rectangle { width: 1; height: bar.vertical ? 1 : 16; color: root.currentFixture.dark ? "#687386" : "#8c98a8"; x: bar.vertical ? 0 : bar.width - 59; y: bar.vertical ? bar.height - 27 : 5 }
+      Item {
+        id: statusSlot; width: 27; height: 27
+        x: bar.vertical ? 0 : bar.width - 43; y: bar.vertical ? bar.height - 27 : 0
+        BarStatusIcon {
+        id: statusIcon; anchors.centerIn: parent; width: 16; height: 16
         icon: presentation.status.icon; badge: presentation.status.badge; stale: presentation.status.stale; refreshing: presentation.status.spinner
         foreground: root.currentFixture.dark || root.currentFixture.contrast || root.currentFixture.transparent ? "#f7f9fc" : "#172033"
         urgent: root.currentFixture.dark ? "#ff9990" : "#bd1830"
+        fontFamily: "monospace"; fontSize: 13
+        }
       }
-      Text { visible: !bar.vertical; x: bar.width - 48; y: 23; text: "Opatchy"; color: statusIcon.foreground; font.pixelSize: 10 }
+      Text { visible: !bar.vertical; x: bar.width - 18; y: 8; text: "Opatchy"; color: statusIcon.foreground; font.pixelSize: 10 }
     }
     Rectangle {
-      id: tooltip; x: bar.vertical ? 126 : 28; y: bar.vertical ? 18 : 108
-      width: bar.vertical ? stage.width - 154 : stage.width - 56; height: bar.vertical ? stage.height - 36 : 142
+      id: tooltip; x: bar.vertical ? 80 : 28; y: bar.vertical ? 18 : 64
+      width: bar.vertical ? stage.width - 108 : stage.width - 56; height: bar.vertical ? stage.height - 36 : 128
       radius: 10; border.width: 1; border.color: root.currentFixture.dark || root.currentFixture.contrast ? "#59657a" : "#b9c2cf"
       color: root.currentFixture.dark || root.currentFixture.contrast ? "#2b313c" : "#ffffff"
       Text { id: tooltipText; anchors.fill: tooltip; anchors.margins: 18; text: presentation.status.tooltip; wrapMode: Text.WordWrap; maximumLineCount: 5; elide: Text.ElideRight; color: root.currentFixture.dark || root.currentFixture.contrast ? "#f7f9fc" : "#172033"; font.pixelSize: 15; verticalAlignment: Text.AlignVCenter }

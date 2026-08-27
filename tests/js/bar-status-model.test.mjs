@@ -7,6 +7,7 @@ import vm from "node:vm";
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const modelPath = resolve(repositoryRoot, "qml/models/BarStatusModel.js");
 const iconPath = resolve(repositoryRoot, "qml/components/BarStatusIcon.qml");
+const barWidgetPath = resolve(repositoryRoot, "BarWidget.qml");
 
 function loadModel() {
   assert.equal(existsSync(modelPath), true, "Todo 24 bar status model must exist");
@@ -148,8 +149,27 @@ test("reserves the urgent token for the actionable-security shield", () => {
   const iconSource = readFileSync(iconPath, "utf8");
 
   assert.equal([...iconSource.matchAll(/root\.urgent/g)].length, 1);
-  assert.match(
-    iconSource,
-    /visible: root\.icon === "shield"[\s\S]{0,500}fillColor: root\.urgent/,
-  );
+  assert.match(iconSource, /icon === "shield" \? root\.urgent : root\.foreground/);
+});
+
+test("uses host-scale MDI glyphs without custom status geometry", () => {
+  const iconSource = readFileSync(iconPath, "utf8");
+  const barWidgetSource = readFileSync(barWidgetPath, "utf8");
+  const glyphs = [
+    ["shield", "󰕥", "f0565"],
+    ["bookmark", "󰃀", "f00c0"],
+    ["update", "󰏖", "f03d6"],
+    ["warning", "󰀦", "f0026"],
+    ["check", "󰗠", "f05e0"],
+  ];
+
+  assert.doesNotMatch(iconSource, /QtQuick\.Shapes|\b(?:Shape|ShapePath|PathLine|Rectangle)\b/);
+  for (const [icon, glyph, codepoint] of glyphs) {
+    assert.equal(glyph.codePointAt(0).toString(16), codepoint);
+    if (icon === "check") assert.match(iconSource, new RegExp(`return "${glyph}"`));
+    else assert.match(iconSource, new RegExp(`currentIcon === "${icon}".*return "${glyph}"`));
+  }
+  assert.match(iconSource, /renderType: Text\.NativeRendering/);
+  assert.match(barWidgetSource, /fontFamily: button\.fontFamily/);
+  assert.match(barWidgetSource, /fontSize: button\.fontSize/);
 });

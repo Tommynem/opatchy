@@ -10,7 +10,6 @@ readonly generation_manifest="${evidence_root}/generation.sha256"
 readonly -a states=(security watched updates degraded clear)
 readonly -a themes=(light dark contrast transparent)
 readonly -a layouts=(horizontal vertical narrow)
-readonly -a icons=(shield bookmark update warning check)
 
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 
@@ -42,8 +41,8 @@ expected_code() {
 
 signature_pixels() {
     local image="$1" width="$2" height="$3" format='' pixel
-    for pixel in {0..5}; do
-        format+="%[pixel:p{$((width - 1 - pixel)),$((height - 1))}]|"
+    for pixel in {0..6}; do
+        format+="%[pixel:p{$((width / 2 + pixel)),$((height - 1))}]|"
     done
     identify -format "${format}" "${image}"
 }
@@ -59,13 +58,13 @@ expected_label() {
     esac
 }
 
-expected_icon() {
+expected_glyph() {
     case "$1" in
-        security) printf '%s' shield ;;
-        watched) printf '%s' bookmark ;;
-        updates) printf '%s' update ;;
-        degraded) printf '%s' warning ;;
-        clear) printf '%s' check ;;
+        security) printf '%s' '󰕥' ;;
+        watched) printf '%s' '󰃀' ;;
+        updates) printf '%s' '󰏖' ;;
+        degraded) printf '%s' '󰀦' ;;
+        clear) printf '%s' '󰗠' ;;
     esac
 }
 
@@ -105,6 +104,19 @@ badge_bit() {
     (( (10#${value} & (1 << (bit - 1))) != 0 )) && printf '%s' 1 || printf '%s' 0
 }
 
+glyph_bit() {
+    local glyph="$1" bit="$2" code
+    case "${glyph}" in
+        '󰕥') code=$((16#f0565)) ;;
+        '󰃀') code=$((16#f00c0)) ;;
+        '󰏖') code=$((16#f03d6)) ;;
+        '󰀦') code=$((16#f0026)) ;;
+        '󰗠') code=$((16#f05e0)) ;;
+        *) fail "unknown MDI glyph: ${glyph}" ;;
+    esac
+    (( code & (1 << bit) )) && printf '%s' 1 || printf '%s' 0
+}
+
 verify_generation() {
     [[ -f "${generation_manifest}" ]] || fail "missing generation manifest: ${generation_manifest}"
     [[ "$(sed -n '1p' "${generation_manifest}")" == "generation_id=${OPATCHY_CAPTURE_GENERATION:-}" ]] || fail 'generation identity does not match this capture run'
@@ -128,22 +140,21 @@ for state in "${states[@]}"; do
             fi
             code="$(expected_code "${state}" "${theme}" "${layout}")"
             label="$(expected_label "${state}" "${theme}" "${layout}")"
-            icon="$(expected_icon "${state}")"
+            glyph="$(expected_glyph "${state}")"
             badge="$(expected_badge "${state}")"
-            icon_code=$(( $(index_of "${icon}" "${icons[@]}") + 1 ))
             geometry="$(geometry_for "${layout}")"
             width="${geometry%x*}"
             height="${geometry#*x}"
             IFS='|' read -r -a pixels <<<"$(signature_pixels "${image}" "${width}" "${height}")"
-            for bit in {0..127}; do
+            for bit in {0..144}; do
                 if (( bit < 10 )); then
                     expected_bit=$(( (code >> bit) & 1 ))
                 elif (( bit < 114 )); then
                     expected_bit="$(label_bit "${label}" "$((bit - 10))")"
-                elif (( bit < 117 )); then
-                    expected_bit=$(( (icon_code >> (bit - 114)) & 1 ))
+                elif (( bit < 134 )); then
+                    expected_bit="$(glyph_bit "${glyph}" "$((bit - 114))")"
                 else
-                    expected_bit="$(badge_bit "${badge}" "$((bit - 117))")"
+                    expected_bit="$(badge_bit "${badge}" "$((bit - 134))")"
                 fi
                 byte=$(( bit / 8 ))
                 channel=$(( byte % 3 + 1 ))
@@ -153,7 +164,7 @@ for state in "${states[@]}"; do
                     if (( bit >= 117 )); then
                         fail "badge signature mismatch: ${image} expected ${badge}"
                     elif (( bit >= 114 )); then
-                        fail "icon signature mismatch: ${image} expected ${icon}"
+                        fail "glyph signature mismatch: ${image} expected ${glyph}"
                     elif (( bit >= 10 )); then
                         fail "label signature mismatch: ${image} expected ${label}"
                     else

@@ -28,7 +28,7 @@ flip_signature_bit() {
     local image="$1" width="$2" height="$3" bit="$4" byte channel x pixel
     byte=$(( bit / 8 ))
     channel=$(( byte % 3 ))
-    x=$(( width - 1 - byte / 3 ))
+    x=$(( width / 2 + byte / 3 ))
     pixel="$(identify -format "%[pixel:p{${x},$((height - 1))}]" "${image}")"
     [[ "${pixel}" =~ ^srgba\(([0-9]+),([0-9]+),([0-9]+),1\)$ ]] || {
         printf 'invalid packed signature pixel: %s (%s)\n' "${image}" "${pixel}" >&2
@@ -53,17 +53,16 @@ cp "${output_directory}/security-light-horizontal.png" "${output_directory}/secu
 expect_failure 'semantic signature mismatch' verify
 
 bash "${repository_root}/scripts/capture_bar_status.sh"
-magick "${output_directory}/security-dark-horizontal.png" -fill '#000000' -draw 'point 190,55' "PNG32:${output_directory}/security-dark-horizontal.png"
+flip_signature_bit "${output_directory}/security-dark-horizontal.png" 192 56 10
 expect_failure 'label signature mismatch' verify
 
 bash "${repository_root}/scripts/capture_bar_status.sh"
 flip_signature_bit "${output_directory}/security-light-horizontal.png" 192 56 114
-flip_signature_bit "${output_directory}/security-light-horizontal.png" 192 56 115
-expect_failure 'icon signature mismatch' verify
+expect_failure 'glyph signature mismatch' verify
 
 bash "${repository_root}/scripts/capture_bar_status.sh"
-flip_signature_bit "${output_directory}/security-light-horizontal.png" 192 56 118
-flip_signature_bit "${output_directory}/security-light-horizontal.png" 192 56 119
+flip_signature_bit "${output_directory}/security-light-horizontal.png" 192 56 135
+flip_signature_bit "${output_directory}/security-light-horizontal.png" 192 56 136
 expect_failure 'badge signature mismatch' verify
 
 expect_failure 'generation identity does not match this capture run' env OPATCHY_CAPTURE_GENERATION=stale bash "${repository_root}/scripts/verify_bar_status_captures.sh"

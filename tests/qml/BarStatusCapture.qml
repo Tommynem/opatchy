@@ -24,22 +24,25 @@ Item {
     property var fixture: root.fixtures[root.captureIndex]
 
     BarStatusIcon {
+      id: statusIcon
       anchors.centerIn: parent
-      width: surface.fixture && surface.fixture.layout === "narrow" ? 28 : 34
-      height: width
+      width: 16
+      height: 16
       icon: presentation.status.icon
       badge: presentation.status.badge
       stale: presentation.status.stale
       refreshing: presentation.status.spinner
       foreground: surface.fixture ? surface.fixture.foreground : "transparent"
       urgent: surface.fixture ? surface.fixture.urgent : "transparent"
+      fontFamily: "monospace"
+      fontSize: 13
     }
 
     Repeater {
-      model: 6
+      model: 7
 
       Rectangle {
-        x: surface.width - 1 - index
+        x: Math.floor(surface.width / 2) + index
         y: surface.height - 1
         width: 1
         height: 1
@@ -129,8 +132,8 @@ Item {
 
   function signatureBit(bit) {
     var status = presentation.status
-    if (bit >= 117) return badgeBit(status.badge, bit - 117)
-    if (bit >= 114) return iconBit(status.icon, bit - 114)
+    if (bit >= 134) return badgeBit(status.badge, bit - 134)
+    if (bit >= 114) return glyphBit(statusIcon.glyph, bit - 114)
     if (bit >= 10) return labelBit(status.label, bit - 10)
     var kinds = ["security", "watched", "updates", "degraded", "clear"]
     var themes = ["light", "dark", "contrast", "transparent"]
@@ -143,9 +146,8 @@ Item {
     return (code & (1 << bit)) !== 0
   }
 
-  function iconBit(icon, bit) {
-    var icons = ["shield", "bookmark", "update", "warning", "check"]
-    var code = icons.indexOf(icon) + 1
+  function glyphBit(glyph, bit) {
+    var code = glyph.codePointAt(0)
     return (code & (1 << bit)) !== 0
   }
 
@@ -167,7 +169,7 @@ Item {
     var value = 0
     var offset = (pixel * 3 + channel) * 8
     for (var bit = 0; bit < 8; bit += 1)
-      if (offset + bit < 128 && signatureBit(offset + bit)) value += 1 << bit
+      if (offset + bit < 145 && signatureBit(offset + bit)) value += 1 << bit
     return value
   }
 }

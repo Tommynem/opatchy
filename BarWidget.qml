@@ -120,6 +120,8 @@ BarWidget {
       refreshing: root.status.spinner
       foreground: root.bar ? root.bar.foreground : Color.foreground
       urgent: root.bar ? root.bar.urgent : Color.urgent
+      fontFamily: button.fontFamily
+      fontSize: button.fontSize
     }
   }
 }
