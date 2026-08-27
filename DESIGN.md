@@ -48,7 +48,7 @@ count.
 - **Structure**: `BarStatusPresentation` provides one Nerd Fonts MDI glyph,
   badge, tooltip, stale marker, and spinner projection for the host
   `WidgetButton`. Use the host font at 13px in a centered 16px glyph slot
-  within the host's 27px bar button: shield `󰕥` (`f0565`), bookmark `󰃀`
+  within the host's 27px bar button: shield-alert `󰻌` (`f0ecc`), bookmark `󰃀`
   (`f00c0`), package `󰏖` (`f03d6`), alert `󰀦` (`f0026`), and check-circle
   `󰗠` (`f05e0`). Do not use custom-drawn primary status geometry.
 - **States**: high/critical security, watched update, ordinary update,

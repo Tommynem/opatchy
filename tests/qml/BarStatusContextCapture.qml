@@ -24,9 +24,9 @@ Item {
       property bool vertical: root.currentFixture.vertical
       x: 28; y: 18
       width: vertical ? 27 : stage.width - 56; height: vertical ? stage.height - 36 : 27
-      radius: 6; color: root.currentFixture.dark || root.currentFixture.transparent ? "#343a46" : "#d9dee7"
-      Repeater { model: 4; Rectangle { width: 16; height: 16; radius: 4; color: root.currentFixture.dark ? "#b7c0cd" : "#4d5969"; x: bar.vertical ? 6 : 16 + index * 32; y: bar.vertical ? 12 + index * 28 : 6 } }
-      Rectangle { width: 1; height: bar.vertical ? 1 : 16; color: root.currentFixture.dark ? "#687386" : "#8c98a8"; x: bar.vertical ? 0 : bar.width - 59; y: bar.vertical ? bar.height - 27 : 5 }
+      radius: 6; color: root.currentFixture.dark || root.currentFixture.transparent || root.currentFixture.contrast ? "#343a46" : "#d9dee7"
+      Repeater { model: 4; Rectangle { width: 16; height: 16; radius: 4; color: root.currentFixture.dark || root.currentFixture.contrast ? "#b7c0cd" : "#4d5969"; x: bar.vertical ? 6 : 16 + index * 32; y: bar.vertical ? 12 + index * 28 : 6 } }
+      Rectangle { width: 1; height: bar.vertical ? 1 : 16; color: root.currentFixture.dark || root.currentFixture.contrast ? "#687386" : "#8c98a8"; x: bar.vertical ? 0 : bar.width - 59; y: bar.vertical ? bar.height - 27 : 5 }
       Item {
         id: statusSlot; width: 27; height: 27
         x: bar.vertical ? 0 : bar.width - 43; y: bar.vertical ? bar.height - 27 : 0
@@ -38,7 +38,6 @@ Item {
         fontFamily: "monospace"; fontSize: 13
         }
       }
-      Text { visible: !bar.vertical; x: bar.width - 18; y: 8; text: "Opatchy"; color: statusIcon.foreground; font.pixelSize: 10 }
     }
     Rectangle {
       id: tooltip; x: bar.vertical ? 80 : 28; y: bar.vertical ? 18 : 64

@@ -17,7 +17,7 @@ Item {
   readonly property real horizontalCorrection: primaryGlyph.implicitWidth / 2 - (glyphMetrics.tightBoundingRect.x + tightWidth / 2)
 
   function glyphFor(currentIcon) {
-    if (currentIcon === "shield") return "󰕥"
+    if (currentIcon === "shield") return "󰻌"
     if (currentIcon === "bookmark") return "󰃀"
     if (currentIcon === "update") return "󰏖"
     if (currentIcon === "warning") return "󰀦"

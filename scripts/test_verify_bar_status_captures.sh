@@ -68,4 +68,4 @@ expect_failure 'badge signature mismatch' verify
 expect_failure 'generation identity does not match this capture run' env OPATCHY_CAPTURE_GENERATION=stale bash "${repository_root}/scripts/verify_bar_status_captures.sh"
 bash "${repository_root}/scripts/capture_bar_status.sh"
 verify
-printf '%s\n' 'PASS: verifier rejects opaque, blank, substituted, wrong-label, wrong-icon, wrong-badge, and stale artifacts'
+printf '%s\n' 'PASS: verifier rejects opaque, blank, substituted, wrong-label, wrong-glyph, wrong-badge, and stale artifacts'

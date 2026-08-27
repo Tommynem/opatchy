@@ -8,6 +8,7 @@ const repositoryRoot = resolve(import.meta.dirname, "../..");
 const modelPath = resolve(repositoryRoot, "qml/models/BarStatusModel.js");
 const iconPath = resolve(repositoryRoot, "qml/components/BarStatusIcon.qml");
 const barWidgetPath = resolve(repositoryRoot, "BarWidget.qml");
+const contextCapturePath = resolve(repositoryRoot, "tests/qml/BarStatusContextCapture.qml");
 
 function loadModel() {
   assert.equal(existsSync(modelPath), true, "Todo 24 bar status model must exist");
@@ -155,8 +156,10 @@ test("reserves the urgent token for the actionable-security shield", () => {
 test("uses host-scale MDI glyphs without custom status geometry", () => {
   const iconSource = readFileSync(iconPath, "utf8");
   const barWidgetSource = readFileSync(barWidgetPath, "utf8");
+  const contextCaptureSource = readFileSync(contextCapturePath, "utf8");
+  const retiredShieldGlyph = String.fromCodePoint(984421);
   const glyphs = [
-    ["shield", "󰕥", "f0565"],
+    ["shield", "󰻌", "f0ecc"],
     ["bookmark", "󰃀", "f00c0"],
     ["update", "󰏖", "f03d6"],
     ["warning", "󰀦", "f0026"],
@@ -164,6 +167,7 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
   ];
 
   assert.doesNotMatch(iconSource, /QtQuick\.Shapes|\b(?:Shape|ShapePath|PathLine|Rectangle)\b/);
+  assert.doesNotMatch(iconSource, new RegExp(retiredShieldGlyph));
   for (const [icon, glyph, codepoint] of glyphs) {
     assert.equal(glyph.codePointAt(0).toString(16), codepoint);
     if (icon === "check") assert.match(iconSource, new RegExp(`return "${glyph}"`));
@@ -172,4 +176,6 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
   assert.match(iconSource, /renderType: Text\.NativeRendering/);
   assert.match(barWidgetSource, /fontFamily: button\.fontFamily/);
   assert.match(barWidgetSource, /fontSize: button\.fontSize/);
+  assert.doesNotMatch(contextCaptureSource, /text: "Opatchy"/);
+  assert.match(contextCaptureSource, /root\.currentFixture\.dark \|\| root\.currentFixture\.transparent \|\| root\.currentFixture\.contrast \? "#343a46" : "#d9dee7"/);
 });

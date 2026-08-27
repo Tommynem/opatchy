@@ -60,7 +60,7 @@ expected_label() {
 
 expected_glyph() {
     case "$1" in
-        security) printf '%s' '󰕥' ;;
+        security) printf '%s' '󰻌' ;;
         watched) printf '%s' '󰃀' ;;
         updates) printf '%s' '󰏖' ;;
         degraded) printf '%s' '󰀦' ;;
@@ -107,7 +107,7 @@ badge_bit() {
 glyph_bit() {
     local glyph="$1" bit="$2" code
     case "${glyph}" in
-        '󰕥') code=$((16#f0565)) ;;
+        '󰻌') code=$((16#f0ecc)) ;;
         '󰃀') code=$((16#f00c0)) ;;
         '󰏖') code=$((16#f03d6)) ;;
         '󰀦') code=$((16#f0026)) ;;
@@ -161,7 +161,7 @@ for state in "${states[@]}"; do
                 [[ "${pixels[byte / 3]}" =~ ^srgba\(([0-9]+),([0-9]+),([0-9]+),1\)$ ]] || fail "invalid packed signature pixel: ${image} (${pixels[byte / 3]})"
                 actual_bit=$(( (BASH_REMATCH[channel] >> (bit % 8)) & 1 ))
                 [[ "${actual_bit}" -eq "${expected_bit}" ]] || {
-                    if (( bit >= 117 )); then
+                    if (( bit >= 134 )); then
                         fail "badge signature mismatch: ${image} expected ${badge}"
                     elif (( bit >= 114 )); then
                         fail "glyph signature mismatch: ${image} expected ${glyph}"
