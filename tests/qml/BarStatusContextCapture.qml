@@ -7,8 +7,12 @@ Item {
   width: 680; height: 220
   property int captureIndex: 0
   property string outputDirectory: ".omo/evidence/task-24-opatchy/visual-qa/context"
+  property string productionIconFont: "monospace"
   property var fixtures: [
-    { name: "security-dark-horizontal", state: "security", dark: true, vertical: false, refreshing: true },
+    { name: "security-stale-dark-horizontal", state: "security", dark: true, vertical: false, stale: true },
+    { name: "security-refresh-dark-horizontal", state: "security", dark: true, vertical: false, refreshing: true },
+    { name: "security-stale-refresh-dark-horizontal", state: "security", dark: true, vertical: false, stale: true, refreshing: true },
+    { name: "security-stale-refresh-transparent-horizontal", state: "security", transparent: true, vertical: false, stale: true, refreshing: true },
     { name: "watched-light-horizontal", state: "watched", dark: false, vertical: false },
     { name: "updates-contrast-horizontal", state: "updates", contrast: true, vertical: false },
     { name: "degraded-transparent-vertical", state: "degraded", transparent: true, vertical: true },
@@ -35,7 +39,7 @@ Item {
         icon: presentation.status.icon; badge: presentation.status.badge; stale: presentation.status.stale; refreshing: presentation.status.spinner
         foreground: root.currentFixture.dark || root.currentFixture.contrast || root.currentFixture.transparent ? "#f7f9fc" : "#172033"
         urgent: root.currentFixture.dark ? "#ff9990" : "#bd1830"
-        fontFamily: "monospace"; fontSize: 13
+        fontFamily: root.productionIconFont; fontSize: 13
         }
       }
     }
@@ -49,7 +53,7 @@ Item {
   }
   Component.onCompleted: captureNext()
   Timer { id: settle; interval: 120; repeat: false; onTriggered: stage.grabToImage(function(result) { result.saveToFile(root.outputDirectory + "/" + root.currentFixture.name + ".png"); root.captureIndex += 1; root.captureNext() }) }
-  function captureNext() { if (captureIndex >= fixtures.length) { Qt.quit(); return }; presentation.refreshing = currentFixture.refreshing === true; presentation.snapshot = snapshot(currentFixture.state, currentFixture.refreshing === true); settle.start() }
+  function captureNext() { if (captureIndex >= fixtures.length) { Qt.quit(); return }; presentation.refreshing = currentFixture.refreshing === true; presentation.snapshot = snapshot(currentFixture.state, currentFixture.stale === true); settle.start() }
   function snapshot(state, stale) {
     var summary = { securityFindings: 0, watchedUpdates: 0, totalUpdates: 0, degradedSources: 0 }
     if (state === "security") summary.securityFindings = 1

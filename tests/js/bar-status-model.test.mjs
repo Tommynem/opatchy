@@ -9,6 +9,7 @@ const modelPath = resolve(repositoryRoot, "qml/models/BarStatusModel.js");
 const iconPath = resolve(repositoryRoot, "qml/components/BarStatusIcon.qml");
 const barWidgetPath = resolve(repositoryRoot, "BarWidget.qml");
 const contextCapturePath = resolve(repositoryRoot, "tests/qml/BarStatusContextCapture.qml");
+const contextCaptureScriptPath = resolve(repositoryRoot, "scripts/capture_bar_status_context.sh");
 
 function loadModel() {
   assert.equal(existsSync(modelPath), true, "Todo 24 bar status model must exist");
@@ -157,7 +158,10 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
   const iconSource = readFileSync(iconPath, "utf8");
   const barWidgetSource = readFileSync(barWidgetPath, "utf8");
   const contextCaptureSource = readFileSync(contextCapturePath, "utf8");
+  const contextCaptureScript = readFileSync(contextCaptureScriptPath, "utf8");
   const retiredShieldGlyph = String.fromCodePoint(984421);
+  const staleGlyph = String.fromCodePoint(0xf0150);
+  const refreshGlyph = String.fromCodePoint(0xf0450);
   const glyphs = [
     ["shield", "󰻌", "f0ecc"],
     ["bookmark", "󰃀", "f00c0"],
@@ -166,7 +170,7 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
     ["check", "󰗠", "f05e0"],
   ];
 
-  assert.doesNotMatch(iconSource, /QtQuick\.Shapes|\b(?:Shape|ShapePath|PathLine|Rectangle)\b/);
+  assert.doesNotMatch(iconSource, /QtQuick\.Shapes|\b(?:Canvas|Shape|ShapePath|Path|PathLine|Rectangle|Image)\b/);
   assert.doesNotMatch(iconSource, new RegExp(retiredShieldGlyph));
   for (const [icon, glyph, codepoint] of glyphs) {
     assert.equal(glyph.codePointAt(0).toString(16), codepoint);
@@ -174,9 +178,23 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
     else assert.match(iconSource, new RegExp(`currentIcon === "${icon}".*return "${glyph}"`));
   }
   assert.match(iconSource, /renderType: Text\.NativeRendering/);
+  assert.match(iconSource, new RegExp(`text: "${staleGlyph}"`));
+  assert.match(iconSource, new RegExp(`text: "${refreshGlyph}"`));
+  assert.match(iconSource, /readonly property real secondaryFontSize: Math\.max\(9, Math\.round\(root\.fontSize \* \.69\)\)/);
+  assert.match(iconSource, /running: root\.refreshing && !root\.reducedMotion/);
   assert.match(barWidgetSource, /fontFamily: button\.fontFamily/);
   assert.match(barWidgetSource, /fontSize: button\.fontSize/);
+  assert.match(barWidgetSource, /reducedMotion: root\.settings && root\.settings\.reducedMotion === true/);
   assert.doesNotMatch(contextCaptureSource, /text: "Opatchy"/);
+  assert.match(contextCaptureSource, /fontFamily: root\.productionIconFont/);
+  assert.match(contextCaptureSource, /property string productionIconFont: "monospace"/);
+  assert.match(contextCaptureSource, /name: "security-stale-dark-horizontal", state: "security", dark: true, vertical: false, stale: true/);
+  assert.match(contextCaptureSource, /name: "security-refresh-dark-horizontal", state: "security", dark: true, vertical: false, refreshing: true/);
+  assert.match(contextCaptureSource, /name: "security-stale-refresh-dark-horizontal", state: "security", dark: true, vertical: false, stale: true, refreshing: true/);
+  assert.match(contextCaptureSource, /name: "security-stale-refresh-transparent-horizontal", state: "security", transparent: true, vertical: false, stale: true, refreshing: true/);
+  assert.match(contextCaptureSource, /snapshot\(currentFixture\.state, currentFixture\.stale === true\)/);
+  assert.match(contextCaptureScript, /context\.sha256/);
+  assert.match(contextCaptureScript, /sha256sum .*BarStatusIcon\.qml.*BarStatusPresentation\.qml.*BarStatusModel\.js.*BarStatusContextCapture\.qml/);
   assert.match(contextCaptureSource, /root\.currentFixture\.dark \|\| root\.currentFixture\.transparent \|\| root\.currentFixture\.contrast \? "#343a46" : "#d9dee7"/);
 });
 
