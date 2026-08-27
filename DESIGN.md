@@ -44,6 +44,14 @@ count.
 - **States**: selected, focus, disabled.
 - **Accessibility**: keyboard focus and textual health.
 
+### Bar Status Indicator
+- **Structure**: `BarStatusPresentation` provides one glyph, badge, tooltip,
+  stale marker, and spinner projection for the host `WidgetButton`.
+- **States**: high/critical security, watched update, ordinary update,
+  mandatory-source degradation, clear, and unavailable in that precedence.
+- **Accessibility**: every state names its counts and retained-data condition in
+  the tooltip; urgent uses `bar.urgent`, all other states use `bar.foreground`.
+
 ### Evidence Row
 - **Structure**: title followed by plain-text metadata.
 - **States**: current, last-known, unknown, empty.
