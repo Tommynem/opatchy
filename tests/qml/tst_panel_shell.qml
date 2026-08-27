@@ -14,7 +14,6 @@ TestCase {
 
   Component {
     id: shellStateComponent
-
     PanelShellState { }
   }
 
@@ -117,7 +116,6 @@ TestCase {
 
   Component {
     id: fakePanelComponent
-
     QtObject {
       property bool opened: false
       property int openCalls: 0
@@ -143,7 +141,6 @@ TestCase {
 
   Component {
     id: anchorComponent
-
     QtObject {
       property int focusCalls: 0
 
