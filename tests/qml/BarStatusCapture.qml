@@ -36,7 +36,7 @@ Item {
     }
 
     Repeater {
-      model: 5
+      model: 6
 
       Rectangle {
         x: surface.width - 1 - index
@@ -129,6 +129,8 @@ Item {
 
   function signatureBit(bit) {
     var status = presentation.status
+    if (bit >= 117) return badgeBit(status.badge, bit - 117)
+    if (bit >= 114) return iconBit(status.icon, bit - 114)
     if (bit >= 10) return labelBit(status.label, bit - 10)
     var kinds = ["security", "watched", "updates", "degraded", "clear"]
     var themes = ["light", "dark", "contrast", "transparent"]
@@ -139,6 +141,18 @@ Item {
     if (status.stale) code += 128
     if (status.spinner) code += 256
     return (code & (1 << bit)) !== 0
+  }
+
+  function iconBit(icon, bit) {
+    var icons = ["shield", "bookmark", "update", "warning", "check"]
+    var code = icons.indexOf(icon) + 1
+    return (code & (1 << bit)) !== 0
+  }
+
+  function badgeBit(badge, bit) {
+    if (bit === 0) return badge !== ""
+    var code = badge === "" ? 0 : Number(badge)
+    return (code & (1 << (bit - 1))) !== 0
   }
 
   function labelBit(label, bit) {
@@ -153,7 +167,7 @@ Item {
     var value = 0
     var offset = (pixel * 3 + channel) * 8
     for (var bit = 0; bit < 8; bit += 1)
-      if (offset + bit < 114 && signatureBit(offset + bit)) value += 1 << bit
+      if (offset + bit < 128 && signatureBit(offset + bit)) value += 1 << bit
     return value
   }
 }

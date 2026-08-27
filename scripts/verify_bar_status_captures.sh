@@ -10,6 +10,7 @@ readonly generation_manifest="${evidence_root}/generation.sha256"
 readonly -a states=(security watched updates degraded clear)
 readonly -a themes=(light dark contrast transparent)
 readonly -a layouts=(horizontal vertical narrow)
+readonly -a icons=(shield bookmark update warning check)
 
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 
@@ -41,7 +42,7 @@ expected_code() {
 
 signature_pixels() {
     local image="$1" width="$2" height="$3" format='' pixel
-    for pixel in {0..4}; do
+    for pixel in {0..5}; do
         format+="%[pixel:p{$((width - 1 - pixel)),$((height - 1))}]|"
     done
     identify -format "${format}" "${image}"
@@ -55,6 +56,26 @@ expected_label() {
         updates-*) printf '%s' '^4' ;;
         degraded-*) printf '%s' '?1' ;;
         clear-*) printf '%s' 'O' ;;
+    esac
+}
+
+expected_icon() {
+    case "$1" in
+        security) printf '%s' shield ;;
+        watched) printf '%s' bookmark ;;
+        updates) printf '%s' update ;;
+        degraded) printf '%s' warning ;;
+        clear) printf '%s' check ;;
+    esac
+}
+
+expected_badge() {
+    case "$1" in
+        security) printf '%s' 1 ;;
+        watched) printf '%s' 2 ;;
+        updates) printf '%s' 4 ;;
+        degraded) printf '%s' 1 ;;
+        clear) printf '%s' '' ;;
     esac
 }
 
@@ -72,6 +93,16 @@ label_bit() {
         *) printf -v code '%d' "'${label:character:1}" ;;
     esac
     (( code & (1 << character_bit) )) && printf '%s' 1 || printf '%s' 0
+}
+
+badge_bit() {
+    local badge="$1" bit="$2" value
+    if (( bit == 0 )); then
+        [[ -n "${badge}" ]] && printf '%s' 1 || printf '%s' 0
+        return
+    fi
+    value="${badge:-0}"
+    (( (10#${value} & (1 << (bit - 1))) != 0 )) && printf '%s' 1 || printf '%s' 0
 }
 
 verify_generation() {
@@ -97,18 +128,37 @@ for state in "${states[@]}"; do
             fi
             code="$(expected_code "${state}" "${theme}" "${layout}")"
             label="$(expected_label "${state}" "${theme}" "${layout}")"
+            icon="$(expected_icon "${state}")"
+            badge="$(expected_badge "${state}")"
+            icon_code=$(( $(index_of "${icon}" "${icons[@]}") + 1 ))
             geometry="$(geometry_for "${layout}")"
             width="${geometry%x*}"
             height="${geometry#*x}"
             IFS='|' read -r -a pixels <<<"$(signature_pixels "${image}" "${width}" "${height}")"
-            for bit in {0..113}; do
-                expected_bit=$(( bit < 10 ? (code >> bit) & 1 : $(label_bit "${label}" "$((bit - 10))") ))
+            for bit in {0..127}; do
+                if (( bit < 10 )); then
+                    expected_bit=$(( (code >> bit) & 1 ))
+                elif (( bit < 114 )); then
+                    expected_bit="$(label_bit "${label}" "$((bit - 10))")"
+                elif (( bit < 117 )); then
+                    expected_bit=$(( (icon_code >> (bit - 114)) & 1 ))
+                else
+                    expected_bit="$(badge_bit "${badge}" "$((bit - 117))")"
+                fi
                 byte=$(( bit / 8 ))
                 channel=$(( byte % 3 + 1 ))
                 [[ "${pixels[byte / 3]}" =~ ^srgba\(([0-9]+),([0-9]+),([0-9]+),1\)$ ]] || fail "invalid packed signature pixel: ${image} (${pixels[byte / 3]})"
                 actual_bit=$(( (BASH_REMATCH[channel] >> (bit % 8)) & 1 ))
                 [[ "${actual_bit}" -eq "${expected_bit}" ]] || {
-                    (( bit >= 10 )) && fail "label signature mismatch: ${image} expected ${label}" || fail "semantic signature mismatch: ${image} expected ${code}"
+                    if (( bit >= 117 )); then
+                        fail "badge signature mismatch: ${image} expected ${badge}"
+                    elif (( bit >= 114 )); then
+                        fail "icon signature mismatch: ${image} expected ${icon}"
+                    elif (( bit >= 10 )); then
+                        fail "label signature mismatch: ${image} expected ${label}"
+                    else
+                        fail "semantic signature mismatch: ${image} expected ${code}"
+                    fi
                 }
             done
             printf '%s\t%s\t%s\tpng/%s-%s-%s.png\t%s\n' "${state}" "${theme}" "${layout}" "${state}" "${theme}" "${layout}" "$(geometry_for "${layout}")" >>"${manifest}"
