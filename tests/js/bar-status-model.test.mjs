@@ -6,6 +6,7 @@ import vm from "node:vm";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const modelPath = resolve(repositoryRoot, "qml/models/BarStatusModel.js");
+const iconPath = resolve(repositoryRoot, "qml/components/BarStatusIcon.qml");
 
 function loadModel() {
   assert.equal(existsSync(modelPath), true, "Todo 24 bar status model must exist");
@@ -141,4 +142,14 @@ test("does not elevate optional source failures to a mandatory-source degradatio
   assert.equal(model.status(document, false, true).kind, "clear");
   document.payload.sources.find((entry) => entry.source === "arch").status = "offline";
   assert.equal(model.status(document, false, true).kind, "degraded");
+});
+
+test("reserves the urgent token for the actionable-security shield", () => {
+  const iconSource = readFileSync(iconPath, "utf8");
+
+  assert.equal([...iconSource.matchAll(/root\.urgent/g)].length, 1);
+  assert.match(
+    iconSource,
+    /visible: root\.icon === "shield"[\s\S]{0,500}fillColor: root\.urgent/,
+  );
 });

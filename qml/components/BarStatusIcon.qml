@@ -37,7 +37,7 @@ Item {
     }
   }
   Rectangle { visible: root.icon === "update"; anchors.centerIn: canvas; width: canvas.width * .72; height: canvas.height * .5; radius: canvas.width * .08; color: root.foreground }
-  Text { visible: root.icon === "update"; anchors.centerIn: canvas; text: "↑"; color: root.urgent; font.bold: true; font.pixelSize: canvas.width * .7 }
+  Text { visible: root.icon === "update"; anchors.centerIn: canvas; text: "↑"; color: root.foreground; font.bold: true; font.pixelSize: canvas.width * .7 }
   Shape {
     anchors.fill: canvas; visible: root.icon === "warning"
     ShapePath {
@@ -48,7 +48,7 @@ Item {
       PathLine { x: canvas.width * .5; y: canvas.height * .08 }
     }
   }
-  Text { visible: root.icon === "warning"; anchors.centerIn: canvas; text: "!"; color: root.urgent; font.bold: true; font.pixelSize: canvas.width * .46 }
+  Text { visible: root.icon === "warning"; anchors.centerIn: canvas; text: "!"; color: root.foreground; font.bold: true; font.pixelSize: canvas.width * .46 }
   Rectangle { visible: root.icon === "check"; anchors.centerIn: canvas; width: canvas.width * .76; height: width; radius: width / 2; border.width: Math.max(1, width * .12); border.color: root.foreground; color: "transparent" }
   Text { visible: root.icon === "check"; anchors.centerIn: canvas; text: "✓"; color: root.foreground; font.bold: true; font.pixelSize: canvas.width * .62 }
   Text { visible: root.badge !== ""; anchors.right: canvas.right; anchors.bottom: canvas.bottom; text: root.badge; color: root.foreground; font.bold: true; font.pixelSize: Math.max(7, canvas.width * .42) }
