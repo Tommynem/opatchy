@@ -34,6 +34,7 @@ Item {
 
   Text {
     id: primaryGlyph
+    objectName: "primaryGlyph"
     anchors.centerIn: parent
     anchors.horizontalCenterOffset: root.horizontalCorrection
     text: root.glyph
@@ -43,17 +44,32 @@ Item {
     renderType: Text.NativeRendering
   }
 
-  Text { visible: root.badge !== ""; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.rightMargin: -3; anchors.bottomMargin: -2; text: root.badge; color: root.foreground; font.family: root.fontFamily; font.bold: true; font.pixelSize: root.badgeFontSize }
+  Text {
+    id: statusBadge
+    objectName: "statusBadge"
+    visible: root.badge !== ""
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    anchors.rightMargin: -4
+    anchors.bottomMargin: -3
+    text: root.badge
+    color: root.foreground
+    font.family: root.fontFamily
+    font.bold: true
+    font.pixelSize: root.badgeFontSize
+  }
   Text {
     id: staleMarker
     objectName: "staleMarker"
     visible: root.stale
     anchors.left: parent.left
     anchors.top: parent.top
+    anchors.leftMargin: -4
+    anchors.topMargin: -5
     text: "↶"
     color: root.foreground
     font.family: root.fontFamily
-    font.pixelSize: Math.max(6, root.fontSize * .4)
+    font.pixelSize: Math.max(7, root.fontSize * .54)
   }
 
   Text {
@@ -62,9 +78,11 @@ Item {
     visible: root.refreshing
     anchors.right: parent.right
     anchors.top: parent.top
+    anchors.rightMargin: -4
+    anchors.topMargin: -5
     text: "…"
     color: root.foreground
     font.family: root.fontFamily
-    font.pixelSize: Math.max(6, root.fontSize * .4)
+    font.pixelSize: Math.max(7, root.fontSize * .54)
   }
 }

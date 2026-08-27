@@ -184,7 +184,7 @@ test("keeps one-digit badges legible and separated from the primary glyph", () =
   const iconSource = readFileSync(iconPath, "utf8");
 
   assert.match(iconSource, /readonly property real badgeFontSize: Math\.max\(9, root\.fontSize \* \.69\)/);
-  assert.match(iconSource, /anchors\.rightMargin: -3/);
-  assert.match(iconSource, /anchors\.bottomMargin: -2/);
+  assert.match(iconSource, /anchors\.rightMargin: -4/);
+  assert.match(iconSource, /anchors\.bottomMargin: -3/);
   assert.match(iconSource, /font\.pixelSize: root\.badgeFontSize/);
 });
