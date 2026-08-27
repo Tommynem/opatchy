@@ -23,13 +23,16 @@ Item {
     color: fixture ? fixture.background : "transparent"
     property var fixture: root.fixtures[root.captureIndex]
 
-    Text {
+    BarStatusIcon {
       anchors.centerIn: parent
-      color: surface.fixture ? (presentation.status.active ? surface.fixture.urgent : surface.fixture.foreground) : "transparent"
-      font.bold: presentation.status.active
-      font.pixelSize: surface.fixture && surface.fixture.layout === "narrow" ? 18 : 24
-      rotation: surface.fixture && surface.fixture.layout === "vertical" ? -90 : 0
-      text: presentation.status.label
+      width: surface.fixture && surface.fixture.layout === "narrow" ? 28 : 34
+      height: width
+      icon: presentation.status.icon
+      badge: presentation.status.badge
+      stale: presentation.status.stale
+      refreshing: presentation.status.spinner
+      foreground: surface.fixture ? surface.fixture.foreground : "transparent"
+      urgent: surface.fixture ? surface.fixture.urgent : "transparent"
     }
 
     Repeater {

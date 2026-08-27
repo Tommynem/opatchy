@@ -17,7 +17,7 @@ QT_QPA_PLATFORM=offscreen qmlscene "${repository_root}/tests/qml/BarStatusCaptur
 
 {
     printf 'generation_id=%s\n' "${generation_id}"
-    for source in qml/components/BarStatusPresentation.qml qml/models/BarStatusModel.js tests/qml/BarStatusCapture.qml; do
+    for source in qml/components/BarStatusPresentation.qml qml/components/BarStatusIcon.qml qml/models/BarStatusModel.js tests/qml/BarStatusCapture.qml; do
         sha256sum "${repository_root}/${source}"
     done
 } >"${generation_root}/${relative_evidence}/generation.sha256"
