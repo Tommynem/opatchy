@@ -26,6 +26,29 @@ TestCase {
     }
   }
 
+  Component {
+    id: statusSlotComponent
+    Item {
+      width: 27
+      height: 27
+
+      BarStatusIcon {
+        objectName: "statusIcon"
+        anchors.centerIn: parent
+        width: 16
+        height: 16
+        icon: "shield"
+        badge: "1"
+        stale: true
+        refreshing: true
+        foreground: "white"
+        urgent: "red"
+        fontFamily: "monospace"
+        fontSize: 13
+      }
+    }
+  }
+
   function snapshot(summary, archStatus, findings) {
     return {
       payload: {
@@ -96,6 +119,44 @@ TestCase {
     compare(staleMarker.text, "↶")
     compare(refreshIndicator.text, "…")
     icon.destroy()
+  }
+
+  function test_icon_uses_distinct_host_slot_territories() {
+    const slot = statusSlotComponent.createObject(root)
+    const icon = findChild(slot, "statusIcon")
+    const primaryGlyph = findChild(icon, "primaryGlyph")
+    const staleMarker = findChild(icon, "staleMarker")
+    const refreshIndicator = findChild(icon, "refreshIndicator")
+    const statusBadge = findChild(icon, "statusBadge")
+
+    verify(icon !== null)
+    verify(primaryGlyph !== null)
+    verify(staleMarker !== null)
+    verify(refreshIndicator !== null)
+    verify(statusBadge !== null)
+    wait(0)
+
+    const glyphPosition = primaryGlyph.mapToItem(slot, 0, 0)
+    const stalePosition = staleMarker.mapToItem(slot, 0, 0)
+    const refreshPosition = refreshIndicator.mapToItem(slot, 0, 0)
+    const badgePosition = statusBadge.mapToItem(slot, 0, 0)
+    const glyphCenterX = glyphPosition.x + primaryGlyph.width / 2
+    const glyphCenterY = glyphPosition.y + primaryGlyph.height / 2
+
+    verify(stalePosition.x > 0)
+    verify(stalePosition.y > 0)
+    verify(refreshPosition.x + refreshIndicator.width < slot.width)
+    verify(refreshPosition.y > 0)
+    verify(badgePosition.x + statusBadge.width < slot.width)
+    verify(badgePosition.y + statusBadge.height < slot.height)
+    verify(stalePosition.x + staleMarker.width < refreshPosition.x)
+    verify(stalePosition.x + staleMarker.width / 2 < glyphCenterX)
+    verify(stalePosition.y + staleMarker.height / 2 < glyphCenterY)
+    verify(refreshPosition.x + refreshIndicator.width / 2 > glyphCenterX)
+    verify(refreshPosition.y + refreshIndicator.height / 2 < glyphCenterY)
+    verify(badgePosition.x + statusBadge.width / 2 > glyphCenterX)
+    verify(badgePosition.y + statusBadge.height / 2 > glyphCenterY)
+    slot.destroy()
   }
 
 }
