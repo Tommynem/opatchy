@@ -30,14 +30,14 @@ expect_failure 'transparent theme lacks transparent pixels' verify
 
 bash "${repository_root}/scripts/capture_bar_status.sh"
 magick -size 192x56 xc:black "PNG32:${output_directory}/updates-dark-horizontal.png"
-expect_failure 'invalid semantic signature pixel' verify
+expect_failure 'semantic signature mismatch' verify
 
 bash "${repository_root}/scripts/capture_bar_status.sh"
 cp "${output_directory}/security-light-horizontal.png" "${output_directory}/security-dark-horizontal.png"
 expect_failure 'semantic signature mismatch' verify
 
 bash "${repository_root}/scripts/capture_bar_status.sh"
-magick "${output_directory}/security-dark-horizontal.png" -fill '#00ffff' -draw 'rectangle 20,8 21,9' -fill '#ff00ff' -draw 'rectangle 23,8 24,9' "PNG32:${output_directory}/security-dark-horizontal.png"
+magick "${output_directory}/security-dark-horizontal.png" -fill '#000000' -draw 'point 190,55' "PNG32:${output_directory}/security-dark-horizontal.png"
 expect_failure 'label signature mismatch' verify
 
 expect_failure 'generation identity does not match this capture run' env OPATCHY_CAPTURE_GENERATION=stale bash "${repository_root}/scripts/verify_bar_status_captures.sh"

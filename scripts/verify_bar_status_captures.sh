@@ -40,9 +40,9 @@ expected_code() {
 }
 
 signature_pixels() {
-    local image="$1" format='' bit
-    for bit in {0..113}; do
-        format+="%[pixel:p{$((2 + bit % 14 * 3)),$((2 + bit / 14 * 3))}]|"
+    local image="$1" width="$2" height="$3" format='' pixel
+    for pixel in {0..4}; do
+        format+="%[pixel:p{$((width - 1 - pixel)),$((height - 1))}]|"
     done
     identify -format "${format}" "${image}"
 }
@@ -97,14 +97,16 @@ for state in "${states[@]}"; do
             fi
             code="$(expected_code "${state}" "${theme}" "${layout}")"
             label="$(expected_label "${state}" "${theme}" "${layout}")"
-            IFS='|' read -r -a pixels <<<"$(signature_pixels "${image}")"
+            geometry="$(geometry_for "${layout}")"
+            width="${geometry%x*}"
+            height="${geometry#*x}"
+            IFS='|' read -r -a pixels <<<"$(signature_pixels "${image}" "${width}" "${height}")"
             for bit in {0..113}; do
                 expected_bit=$(( bit < 10 ? (code >> bit) & 1 : $(label_bit "${label}" "$((bit - 10))") ))
-                case "${pixels[bit]}" in
-                    'srgba(255,0,255,1)') actual_bit=1 ;;
-                    'srgba(0,255,255,1)') actual_bit=0 ;;
-                    *) fail "invalid semantic signature pixel ${bit}: ${image} (${pixels[bit]})" ;;
-                esac
+                byte=$(( bit / 8 ))
+                channel=$(( byte % 3 + 1 ))
+                [[ "${pixels[byte / 3]}" =~ ^srgba\(([0-9]+),([0-9]+),([0-9]+),1\)$ ]] || fail "invalid packed signature pixel: ${image} (${pixels[byte / 3]})"
+                actual_bit=$(( (BASH_REMATCH[channel] >> (bit % 8)) & 1 ))
                 [[ "${actual_bit}" -eq "${expected_bit}" ]] || {
                     (( bit >= 10 )) && fail "label signature mismatch: ${image} expected ${label}" || fail "semantic signature mismatch: ${image} expected ${code}"
                 }

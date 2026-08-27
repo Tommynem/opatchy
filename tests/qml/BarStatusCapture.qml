@@ -33,14 +33,14 @@ Item {
     }
 
     Repeater {
-      model: 114
+      model: 5
 
       Rectangle {
-        x: 2 + index % 14 * 3
-        y: 2 + Math.floor(index / 14) * 3
-        width: 2
-        height: 2
-        color: signatureBit(index) ? "#ff00ff" : "#00ffff"
+        x: surface.width - 1 - index
+        y: surface.height - 1
+        width: 1
+        height: 1
+        color: Qt.rgba(signatureComponent(index, 0) / 255, signatureComponent(index, 1) / 255, signatureComponent(index, 2) / 255, 1)
       }
     }
   }
@@ -144,5 +144,13 @@ Item {
     var characterBit = (bit - 8) % 16
     var code = character < label.length ? label.charCodeAt(character) : 0
     return (code & (1 << characterBit)) !== 0
+  }
+
+  function signatureComponent(pixel, channel) {
+    var value = 0
+    var offset = (pixel * 3 + channel) * 8
+    for (var bit = 0; bit < 8; bit += 1)
+      if (offset + bit < 114 && signatureBit(offset + bit)) value += 1 << bit
+    return value
   }
 }
