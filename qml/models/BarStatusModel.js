@@ -11,7 +11,7 @@ function status(snapshot, refreshing, serviceAvailable) {
   var values = counts(payload)
   var urgent = urgentSecurityCount(payload.findings)
   var mandatory = mandatoryDegradationCount(payload.sources)
-  var degraded = Math.max(values.degraded, mandatory)
+  var degraded = mandatory
   var stale = staleSourceCount(payload.sources) > 0
   var selected = urgent > 0
     ? view("security", "!", String(urgent), true, stale, refreshing === true, values, "")
@@ -33,7 +33,7 @@ function view(kind, glyph, badge, active, stale, spinner, values, tooltipText) {
 
 function tooltip(selected, urgent, degraded) {
   var values = selected.counts
-  var text = values.security + " security findings; " + urgent + " high or critical; "
+  var text = values.security + " security findings; " + urgent + " actionable high or critical; "
     + values.watched + " watched updates; " + values.updates + " other updates; "
     + degraded + " sources need attention."
   if (selected.stale) text += " Last known data is shown for at least one source."
@@ -54,8 +54,9 @@ function urgentSecurityCount(groups) {
   for (var index = 0; index < groups.length; index += 1) {
     var findings = groups[index] && isList(groups[index].findings) ? groups[index].findings : []
     for (var findingIndex = 0; findingIndex < findings.length; findingIndex += 1) {
-      var severity = findings[findingIndex] ? findings[findingIndex].severity : ""
-      if (severity === "high" || severity === "critical") count += 1
+      var finding = findings[findingIndex]
+      var severity = finding ? finding.severity : ""
+      if ((severity === "high" || severity === "critical") && typeof finding.fixedVersion === "string" && finding.fixedVersion.length > 0 && finding.status === "Fixed") count += 1
     }
   }
   return count

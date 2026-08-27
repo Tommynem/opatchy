@@ -24,7 +24,11 @@ function snapshot(summary, sourceStatuses = {}) {
       summary,
       sources: ["security", "omarchy", "arch", "aur", "flatpak", "mise"].map((name) => source(name, sourceStatuses[name])),
       findings: Array.from({ length: summary.securityFindings || 0 }, (_, index) => ({
-        findings: [{ severity: index % 2 === 0 ? "high" : "critical" }],
+        findings: [{
+          severity: index % 2 === 0 ? "high" : "critical",
+          fixedVersion: "1.2.3",
+          status: "Fixed",
+        }],
       })),
     },
   };
@@ -107,4 +111,28 @@ test("marks refresh activity without replacing the selected state and exposes un
   assert.equal(unavailable.glyph, "?");
   assert.equal(unavailable.badge, "");
   assert.match(unavailable.tooltip, /service unavailable/);
+});
+
+test("selects security only for high or critical findings with an available fix and Fixed status", () => {
+  const model = loadModel();
+  const noFix = snapshot({ securityFindings: 1, watchedUpdates: 2, totalUpdates: 2, degradedSources: 0 });
+  noFix.payload.findings[0].findings[0].fixedVersion = null;
+  const notFixed = snapshot({ securityFindings: 1, watchedUpdates: 2, totalUpdates: 2, degradedSources: 0 });
+  notFixed.payload.findings[0].findings[0].status = "Vulnerable";
+
+  assert.equal(model.status(noFix, false, true).kind, "watched");
+  assert.equal(model.status(notFixed, false, true).kind, "watched");
+  assert.equal(model.status(snapshot({ securityFindings: 1, watchedUpdates: 2, totalUpdates: 2, degradedSources: 0 }), false, true).kind, "security");
+});
+
+test("does not elevate optional source failures to a mandatory-source degradation", () => {
+  const model = loadModel();
+  const document = snapshot(
+    { securityFindings: 0, watchedUpdates: 0, totalUpdates: 0, degradedSources: 1 },
+    { aur: "offline" },
+  );
+
+  assert.equal(model.status(document, false, true).kind, "clear");
+  document.payload.sources.find((entry) => entry.source === "arch").status = "offline";
+  assert.equal(model.status(document, false, true).kind, "degraded");
 });

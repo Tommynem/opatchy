@@ -1,4 +1,4 @@
-import QtQml
+import QtQml 2.15
 import "../models/BarStatusModel.js" as BarStatusModel
 
 QtObject {
