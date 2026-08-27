@@ -44,5 +44,27 @@ Item {
   }
 
   Text { visible: root.badge !== ""; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.rightMargin: -3; anchors.bottomMargin: -2; text: root.badge; color: root.foreground; font.family: root.fontFamily; font.bold: true; font.pixelSize: root.badgeFontSize }
-  Text { visible: root.refreshing || root.stale; anchors.left: parent.left; anchors.top: parent.top; text: root.refreshing ? "…" : "↶"; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Math.max(6, root.fontSize * .4) }
+  Text {
+    id: staleMarker
+    objectName: "staleMarker"
+    visible: root.stale
+    anchors.left: parent.left
+    anchors.top: parent.top
+    text: "↶"
+    color: root.foreground
+    font.family: root.fontFamily
+    font.pixelSize: Math.max(6, root.fontSize * .4)
+  }
+
+  Text {
+    id: refreshIndicator
+    objectName: "refreshIndicator"
+    visible: root.refreshing
+    anchors.right: parent.right
+    anchors.top: parent.top
+    text: "…"
+    color: root.foreground
+    font.family: root.fontFamily
+    font.pixelSize: Math.max(6, root.fontSize * .4)
+  }
 }

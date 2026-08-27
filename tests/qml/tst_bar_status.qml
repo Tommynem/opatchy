@@ -13,6 +13,19 @@ TestCase {
     BarStatusPresentation { }
   }
 
+  Component {
+    id: iconComponent
+    BarStatusIcon {
+      width: 16
+      height: 16
+      icon: "shield"
+      foreground: "white"
+      urgent: "red"
+      fontFamily: "monospace"
+      fontSize: 13
+    }
+  }
+
   function snapshot(summary, archStatus, findings) {
     return {
       payload: {
@@ -52,6 +65,37 @@ TestCase {
     compare(presentation.status.stale, true)
     verify(presentation.status.label.indexOf("~") !== -1)
     presentation.destroy()
+  }
+
+  function test_icon_exposes_stale_and_refresh_marks_independently() {
+    const icon = iconComponent.createObject(null)
+    const staleMarker = findChild(icon, "staleMarker")
+    const refreshIndicator = findChild(icon, "refreshIndicator")
+
+    verify(staleMarker !== null)
+    verify(refreshIndicator !== null)
+
+    icon.stale = true
+    icon.refreshing = false
+    wait(0)
+    compare(icon.stale, true)
+    compare(staleMarker.visible, true)
+    compare(refreshIndicator.visible, false)
+
+    icon.stale = false
+    icon.refreshing = true
+    wait(0)
+    compare(staleMarker.visible, false)
+    compare(refreshIndicator.visible, true)
+
+    icon.stale = true
+    icon.refreshing = true
+    wait(0)
+    compare(staleMarker.visible, true)
+    compare(refreshIndicator.visible, true)
+    compare(staleMarker.text, "↶")
+    compare(refreshIndicator.text, "…")
+    icon.destroy()
   }
 
 }
