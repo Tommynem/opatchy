@@ -28,7 +28,15 @@ function status(snapshot, refreshing, serviceAvailable) {
 
 function view(kind, glyph, badge, active, stale, spinner, values, tooltipText) {
   var label = glyph + badge + (stale ? " ~" : "") + (spinner ? " …" : "")
-  return { kind: kind, glyph: glyph, badge: badge, active: active, stale: stale, spinner: spinner, label: label, tooltip: tooltipText, counts: values }
+  return { kind: kind, icon: iconKind(kind), glyph: glyph, badge: badge, active: active, stale: stale, spinner: spinner, label: label, tooltip: tooltipText, counts: values }
+}
+
+function iconKind(kind) {
+  if (kind === "security") return "shield"
+  if (kind === "watched") return "bookmark"
+  if (kind === "updates") return "update"
+  if (kind === "degraded" || kind === "unavailable") return "warning"
+  return "check"
 }
 
 function tooltip(selected, urgent, degraded) {

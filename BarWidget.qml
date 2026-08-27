@@ -97,17 +97,29 @@ BarWidget {
     }
   }
 
-  WidgetButton {
+  BarIconButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.vertical ? root.status.glyph + (root.status.stale ? "~" : "") + (root.status.spinner ? "…" : "") : root.status.label
+    text: root.status.label
+    iconComponent: statusIconComponent
     tooltipText: root.status.tooltip
     foreground: root.bar ? root.bar.foreground : Color.foreground
     activeColor: root.bar ? root.bar.urgent : Color.urgent
     active: root.status.active
     dimmed: root.status.kind === "clear"
-    fontSize: Style.bar.iconFont
     onPressed: function() { root.togglePanel() }
+  }
+
+  Component {
+    id: statusIconComponent
+    BarStatusIcon {
+      icon: root.status.icon
+      badge: root.status.badge
+      stale: root.status.stale
+      refreshing: root.status.spinner
+      foreground: root.bar ? root.bar.foreground : Color.foreground
+      urgent: root.bar ? root.bar.urgent : Color.urgent
+    }
   }
 }

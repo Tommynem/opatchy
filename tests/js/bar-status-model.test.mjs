@@ -42,6 +42,7 @@ test("selects the five bar states from one precedence seam while retaining simul
       document: snapshot({ securityFindings: 2, watchedUpdates: 3, totalUpdates: 7, degradedSources: 1 }, { arch: "stale" }),
       kind: "security",
       glyph: "!",
+      icon: "shield",
       badge: "2",
       active: true,
       stale: true,
@@ -51,6 +52,7 @@ test("selects the five bar states from one precedence seam while retaining simul
       document: snapshot({ securityFindings: 0, watchedUpdates: 3, totalUpdates: 7, degradedSources: 1 }),
       kind: "watched",
       glyph: "*",
+      icon: "bookmark",
       badge: "3",
       active: false,
       stale: false,
@@ -60,6 +62,7 @@ test("selects the five bar states from one precedence seam while retaining simul
       document: snapshot({ securityFindings: 0, watchedUpdates: 0, totalUpdates: 7, degradedSources: 1 }),
       kind: "updates",
       glyph: "^",
+      icon: "update",
       badge: "7",
       active: false,
       stale: false,
@@ -69,6 +72,7 @@ test("selects the five bar states from one precedence seam while retaining simul
       document: snapshot({ securityFindings: 0, watchedUpdates: 0, totalUpdates: 0, degradedSources: 1 }, { arch: "stale" }),
       kind: "degraded",
       glyph: "~",
+      icon: "warning",
       badge: "1",
       active: false,
       stale: true,
@@ -78,6 +82,7 @@ test("selects the five bar states from one precedence seam while retaining simul
       document: snapshot({ securityFindings: 0, watchedUpdates: 0, totalUpdates: 0, degradedSources: 0 }),
       kind: "clear",
       glyph: "O",
+      icon: "check",
       badge: "",
       active: false,
       stale: false,
@@ -88,6 +93,7 @@ test("selects the five bar states from one precedence seam while retaining simul
     const view = model.status(fixture.document, false, true);
     assert.equal(view.kind, fixture.kind, fixture.name);
     assert.equal(view.glyph, fixture.glyph, fixture.name);
+    assert.equal(view.icon, fixture.icon, fixture.name);
     assert.equal(view.badge, fixture.badge, fixture.name);
     assert.equal(view.active, fixture.active, fixture.name);
     assert.equal(view.stale, fixture.stale, fixture.name);
