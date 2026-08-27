@@ -119,7 +119,9 @@ glyph_bit() {
 
 verify_generation() {
     [[ -f "${generation_manifest}" ]] || fail "missing generation manifest: ${generation_manifest}"
-    [[ "$(sed -n '1p' "${generation_manifest}")" == "generation_id=${OPATCHY_CAPTURE_GENERATION:-}" ]] || fail 'generation identity does not match this capture run'
+    if [[ -n "${OPATCHY_CAPTURE_GENERATION:-}" ]]; then
+        [[ "$(sed -n '1p' "${generation_manifest}")" == "generation_id=${OPATCHY_CAPTURE_GENERATION}" ]] || fail 'generation identity does not match this capture run'
+    fi
     tail -n +2 "${generation_manifest}" | sha256sum -c - >/dev/null || fail 'source hash manifest is invalid'
 }
 
