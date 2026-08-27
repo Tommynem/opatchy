@@ -180,7 +180,7 @@ test("uses host-scale MDI glyphs without custom status geometry", () => {
   assert.match(iconSource, /renderType: Text\.NativeRendering/);
   assert.match(iconSource, new RegExp(`text: "${staleGlyph}"`));
   assert.match(iconSource, new RegExp(`text: "${refreshGlyph}"`));
-  assert.match(iconSource, /readonly property real secondaryFontSize: Math\.max\(9, Math\.round\(root\.fontSize \* \.69\)\)/);
+  assert.match(iconSource, /readonly property real secondaryFontSize: Math\.max\(8, Math\.round\(root\.fontSize \* \.62\)\)/);
   assert.match(iconSource, /running: root\.refreshing && !root\.reducedMotion/);
   assert.match(barWidgetSource, /fontFamily: button\.fontFamily/);
   assert.match(barWidgetSource, /fontSize: button\.fontSize/);
@@ -206,6 +206,6 @@ test("keeps one-digit badges legible and separated from the primary glyph", () =
 
   assert.match(iconSource, /readonly property real badgeFontSize: Math\.max\(9, root\.fontSize \* \.69\)/);
   assert.match(iconSource, /anchors\.rightMargin: -4\.5/);
-  assert.match(iconSource, /anchors\.bottomMargin: -4\.5/);
+  assert.match(iconSource, /anchors\.bottomMargin: 0/);
   assert.match(iconSource, /font\.pixelSize: root\.badgeFontSize/);
 });

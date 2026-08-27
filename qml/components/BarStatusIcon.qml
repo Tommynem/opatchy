@@ -15,7 +15,7 @@ Item {
   readonly property color glyphColor: icon === "shield" ? root.urgent : root.foreground
   readonly property int renderedFontSize: Math.max(1, Math.round(fontSize))
   readonly property real badgeFontSize: Math.max(9, root.fontSize * .69)
-  readonly property real secondaryFontSize: Math.max(9, Math.round(root.fontSize * .69))
+  readonly property real secondaryFontSize: Math.max(8, Math.round(root.fontSize * .62))
   readonly property real tightWidth: Math.max(1, glyphMetrics.tightBoundingRect.width)
   readonly property real horizontalCorrection: primaryGlyph.implicitWidth / 2 - (glyphMetrics.tightBoundingRect.x + tightWidth / 2)
 
@@ -53,7 +53,7 @@ Item {
     anchors.right: parent.right
     anchors.bottom: parent.bottom
     anchors.rightMargin: -4.5
-    anchors.bottomMargin: -4.5
+    anchors.bottomMargin: 0
     text: root.badge
     color: root.foreground
     font.family: root.fontFamily

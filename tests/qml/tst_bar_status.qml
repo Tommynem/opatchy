@@ -14,8 +14,8 @@ TestCase {
   }
 
   TextMetrics { id: shieldMetrics; font.family: "monospace"; font.pixelSize: 13; text: "󰻌" }
-  TextMetrics { id: staleMetrics; font.family: "monospace"; font.pixelSize: 9; text: "󰅐" }
-  TextMetrics { id: refreshMetrics; font.family: "monospace"; font.pixelSize: 9; text: "󰑐" }
+  TextMetrics { id: staleMetrics; font.family: "monospace"; font.pixelSize: 8; text: "󰅐" }
+  TextMetrics { id: refreshMetrics; font.family: "monospace"; font.pixelSize: 8; text: "󰑐" }
   TextMetrics { id: badgeMetrics; font.family: "monospace"; font.pixelSize: 9; font.bold: true; text: "1" }
 
   Component {
@@ -139,8 +139,8 @@ TestCase {
     compare(refreshIndicator.visible, true)
     compare(staleMarker.text, "󰅐")
     compare(refreshIndicator.text, "󰑐")
-    compare(staleMarker.font.pixelSize, 9)
-    compare(refreshIndicator.font.pixelSize, 9)
+    compare(staleMarker.font.pixelSize, 8)
+    compare(refreshIndicator.font.pixelSize, 8)
     icon.destroy()
   }
 
@@ -196,7 +196,7 @@ TestCase {
     verify(badgePosition.x > 0)
     verify(badgePosition.y > 0)
     verify(badgePosition.x + statusBadge.width < slot.width)
-    verify(badgePosition.y + statusBadge.height < slot.height)
+    verify(slot.height - (badgePosition.y + statusBadge.height) >= 4)
     verify(stalePosition.x + staleMarker.width < refreshPosition.x)
     verify(stalePosition.x + staleMarker.width / 2 < glyphCenterX)
     verify(stalePosition.y + staleMarker.height / 2 < glyphCenterY)

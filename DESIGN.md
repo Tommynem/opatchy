@@ -50,8 +50,8 @@ count.
   `WidgetButton`. Use the host `monospace` fontconfig alias at 13px in a
   centered 16px glyph slot within the host's 27px bar button: shield-alert
   `󰻌` (`f0ecc`), bookmark `󰃀` (`f00c0`), package `󰏖` (`f03d6`), alert `󰀦`
-  (`f0026`), and check-circle `󰗠` (`f05e0`). The 9px upper-left Clock Outline
-  `󰅐` (`f0150`) indicates last-known data; the 9px upper-right Refresh `󰑐`
+  (`f0026`), and check-circle `󰗠` (`f05e0`). The 8px upper-left Clock Outline
+  `󰅐` (`f0150`) indicates last-known data; the 8px upper-right Refresh `󰑐`
   (`f0450`) indicates scanning and rotates only when reduced motion is off.
   Do not use custom-drawn status geometry.
 - **States**: high/critical security, watched update, ordinary update,
