@@ -116,8 +116,29 @@ TestCase {
     wait(0)
     compare(staleMarker.visible, true)
     compare(refreshIndicator.visible, true)
-    compare(staleMarker.text, "↶")
-    compare(refreshIndicator.text, "…")
+    compare(staleMarker.text, "󰅐")
+    compare(refreshIndicator.text, "󰑐")
+    compare(staleMarker.font.pixelSize, 9)
+    compare(refreshIndicator.font.pixelSize, 9)
+    icon.destroy()
+  }
+
+  function test_refresh_rotation_stops_for_reduced_motion_without_hiding_the_glyph() {
+    const icon = iconComponent.createObject(null)
+    const refreshIndicator = findChild(icon, "refreshIndicator")
+    const refreshRotation = findChild(icon, "refreshRotation")
+
+    verify(refreshIndicator !== null)
+    verify(refreshRotation !== null)
+    icon.refreshing = true
+    wait(0)
+    compare(refreshRotation.running, true)
+
+    icon.reducedMotion = true
+    wait(0)
+    compare(refreshRotation.running, false)
+    compare(refreshIndicator.visible, true)
+    compare(refreshIndicator.rotation, 0)
     icon.destroy()
   }
 
@@ -145,8 +166,14 @@ TestCase {
 
     verify(stalePosition.x > 0)
     verify(stalePosition.y > 0)
+    verify(stalePosition.x + staleMarker.width < slot.width)
+    verify(stalePosition.y + staleMarker.height < slot.height)
+    verify(refreshPosition.x > 0)
     verify(refreshPosition.x + refreshIndicator.width < slot.width)
     verify(refreshPosition.y > 0)
+    verify(refreshPosition.y + refreshIndicator.height < slot.height)
+    verify(badgePosition.x > 0)
+    verify(badgePosition.y > 0)
     verify(badgePosition.x + statusBadge.width < slot.width)
     verify(badgePosition.y + statusBadge.height < slot.height)
     verify(stalePosition.x + staleMarker.width < refreshPosition.x)

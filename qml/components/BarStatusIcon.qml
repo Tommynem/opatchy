@@ -6,6 +6,7 @@ Item {
   property string badge: ""
   property bool stale: false
   property bool refreshing: false
+  property bool reducedMotion: false
   property color foreground
   property color urgent
   property string fontFamily: "monospace"
@@ -14,6 +15,7 @@ Item {
   readonly property color glyphColor: icon === "shield" ? root.urgent : root.foreground
   readonly property int renderedFontSize: Math.max(1, Math.round(fontSize))
   readonly property real badgeFontSize: Math.max(9, root.fontSize * .69)
+  readonly property real secondaryFontSize: Math.max(9, Math.round(root.fontSize * .69))
   readonly property real tightWidth: Math.max(1, glyphMetrics.tightBoundingRect.width)
   readonly property real horizontalCorrection: primaryGlyph.implicitWidth / 2 - (glyphMetrics.tightBoundingRect.x + tightWidth / 2)
 
@@ -66,10 +68,11 @@ Item {
     anchors.top: parent.top
     anchors.leftMargin: -4
     anchors.topMargin: -5
-    text: "↶"
+    text: "󰅐"
     color: root.foreground
     font.family: root.fontFamily
-    font.pixelSize: Math.max(7, root.fontSize * .54)
+    font.pixelSize: root.secondaryFontSize
+    renderType: Text.NativeRendering
   }
 
   Text {
@@ -80,9 +83,23 @@ Item {
     anchors.top: parent.top
     anchors.rightMargin: -4
     anchors.topMargin: -5
-    text: "…"
+    rotation: root.refreshing && !root.reducedMotion ? root.refreshAngle : 0
+    text: "󰑐"
     color: root.foreground
     font.family: root.fontFamily
-    font.pixelSize: Math.max(7, root.fontSize * .54)
+    font.pixelSize: root.secondaryFontSize
+    renderType: Text.NativeRendering
+  }
+
+  property real refreshAngle: 0
+
+  NumberAnimation on refreshAngle {
+    id: refreshRotation
+    objectName: "refreshRotation"
+    from: 0
+    to: 360
+    duration: 900
+    loops: Animation.Infinite
+    running: root.refreshing && !root.reducedMotion
   }
 }

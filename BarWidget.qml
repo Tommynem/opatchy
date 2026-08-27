@@ -118,6 +118,7 @@ BarWidget {
       badge: root.status.badge
       stale: root.status.stale
       refreshing: root.status.spinner
+      reducedMotion: root.settings && root.settings.reducedMotion === true
       foreground: root.bar ? root.bar.foreground : Color.foreground
       urgent: root.bar ? root.bar.urgent : Color.urgent
       fontFamily: button.fontFamily
