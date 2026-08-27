@@ -16,7 +16,7 @@ BarWidget {
   readonly property var service: lifecycleState.service
   readonly property bool serviceAvailable: lifecycleState.serviceAvailable
   readonly property var panel: panelLoader.item
-  readonly property string statusText: panelState.statusText
+  readonly property var status: statusPresentation.status
 
   LifecycleState {
     id: lifecycleState
@@ -30,6 +30,13 @@ BarWidget {
     panel: root.panel
     anchorItem: button
     loaderFailed: panelLoader.status === Loader.Error
+  }
+
+  BarStatusPresentation {
+    id: statusPresentation
+    snapshot: root.service ? root.service.lastSnapshot : null
+    refreshing: root.service ? root.service.refreshing === true : false
+    serviceAvailable: root.serviceAvailable
   }
 
   function injectPanel() {
@@ -94,10 +101,13 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.vertical ? "O" : root.statusText
-    tooltipText: root.serviceAvailable
-      ? "Open Opatchy"
-      : "Opatchy service unavailable"
+    text: root.vertical ? root.status.glyph + (root.status.stale ? "~" : "") + (root.status.spinner ? "…" : "") : root.status.label
+    tooltipText: root.status.tooltip
+    foreground: root.bar ? root.bar.foreground : Color.foreground
+    activeColor: root.bar ? root.bar.urgent : Color.urgent
+    active: root.status.active
+    dimmed: root.status.kind === "clear"
+    fontSize: Style.bar.iconFont
     onPressed: function() { root.togglePanel() }
   }
 }
