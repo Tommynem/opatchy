@@ -33,11 +33,11 @@ Item {
     }
 
     Repeater {
-      model: 10
+      model: 114
 
       Rectangle {
-        x: 2 + index * 3
-        y: 2
+        x: 2 + index % 14 * 3
+        y: 2 + Math.floor(index / 14) * 3
         width: 2
         height: 2
         color: signatureBit(index) ? "#ff00ff" : "#00ffff"
@@ -126,6 +126,7 @@ Item {
 
   function signatureBit(bit) {
     var status = presentation.status
+    if (bit >= 10) return labelBit(status.label, bit - 10)
     var kinds = ["security", "watched", "updates", "degraded", "clear"]
     var themes = ["light", "dark", "contrast", "transparent"]
     var layouts = ["horizontal", "vertical", "narrow"]
@@ -135,5 +136,13 @@ Item {
     if (status.stale) code += 128
     if (status.spinner) code += 256
     return (code & (1 << bit)) !== 0
+  }
+
+  function labelBit(label, bit) {
+    if (bit < 8) return (label.length & (1 << bit)) !== 0
+    var character = Math.floor((bit - 8) / 16)
+    var characterBit = (bit - 8) % 16
+    var code = character < label.length ? label.charCodeAt(character) : 0
+    return (code & (1 << characterBit)) !== 0
   }
 }

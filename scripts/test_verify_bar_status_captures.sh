@@ -36,7 +36,11 @@ bash "${repository_root}/scripts/capture_bar_status.sh"
 cp "${output_directory}/security-light-horizontal.png" "${output_directory}/security-dark-horizontal.png"
 expect_failure 'semantic signature mismatch' verify
 
+bash "${repository_root}/scripts/capture_bar_status.sh"
+magick "${output_directory}/security-dark-horizontal.png" -fill '#00ffff' -draw 'rectangle 20,8 21,9' -fill '#ff00ff' -draw 'rectangle 23,8 24,9' "PNG32:${output_directory}/security-dark-horizontal.png"
+expect_failure 'label signature mismatch' verify
+
 expect_failure 'generation identity does not match this capture run' env OPATCHY_CAPTURE_GENERATION=stale bash "${repository_root}/scripts/verify_bar_status_captures.sh"
 bash "${repository_root}/scripts/capture_bar_status.sh"
 verify
-printf '%s\n' 'PASS: verifier rejects opaque, blank, substituted, and stale artifacts'
+printf '%s\n' 'PASS: verifier rejects opaque, blank, substituted, wrong-label, and stale artifacts'

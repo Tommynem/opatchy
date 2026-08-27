@@ -39,12 +39,39 @@ expected_code() {
     printf '%s' "${code}"
 }
 
-pixel_bit() {
-    local image="$1" bit="$2" pixel
-    pixel="$(identify -format "%[pixel:p{$((2 + bit * 3)),2}]" "${image}")"
-    [[ "${pixel}" == 'srgba(255,0,255,1)' ]] && { printf '%s' 1; return; }
-    [[ "${pixel}" == 'srgba(0,255,255,1)' ]] && { printf '%s' 0; return; }
-    fail "invalid semantic signature pixel ${bit}: ${image} (${pixel})"
+signature_pixels() {
+    local image="$1" format='' bit
+    for bit in {0..113}; do
+        format+="%[pixel:p{$((2 + bit % 14 * 3)),$((2 + bit / 14 * 3))}]|"
+    done
+    identify -format "${format}" "${image}"
+}
+
+expected_label() {
+    case "$1-$2-$3" in
+        security-dark-horizontal) printf '%s' '!1 ~ …' ;;
+        security-*) printf '%s' '!1' ;;
+        watched-*) printf '%s' '*2' ;;
+        updates-*) printf '%s' '^4' ;;
+        degraded-*) printf '%s' '?1' ;;
+        clear-*) printf '%s' 'O' ;;
+    esac
+}
+
+label_bit() {
+    local label="$1" bit="$2" character character_bit code
+    if (( bit < 8 )); then
+        (( ${#label} & (1 << bit) )) && printf '%s' 1 || printf '%s' 0
+        return
+    fi
+    character=$(( (bit - 8) / 16 ))
+    character_bit=$(( (bit - 8) % 16 ))
+    [[ "${character}" -lt "${#label}" ]] || { printf '%s' 0; return; }
+    case "${label:character:1}" in
+        '…') code=8230 ;;
+        *) printf -v code '%d' "'${label:character:1}" ;;
+    esac
+    (( code & (1 << character_bit) )) && printf '%s' 1 || printf '%s' 0
 }
 
 verify_generation() {
@@ -69,11 +96,19 @@ for state in "${states[@]}"; do
                 [[ "$(magick "${image}" -alpha extract -format '%[fx:minima]' info:)" == '0' ]] || fail "transparent theme lacks transparent pixels: ${image}"
             fi
             code="$(expected_code "${state}" "${theme}" "${layout}")"
-            actual_code=0
-            for bit in {0..9}; do
-                : $(( actual_code += $(pixel_bit "${image}" "${bit}") << bit ))
+            label="$(expected_label "${state}" "${theme}" "${layout}")"
+            IFS='|' read -r -a pixels <<<"$(signature_pixels "${image}")"
+            for bit in {0..113}; do
+                expected_bit=$(( bit < 10 ? (code >> bit) & 1 : $(label_bit "${label}" "$((bit - 10))") ))
+                case "${pixels[bit]}" in
+                    'srgba(255,0,255,1)') actual_bit=1 ;;
+                    'srgba(0,255,255,1)') actual_bit=0 ;;
+                    *) fail "invalid semantic signature pixel ${bit}: ${image} (${pixels[bit]})" ;;
+                esac
+                [[ "${actual_bit}" -eq "${expected_bit}" ]] || {
+                    (( bit >= 10 )) && fail "label signature mismatch: ${image} expected ${label}" || fail "semantic signature mismatch: ${image} expected ${code}"
+                }
             done
-            [[ "${actual_code}" -eq "${code}" ]] || fail "semantic signature mismatch: ${image} expected ${code}, got ${actual_code}"
             printf '%s\t%s\t%s\tpng/%s-%s-%s.png\t%s\n' "${state}" "${theme}" "${layout}" "${state}" "${theme}" "${layout}" "$(geometry_for "${layout}")" >>"${manifest}"
         done
     done
