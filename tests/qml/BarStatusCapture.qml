@@ -31,6 +31,18 @@ Item {
       rotation: surface.fixture && surface.fixture.layout === "vertical" ? -90 : 0
       text: presentation.status.label
     }
+
+    Repeater {
+      model: 10
+
+      Rectangle {
+        x: 2 + index * 3
+        y: 2
+        width: 2
+        height: 2
+        color: signatureBit(index) ? "#ff00ff" : "#00ffff"
+      }
+    }
   }
 
   Component.onCompleted: captureNext()
@@ -110,5 +122,18 @@ Item {
     ]
     var findings = fixture.state === "security" ? [{ findings: [{ severity: "critical", fixedVersion: "1.2.3", status: "Fixed" }] }] : []
     return { payload: { summary: summary, sources: sources, findings: findings } }
+  }
+
+  function signatureBit(bit) {
+    var status = presentation.status
+    var kinds = ["security", "watched", "updates", "degraded", "clear"]
+    var themes = ["light", "dark", "contrast", "transparent"]
+    var layouts = ["horizontal", "vertical", "narrow"]
+    var code = kinds.indexOf(status.kind) + 1
+    code += themes.indexOf(surface.fixture.theme) * 8
+    code += layouts.indexOf(surface.fixture.layout) * 32
+    if (status.stale) code += 128
+    if (status.spinner) code += 256
+    return (code & (1 << bit)) !== 0
   }
 }
