@@ -4,7 +4,7 @@ import qs.Ui
 import "../models/UpdateViewModel.js" as UpdateViewModel
 import "../models/StarViewModel.js" as StarViewModel
 
-Item {
+FocusScope {
   id: root
 
   property string tab: "Security"
@@ -17,6 +17,7 @@ Item {
   property bool notifyPermanent: true
   property bool reducedMotion: false
   readonly property alias starState: stars
+  readonly property Item primaryControl: tab === "Security" ? securityView.primaryControl : browseButton
   readonly property var rows: UpdateViewModel.updateRows(snapshot, tab)
   readonly property var displayedRows: watchedOnly ? StarViewModel.watchedRows(rows).map(function(watched) {
     return rows.filter(function(row) { return row.target === watched.target })[0]
@@ -46,13 +47,16 @@ Item {
     spacing: Style.spacing.sm
 
     SecurityView {
+      id: securityView
       visible: root.tab === "Security"
       width: parent.width
       snapshot: root.snapshot
       starState: stars
+      canRefresh: root.service !== null
       notifyPermanent: root.notifyPermanent
       foreground: root.foreground
       fontFamily: root.fontFamily
+      onRefreshRequested: if (root.service) root.service.requestRefresh()
     }
 
     Item {
@@ -71,6 +75,8 @@ Item {
           spacing: Style.spacing.sm
 
           Button {
+            id: browseButton
+            objectName: "browse-primary-control"
             width: parent.width
             text: root.browsing ? "Show updates" : "Browse packages/tools"
             tooltipText: root.browsing ? "Show actionable updates" : "Search cached packages and tools"

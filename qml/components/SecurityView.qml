@@ -10,8 +10,13 @@ Item {
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
   property var starState: null
+  property bool canRefresh: false
   property bool notifyPermanent: true
   readonly property var view: presentation.view
+  readonly property Item primaryControl: groupRepeater.count > 0 && groupRepeater.itemAt(0)
+    ? groupRepeater.itemAt(0).primaryControl
+    : refreshButton
+  signal refreshRequested()
 
   implicitHeight: content.implicitHeight
 
@@ -49,11 +54,29 @@ Item {
       elide: Text.ElideRight
     }
 
+    Button {
+      id: refreshButton
+      objectName: "security-refresh"
+      visible: root.view.groups.length === 0
+      width: parent.width
+      text: "Refresh security data"
+      tooltipText: "Request a new source scan; results may remain unavailable."
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
+      focusable: true
+      bordered: true
+      enabled: root.canRefresh
+      onClicked: root.refreshRequested()
+    }
+
     Repeater {
+      id: groupRepeater
       model: root.view.groups
 
       delegate: Item {
         required property var modelData
+        property alias primaryControl: watchButton
         width: parent.width
         implicitHeight: findings.implicitHeight
 
@@ -63,6 +86,8 @@ Item {
           spacing: Style.spacing.sm
 
           StarButton {
+            id: watchButton
+            objectName: "security-watch-" + modelData.watchTarget
             width: parent.width
             starState: root.starState
             target: modelData.watchTarget

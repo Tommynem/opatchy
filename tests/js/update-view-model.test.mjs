@@ -158,7 +158,7 @@ test("disables footer actions when the visible source is not current even if ano
   assert.equal(model.footerActions(document, "Flatpak", { canOpenFlatpakUserUpdate: true, canOpenFlatpakSystemUpdate: true })[0].enabled, false);
 });
 
-test("renders source content through plain text and dispatches only fixed service actions", () => {
+test("renders source content through plain text and dispatches only fixed update actions plus Security refresh", () => {
   const source = readFileSync(resolve(repositoryRoot, "qml/components/SourceContent.qml"), "utf8");
   const row = readFileSync(resolve(repositoryRoot, "qml/components/UpdateRow.qml"), "utf8");
 
@@ -166,7 +166,8 @@ test("renders source content through plain text and dispatches only fixed servic
   assert.match(source, /case "omarchy": service\.openOmarchyUpdate\(\); break/);
   assert.match(source, /case "flatpak-user": service\.openFlatpakUserUpdate\(\); break/);
   assert.match(source, /case "flatpak-system": service\.openFlatpakSystemUpdate\(\); break/);
-  assert.doesNotMatch(source, /setStar|openAction\(|requestRefresh\(/);
+  assert.match(source, /onRefreshRequested:\s*if \(root\.service\) root\.service\.requestRefresh\(\)/);
+  assert.doesNotMatch(source, /setStar|openAction\(/);
 });
 
 test("normalizes hostile presentation strings to one bounded plain-text line", () => {
