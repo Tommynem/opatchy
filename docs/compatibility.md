@@ -1,24 +1,26 @@
 # Compatibility
 
-## Target
+Opatchy targets Omarchy 4 and plugin manifest schema v1. Its permanent plugin
+ID is `io.github.tomge.opatchy` and its version is `0.1.0`. The manifest declares
+a combined `service` and `bar-widget` plugin, with the widget placed in the
+right section by default and only one instance allowed.
 
-Opatchy targets Omarchy 4 with plugin manifest schema v1 and the permanent
-plugin ID `io.github.tomge.opatchy`. The intended initial version is `0.1.0`.
-The local planning input is Omarchy `4.0.0.alpha`; exact release support will
-be verified against the Omarchy version available at release time.
+This is a compatibility target, not a universal compatibility promise. The host
+must provide Omarchy's plugin CLI and shell runtime. The plugin is loaded by the
+long-lived `omarchy-shell` process and therefore requires a compatible
+Quickshell environment supplied by Omarchy.
 
-## Current limitation
+The plugin uses host-provided `/usr/bin` programs when their source is enabled:
+`omarchy-update-available`, `pacman`, `checkupdates`, `vercmp`, `yay`, `paru`,
+`flatpak`, `mise`, `arch-audit`, and `notify-send`. A missing optional collector
+is a visible source condition. Opatchy does not install a missing dependency.
 
-This repository-contract stage contains no `manifest.json` or runtime, so it
-makes no installation compatibility claim. Later work must validate the
-manifest with `omarchy plugin validate .` and retain the contract test below.
+Validate a checkout with the host before enabling it:
 
 ```sh
-python3 -m unittest discover -s tests/contract -p 'test_*.py'
+omarchy plugin validate .
 ```
 
-## Runtime boundary
-
-The planned runtime uses Python 3 standard library components only and has no
-runtime telemetry. Opatchy will open native update workflows rather than
-perform privileged, partial, unattended, or package-specific updates.
+The official [Shell Plugins manual](https://omarchy.org/manual/shell-plugins/)
+describes current host lifecycle semantics. Omarchy manages system updates
+through its own workflow; Opatchy opens that workflow and does not replace it.
