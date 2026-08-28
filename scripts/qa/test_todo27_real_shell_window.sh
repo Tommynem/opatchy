@@ -83,6 +83,13 @@ case "$1 $2" in
     fi
     ;;
   "plugin enable")
+    if [[ "${DELAY_PLUGIN_DISCOVERY:-0}" == 1 && ! -f "$HOME/plugin-known" ]]; then
+      printf "%s\n" "plugin '$3' is not known; run: omarchy-shell shell rescanPlugins" >&2
+      exit 1
+    fi
+    if [[ "${DELAY_PLUGIN_DISCOVERY:-0}" == 1 ]]; then
+      cp "$HOME/discovery-list.calls" "$HOME/discovery-list.calls-at-enable"
+    fi
     python3 - "$HOME/.config/omarchy/shell.json" "$3" <<'PY'
 import json
 import sys
@@ -99,10 +106,27 @@ PY
     case "$3" in
       ping) printf 'ok\n' ;;
       listPlugins)
-        printf '%s\n' 'akitaonrails.ai-usagebar io.github.sirjul1337.lock-explorer mirador omaplug jkoestinger.vpn'
-        grep -Fq 'io.github.tomge.opatchy' "$HOME/.config/omarchy/shell.json" && printf '%s\n' 'io.github.tomge.opatchy'
+        if [[ "${DELAY_PLUGIN_DISCOVERY:-0}" == 1 && -f "$HOME/discovery-rescan" ]]; then
+          calls=0
+          [[ -f "$HOME/discovery-list.calls" ]] && calls="$(<"$HOME/discovery-list.calls")"
+          calls=$((calls + 1))
+          printf '%s\n' "${calls}" >"$HOME/discovery-list.calls"
+          if [[ "${DISCOVERY_NEVER_READY:-0}" != 1 && "${calls}" -ge "${DISCOVERY_DELAY_LIST_CALLS:-3}" ]]; then
+            touch "$HOME/plugin-known"
+          fi
+        fi
+        if [[ "${DELAY_PLUGIN_DISCOVERY:-0}" != 1 || -f "$HOME/plugin-known" ]]; then
+          printf '%s\n' '[{"id":"io.github.tomge.opatchy"}]'
+        else
+          printf '%s\n' '[]'
+        fi
         ;;
-      rescanPlugins) : ;;
+      rescanPlugins)
+        if [[ "${DELAY_PLUGIN_DISCOVERY:-0}" == 1 ]]; then
+          rm -f "$HOME/plugin-known" "$HOME/discovery-list.calls"
+          touch "$HOME/discovery-rescan"
+        fi
+        ;;
       reloadConfig)
         if [[ "${PERSIST_HELPER_AFTER_RESTORE:-0}" == 1 ]]; then
           touch "$HOME/helper-running"
@@ -209,6 +233,25 @@ printf 'RESTORE\n' | run_runner "${record_dir}" env
 [[ "$(<"${record_dir}/helper-count.during.txt")" == 1 ]]
 assert_restored "${record_dir}" absent 0
 [[ "$(<"${record_dir}/helper-monitor.status")" == stopped ]]
+
+setup_fixture
+HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
+  DELAY_PLUGIN_DISCOVERY=1 omarchy shell shell rescanPlugins
+expect_failure "plugin 'io.github.tomge.opatchy' is not known" env HOME="${home}" PATH="${fake_bin}:${PATH}" \
+  TODO27_COMMAND_LOG="${command_log}" DELAY_PLUGIN_DISCOVERY=1 omarchy plugin enable io.github.tomge.opatchy
+
+setup_fixture
+record_dir="${fixture_root}/delayed-discovery-record"
+printf 'RESTORE\n' | run_runner "${record_dir}" env DELAY_PLUGIN_DISCOVERY=1 DISCOVERY_DELAY_LIST_CALLS=3
+assert_restored "${record_dir}" absent 0
+[[ "$(<"${home}/discovery-list.calls-at-enable")" == 3 ]]
+
+setup_fixture
+record_dir="${fixture_root}/discovery-timeout-record"
+expect_failure 'was not discovered within 5 seconds after rescan' run_runner "${record_dir}" env \
+  DELAY_PLUGIN_DISCOVERY=1 DISCOVERY_NEVER_READY=1
+assert_restored "${record_dir}" absent 0
+! grep -Fq 'plugin enable' "${command_log}"
 
 setup_fixture
 target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"

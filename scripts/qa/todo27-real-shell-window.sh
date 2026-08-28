@@ -3,6 +3,8 @@ set -euo pipefail
 
 readonly plugin_id="io.github.tomge.opatchy"
 readonly hostname_bin="/usr/bin/hostname"
+readonly discovery_attempts=50
+readonly discovery_poll_seconds=0.1
 readonly -a retained_ids=(
   "akitaonrails.ai-usagebar"
   "io.github.sirjul1337.lock-explorer"
@@ -159,6 +161,37 @@ shell_ping() {
   [[ "$(shell_ipc ping)" == "ok" ]]
 }
 
+plugin_is_discovered() {
+  local plugins
+  plugins="$(shell_ipc listPlugins)" || return 2
+  python3 -c '
+import json
+import sys
+
+try:
+    plugins = json.load(sys.stdin)
+except json.JSONDecodeError:
+    raise SystemExit(2)
+if not isinstance(plugins, list):
+    raise SystemExit(2)
+raise SystemExit(0 if any(isinstance(plugin, dict) and plugin.get("id") == sys.argv[1] for plugin in plugins) else 1)
+' "${plugin_id}" <<<"${plugins}"
+}
+
+wait_for_plugin_discovery() {
+  local attempt status
+  for ((attempt = 1; attempt <= discovery_attempts; attempt++)); do
+    if plugin_is_discovered; then
+      return
+    else
+      status="$?"
+    fi
+    (( status == 1 )) || fail "plugin discovery query failed after rescan"
+    (( attempt == discovery_attempts )) || sleep "${discovery_poll_seconds}"
+  done
+  fail "plugin ${plugin_id} was not discovered within 5 seconds after rescan"
+}
+
 helper_count() {
   { pgrep -af "${target_plugin}/helper/opatchy.py" || true; } | wc -l
 }
@@ -293,6 +326,7 @@ rm -rf -- "${target_plugin}"
 cp -a "${plugin_source}" "${target_plugin}"
 omarchy plugin validate "${target_plugin}" >/dev/null
 shell_ipc rescanPlugins
+wait_for_plugin_discovery
 omarchy plugin enable "${plugin_id}"
 omarchy bar move "${plugin_id}" --section right
 target_is_right_widget
