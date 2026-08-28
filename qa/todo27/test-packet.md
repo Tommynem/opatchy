@@ -44,7 +44,9 @@ identifier, exact host-bound approval, and `--record-dir`. The selected host mus
 match the trusted system `/usr/bin/hostname` result with no arguments.
 Do not run either command during Stage A. The runner refuses missing approval,
 missing `--execute`, invalid source, failed shell ping, failed validator,
-missing retained IDs, symlinks, or a nonempty record directory. It backs up
+missing retained IDs, symlinks, or a nonempty record directory. It stages and
+validates the replacement outside the watched plugin directory, then moves the
+complete tree into place only after disabling an enabled target. It backs up
 `shell.json` and the target plugin directory before mutation; its EXIT trap
 restores both and compares semantic JSON/plugin digests before returning.
 
