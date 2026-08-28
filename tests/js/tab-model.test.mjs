@@ -70,7 +70,25 @@ test("builds the six approved tabs in stable order with source counts", () => {
     "Security", "Omarchy", "System", "AUR", "Flatpak", "mise",
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(view.tabs.map((tab) => tab.count))), [2, 1, 2, 1, 1, 1]);
-  assert.equal(view.summaryText, "6 updates, 2 security findings, 0 sources need attention");
+  assert.equal(view.summaryText, "6 updates; 2 security findings; all sources current");
+});
+
+test("summarizes actual source attention without contradicting retained or incompatible evidence", () => {
+  const model = loadModel();
+  const degraded = snapshot();
+  degraded.payload.sources[2] = source("omarchy", "invalid");
+  degraded.payload.sources[3] = source("arch", "stale");
+  degraded.payload.summary.degradedSources = 0;
+
+  const view = model.buildPanelState(degraded, {
+    lastFailureKind: "incompatible",
+  }, Date.parse("2026-08-26T00:01:00.000Z"));
+
+  assert.equal(view.summaryText, "6 updates; 2 security findings; latest refresh incompatible; last known result shown");
+  assert.equal(view.problemTitle, "Update required");
+  assert.match(view.problemDetail, /latest refresh is incompatible/i);
+  assert.match(view.failureText, /Update Opatchy, then refresh/i);
+  assert.doesNotMatch(view.failureText, /^Incompatible data\./);
 });
 
 test("renders every supported source health with visible text, glyph, and tooltip", () => {
@@ -185,6 +203,29 @@ test("aggregates Arch security and CISA KEV health without claiming incomplete c
   }
 });
 
+test("names optional CISA coverage instead of claiming all sources are current", () => {
+  const model = loadModel();
+  const cases = [
+    ["ok", "Current", "all sources current", "All sources current"],
+    ["stale", "Partial coverage, last known", "1 source needs attention", "1 source needs attention"],
+    ["offline", "Partial coverage", "1 source needs attention", "1 source needs attention"],
+    ["not_applicable", "Partial coverage, not applicable", "all applicable sources current; optional coverage not applicable", "All applicable sources current"],
+  ];
+
+  for (const [kevStatus, healthText, summaryText, problemTitle] of cases) {
+    const document = snapshot();
+    document.payload.sources[1] = source("cisa-kev", kevStatus);
+    const view = model.buildPanelState(document, {}, Date.parse("2026-08-26T00:01:00.000Z"));
+
+    assert.equal(view.summaryText, `6 updates; 2 security findings; ${summaryText}`, kevStatus);
+    assert.equal(view.problemTitle, problemTitle, kevStatus);
+    assert.equal(view.tabs[0].healthText, healthText, kevStatus);
+    if (kevStatus === "not_applicable") {
+      assert.doesNotMatch(view.summaryText, /all sources current/i);
+    }
+  }
+});
+
 test("keeps unavailable tabs visible with their explanation", () => {
   const model = loadModel();
   const unavailable = snapshot();
@@ -208,7 +249,11 @@ test("shows incompatibility while retaining the validated last-good tab data", (
   }, Date.parse("2026-08-26T00:01:00.000Z"));
 
   assert.equal(view.tabs[2].count, 2);
-  assert.match(view.failureText, /Incompatible data/);
+  assert.equal(view.summaryText, "6 updates; 2 security findings; latest refresh incompatible; last known result shown");
+  assert.equal(view.problemTitle, "Update required");
+  assert.match(view.problemDetail, /latest refresh/i);
+  assert.match(view.failureText, /Update Opatchy, then refresh/);
   assert.match(view.failureText, /last known result/);
+  assert.doesNotMatch(`${view.summaryText} ${view.problemTitle} ${view.problemDetail} ${view.failureText}`, /all (applicable )?sources current/i);
   assert.equal(model.healthForStatus("unknown-future").text, "Incompatible");
 });

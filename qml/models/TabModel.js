@@ -32,9 +32,13 @@ function buildPanelState(snapshot, runtime, currentTime) {
   var scanBanner = scanState === "partial"
     ? "Partial scan: some source results are unavailable."
     : (scanState === "failed" ? "Scan failed: showing the last known result." : "")
+  var problem = problemState(payload, runtime)
   return {
     tabs: tabs,
-    summaryText: summaryText(payload ? payload.summary : null),
+    summaryText: summaryText(payload, runtime),
+    problemTitle: problem.title,
+    problemDetail: problem.detail,
+    problemGlyph: problem.glyph,
     bannerText: joinText(scanBanner, joinText(sourceBanner, coverageBanner)),
     failureText: failureText(runtime ? runtime.lastFailureKind : ""),
     refreshText: runtime && runtime.refreshing ? "Refreshing" : "Refresh",
@@ -107,16 +111,25 @@ function itemCount(items, source) {
   return items.filter(function(item) { return item.source === source }).length
 }
 
-function summaryText(summary) {
+function summaryText(payload, runtime) {
+  var summary = payload ? payload.summary : null
   var total = number(summary ? summary.totalUpdates : 0)
   var findings = number(summary ? summary.securityFindings : 0)
-  var degraded = number(summary ? summary.degradedSources : 0)
-  return total + " updates, " + findings + " security findings, " + degraded + " sources need attention"
+  var attention = sourceAttention(payload)
+  var failure = runtime ? runtime.lastFailureKind : ""
+  var sourceText = failure === "incompatible"
+    ? "latest refresh incompatible; last known result shown"
+    : (attention.count > 0
+      ? attentionText(attention.count)
+      : (attention.notApplicableCount > 0
+        ? "all applicable sources current; optional coverage not applicable"
+        : "all sources current"))
+  return total + " updates; " + findings + " security findings; " + sourceText
 }
 
 function failureText(kind) {
   switch (kind) {
-  case "incompatible": return "Incompatible data. Showing the last known result; refresh after updating Opatchy."
+  case "incompatible": return "Latest refresh result is incompatible with this Opatchy version. Update Opatchy, then refresh; the last known result remains visible."
   case "timeout": return "Refresh timed out. Showing the last known result."
   case "output": return "Refresh output was too large. Showing the last known result."
   case "command": return "Refresh command failed. Showing the last known result."
@@ -124,6 +137,32 @@ function failureText(kind) {
   case "transport": return "Refresh transport is unavailable. Showing the last known result."
   default: return ""
   }
+}
+
+function problemState(payload, runtime) {
+  var attention = sourceAttention(payload)
+  var failure = runtime ? runtime.lastFailureKind : ""
+  if (!payload) return problem("Source results unavailable", "Open the panel after the service is available, then refresh source evidence.", "\uf0026")
+  if (failure === "incompatible") return problem("Update required", "The latest refresh is incompatible with this Opatchy version. Update Opatchy, then refresh; retained source data remains visible.", "\uf0026")
+  if (attention.count > 0) {
+    return problem(attentionText(attention.count), "Review tabs marked with a warning glyph. Complete required setup or a refresh before acting on retained data.", "\uf0026")
+  }
+  if (attention.notApplicableCount > 0) return problem("All applicable sources current", "Current applicable source evidence is ready to review. Optional coverage is not applicable on this host.", "\uf05e0")
+  return problem("All sources current", "Current source evidence is ready to review in the selected tab.", "\uf05e0")
+}
+
+function sourceAttention(payload) {
+  var names = TAB_SOURCES.concat(["cisa-kev"])
+  var count = 0
+  var notApplicableCount = 0
+  for (var index = 0; index < names.length; index += 1) {
+    var state = sourceFor(payload, names[index])
+    if (!state || state.status !== "ok") {
+      if (state && state.status === "not_applicable") notApplicableCount += 1
+      else count += 1
+    }
+  }
+  return { count: count, notApplicableCount: notApplicableCount }
 }
 
 function ageText(value, currentTime) {
@@ -142,6 +181,8 @@ function successAt(snapshot) {
 }
 
 function health(glyph, text, tooltip) { return { glyph: glyph, text: text, tooltip: tooltip } }
+function problem(title, detail, glyph) { return { title: title, detail: detail, glyph: glyph } }
 function joinText(first, second) { return first && second ? first + " " + second : first || second }
 function number(value) { return typeof value === "number" && isFinite(value) && value >= 0 ? value : 0 }
+function attentionText(count) { return plural(count, "source") + (count === 1 ? " needs attention" : " need attention") }
 function plural(value, unit) { return value + " " + unit + (value === 1 ? "" : "s") }
