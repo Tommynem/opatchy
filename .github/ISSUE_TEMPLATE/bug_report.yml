@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible Opatchy behavior problem
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Don't include tokens, private inventories, or state/cache file contents. For security concerns, use SECURITY.md instead."
+  - type: input
+    id: version
+    attributes:
+      label: Opatchy and Omarchy version
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Relevant source status or safe log excerpt
