@@ -10,6 +10,8 @@ _CONSTANT_PATTERN: Final = re.compile(
 _TOKEN_PATTERN: Final = re.compile(
     r"(?P<string>\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*')|(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)|(?P<comma>,)|(?P<space>\s+)"
 )
+_STRING_PATTERN: Final = re.compile(r"\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'")
+_NAME_PATTERN: Final = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 _APPROVED_HANDOFFS: Final = frozenset(
     {
         (
@@ -43,14 +45,17 @@ def mutation_array_lines(text: str) -> tuple[int, ...]:
     return tuple(
         text.count("\n", 0, offset) + 1
         for offset, content in _array_contents(text)
-        if (argv := _literal_argv(content, constants)) is not None
-        and _is_unapproved_mutation(argv)
+        if _is_package_manager_bearing(content, constants)
+        and (
+            (argv := _literal_argv(content, constants)) is None
+            or _is_unapproved_mutation(argv)
+        )
     )
 
 
 def _array_contents(text: str) -> tuple[tuple[int, str], ...]:
     arrays: list[tuple[int, str]] = []
-    start: int | None = None
+    starts: list[int] = []
     quote: str | None = None
     escaped = False
     depth = 0
@@ -66,14 +71,12 @@ def _array_contents(text: str) -> tuple[tuple[int, str], ...]:
         if character in {"'", '"'}:
             quote = character
         elif character == "[":
-            if depth == 0:
-                start = index
+            starts.append(index)
             depth += 1
         elif character == "]" and depth > 0:
             depth -= 1
-            if depth == 0 and start is not None:
-                arrays.append((start, text[start + 1 : index]))
-                start = None
+            start = starts.pop()
+            arrays.append((start, text[start + 1 : index]))
     return tuple(arrays)
 
 
@@ -106,11 +109,71 @@ def _literal_argv(content: str, constants: dict[str, str]) -> tuple[str, ...] | 
     return tuple(values)
 
 
+def _is_package_manager_bearing(content: str, constants: dict[str, str]) -> bool:
+    entries = _top_level_entries(content)
+    if not entries:
+        return False
+    executable = _entry_value(entries[0], constants)
+    command = (
+        entries[1] if executable == _launcher() and len(entries) > 1 else entries[0]
+    )
+    return _contains_package_manager(command, constants)
+
+
+def _top_level_entries(content: str) -> list[str]:
+    entries: list[str] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    depth = 0
+    for index, character in enumerate(content):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character in "([{":
+            depth += 1
+        elif character in ")]}":
+            depth -= 1
+        elif character == "," and depth == 0:
+            entries.append(content[start:index])
+            start = index + 1
+    entries.append(content[start:])
+    return entries
+
+
+def _entry_value(entry: str, constants: dict[str, str]) -> str | None:
+    argv = _literal_argv(entry.strip(), constants)
+    if argv is None or len(argv) != 1:
+        return None
+    return argv[0]
+
+
+def _contains_package_manager(entry: str, constants: dict[str, str]) -> bool:
+    return any(
+        _unquote(match.group()) in _PACKAGE_MANAGERS
+        for match in _STRING_PATTERN.finditer(entry)
+    ) or any(
+        constants.get(match.group()) in _PACKAGE_MANAGERS
+        for match in _NAME_PATTERN.finditer(entry)
+    )
+
+
 def _is_unapproved_mutation(argv: tuple[str, ...]) -> bool:
     executable = argv[0] if argv else ""
-    if executable == "/usr/bin/omarchy-launch-floating-terminal-with-presentation":
+    if executable == _launcher():
         executable = argv[1] if len(argv) > 1 else ""
     return executable in _PACKAGE_MANAGERS and argv not in _APPROVED_HANDOFFS
+
+
+def _launcher() -> str:
+    return "/usr/bin/omarchy-launch-floating-terminal-with-presentation"
 
 
 def _unquote(token: str) -> str:

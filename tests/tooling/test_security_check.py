@@ -155,3 +155,37 @@ def test_security_check_rejects_modified_fixed_flatpak_handoffs(argv: str) -> No
 
     assert result.returncode != 0
     assert "SECURITY POLICY VIOLATION(mutation-command)" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "argv",
+    (
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/pacman", "-S" + "yu"]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", ...["/usr/bin/pacman", "-Syu"]]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", commandFor("/usr/bin/pacman"), "-Syu"]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/pacman", unknownFlags]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", ["/usr/bin/pacman", "-Syu"]]',
+    ),
+)
+def test_security_check_rejects_unresolved_qml_package_manager_arrays(
+    argv: str,
+) -> None:
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        path = repository.path("qml/models/TerminalHandoff.qml")
+        with path.open("a", encoding="utf-8") as handle:
+            _ = handle.write(f"\nvar unsafe = {argv}\n")
+        result = _run(repository)
+
+    assert result.returncode != 0
+    assert "SECURITY POLICY VIOLATION(mutation-command)" in result.stderr
+
+
+def test_security_check_accepts_unrelated_dynamic_qml_arrays() -> None:
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        path = repository.path("qml/models/TerminalHandoff.qml")
+        with path.open("a", encoding="utf-8") as handle:
+            _ = handle.write("\nvar presentation = [renderTitle(), dynamicColor]\n")
+        result = _run(repository)
+
+    assert result.returncode == 0
+    assert "PASS(security-policy)" in result.stdout
