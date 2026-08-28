@@ -17,6 +17,7 @@ Item {
     ? ""
     : localPath(sourceDir) + "/helper/opatchy.py"
   property var _controller: null
+  property bool _readyForInitialization: false
   property var handoffTransport: terminalHandoff
   property var _updateAllActions: []
   property bool _updateAllActive: false
@@ -198,6 +199,25 @@ Item {
     wakeTimer.restart()
   }
 
+  function initializeController() {
+    if (_controller) return
+    if (helperEntrypoint === "") {
+      _state = Object.assign({}, _state, { "lastError": "trusted helper path is unavailable" })
+      return
+    }
+    _state = Object.assign({}, _state, { "lastError": "" })
+    _controller = ServiceController.createController({
+      now: function() { return Date.now() },
+      random: function() { return Math.random() },
+      refreshIntervalMs: 21600 * 1000,
+      onStart: function(operation) { return root.startOperation(operation) },
+      onState: function(state) { root.applyState(state) },
+      onResponse: function(operation, response) { root.applyResponse(operation, response) },
+      parseResponse: ProtocolValidator.parseResponse
+    })
+    _controller.start()
+  }
+
   Models.HelperTransport {
     id: transport
     helperEntrypoint: root.helperEntrypoint
@@ -224,20 +244,12 @@ Item {
 
   Component.onCompleted: {
     bindHandoffTransport()
-    if (helperEntrypoint === "") {
-      _state = Object.assign({}, _state, { "lastError": "trusted helper path is unavailable" })
-      return
-    }
-    _controller = ServiceController.createController({
-      now: function() { return Date.now() },
-      random: function() { return Math.random() },
-      refreshIntervalMs: 21600 * 1000,
-      onStart: function(operation) { return root.startOperation(operation) },
-      onState: function(state) { root.applyState(state) },
-      onResponse: function(operation, response) { root.applyResponse(operation, response) },
-      parseResponse: ProtocolValidator.parseResponse
-    })
-    _controller.start()
+    _readyForInitialization = true
+    initializeController()
+  }
+
+  onHelperEntrypointChanged: {
+    if (_readyForInitialization) initializeController()
   }
 
   Component.onDestruction: {

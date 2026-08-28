@@ -10,6 +10,81 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 HELPER_ROOT = REPOSITORY_ROOT / "helper"
 SMOKE_FIXTURE = REPOSITORY_ROOT / "tests/qml/controlled-runner-smoke.qml"
 
+HOST_OWNERSHIP_FIXTURE = """import QtQuick
+import Quickshell
+
+ShellRoot {
+  id: root
+  property var service: null
+  property var services: ({})
+
+  function serviceFor(pluginId) {
+    return services[pluginId] || null
+  }
+
+  Item {
+    id: serviceHost
+    visible: false
+  }
+
+  function fail(message) {
+    console.error("host-service-ownership: " + message)
+    Qt.exit(1)
+  }
+
+  Component.onCompleted: {
+    const sourceDir = Quickshell.env("OPATCHY_HOST_CONTRACT_ROOT")
+    const manifest = {
+      "id": "io.github.tomge.opatchy",
+      "kinds": ["service", "bar-widget"],
+      "entryPoints": { "service": "Service.qml", "barWidget": "BarWidget.qml" },
+      "__sourceDir": sourceDir
+    }
+    const component = Qt.createComponent("file://" + sourceDir + "/Service.qml", Component.PreferSynchronous)
+    if (component.status !== Component.Ready) {
+      fail("component load failed: " + component.errorString())
+      return
+    }
+
+    service = component.createObject(serviceHost)
+    if (service === null) {
+      fail("component create failed: " + component.errorString())
+      return
+    }
+    if (service.lastError !== "trusted helper path is unavailable") {
+      fail("service must expose an unavailable trusted helper path before manifest injection")
+      return
+    }
+    service.shell = root
+    service.manifest = manifest
+    services[manifest.id] = service
+    verifyTimer.start()
+  }
+
+  Timer {
+    id: verifyTimer
+    interval: 0
+    repeat: false
+    onTriggered: {
+      const registeredService = root.serviceFor("io.github.tomge.opatchy")
+      if (registeredService === null || registeredService._controller === null) {
+        root.fail("enabled combined manifest did not initialize its service after host-order injection")
+        return
+      }
+      const controller = registeredService._controller
+      registeredService.initializeController()
+      if (registeredService._controller !== controller) {
+        root.fail("repeated initialization created a second controller")
+        return
+      }
+      console.log("host-service-ownership: registered ready service")
+      root.service.destroy()
+      Qt.exit(0)
+    }
+  }
+}
+"""
+
 
 def _write_controlled_target(path: Path, pid_log: Path, sentinel: Path) -> None:
     child_source = (
@@ -61,6 +136,29 @@ def _wait_for_dead(pid: int) -> bool:
             return True
         time.sleep(0.01)
     return False
+
+
+def test_host_order_initializes_service_for_combined_manifest(tmp_path: Path) -> None:
+    # Given: the installed host's create-then-inject service ownership order.
+    fixture = tmp_path / "host-service-ownership.qml"
+    _ = fixture.write_text(HOST_OWNERSHIP_FIXTURE, encoding="utf-8")
+    environment = os.environ | {
+        "OPATCHY_HOST_CONTRACT_ROOT": str(REPOSITORY_ROOT),
+    }
+
+    # When: Quickshell creates Service.qml before assigning its combined manifest.
+    result = subprocess.run(
+        ["/usr/bin/qs", "--path", str(fixture)],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+        timeout=30,
+    )
+
+    # Then: the host-owned service is registered and ready to own one controller.
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "host-service-ownership: registered ready service" in result.stdout
 
 
 @pytest.mark.parametrize(
