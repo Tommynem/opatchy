@@ -54,6 +54,15 @@ Panel {
     if (serviceAvailable) service.requestRefresh()
   }
 
+  PanelShellLayout {
+    id: layout
+    edge: panel.barPos
+    availableWidth: panel.availableCardWidth
+    availableHeight: panel.availableCardHeight
+    preferredWidth: Style.space(520)
+    preferredHeight: Style.space(360)
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -63,15 +72,6 @@ Panel {
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(layout.contentWidth)
     contentHeight: panel.fittedContentHeight(layout.contentHeight)
-
-    PanelShellLayout {
-      id: layout
-      edge: panel.barPos
-      availableWidth: panel.availableCardWidth
-      availableHeight: panel.availableCardHeight
-      preferredWidth: Style.space(520)
-      preferredHeight: Style.space(360)
-    }
 
     // The host dispatcher remains part of the panel lifecycle contract. The
     // visible handler below owns Ctrl-modified tab semantics that it cannot expose.

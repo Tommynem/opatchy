@@ -2,6 +2,7 @@ import QtQuick
 
 Item {
   id: root
+  default property alias contentItem: contentHolder.children
   property var anchorItem: null
   property var owner: null
   property var bar: null
@@ -15,4 +16,9 @@ Item {
 
   function fittedContentWidth(value) { return Math.min(value, availableCardWidth) }
   function fittedContentHeight(value) { return Math.min(value, availableCardHeight) }
+
+  Item {
+    id: contentHolder
+    anchors.fill: parent
+  }
 }
