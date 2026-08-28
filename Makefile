@@ -23,6 +23,7 @@ test-e2e:
 
 security-check:
 	/usr/bin/python3 scripts/security_check.py
+	uv run --locked --no-sync pytest -q tests/tooling/test_security_check.py
 
 validate:
 	./scripts/validate.sh
