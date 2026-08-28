@@ -25,6 +25,7 @@ monitor_pid=""
 trap_status=0
 signal_status=0
 original_helper_count=""
+staged_plugin=""
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -322,8 +323,16 @@ trap 'signal_status=129; exit 129' HUP
 trap 'signal_status=130; exit 130' INT
 trap 'signal_status=143; exit 143' TERM
 
+staged_plugin="${record_dir}/staged-plugin"
+cp -a "${plugin_source}" "${staged_plugin}"
+require_no_symlink_components "${staged_plugin}"
+plugin_digest "${staged_plugin}" >/dev/null || fail "staged plugin directory is not deployment-safe"
+omarchy plugin validate "${staged_plugin}" >/dev/null
+if config_contains_ids "${plugin_id}" 2>/dev/null; then
+  omarchy plugin disable "${plugin_id}"
+fi
 rm -rf -- "${target_plugin}"
-cp -a "${plugin_source}" "${target_plugin}"
+mv "${staged_plugin}" "${target_plugin}"
 omarchy plugin validate "${target_plugin}" >/dev/null
 shell_ipc rescanPlugins
 wait_for_plugin_discovery

@@ -101,6 +101,7 @@ PY
     touch "$HOME/enabled"
     touch "$HOME/helper-running"
     ;;
+  "plugin disable") : ;;
   "bar move") : ;;
   "shell shell")
     case "$3" in
@@ -172,6 +173,10 @@ if [[ "${FAIL_COPY_BACKUP:-0}" == 1 && "$2" == "$HOME/.config/omarchy/plugins/io
   printf '%s\n' 'backup copy failure' >&2
   exit 1
 fi
+if [[ "${DISALLOW_WATCHED_COPY:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" && "$3" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+  printf '%s\n' 'source copy must not write directly into the watched plugin directory' >&2
+  exit 1
+fi
 command -p cp "$@"
 EOF
   chmod +x "${fake_bin}/omarchy" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp"
@@ -229,7 +234,7 @@ expect_failure 'symlink path component is not allowed' env HOME="${home}" PATH="
 rm "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
 
 record_dir="${fixture_root}/absent-record"
-printf 'RESTORE\n' | run_runner "${record_dir}" env
+printf 'RESTORE\n' | run_runner "${record_dir}" env DISALLOW_WATCHED_COPY=1
 [[ "$(<"${record_dir}/helper-count.during.txt")" == 1 ]]
 assert_restored "${record_dir}" absent 0
 [[ "$(<"${record_dir}/helper-monitor.status")" == stopped ]]
