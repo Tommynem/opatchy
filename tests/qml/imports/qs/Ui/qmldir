@@ -1,5 +1,12 @@
 module qs.Ui
+BarIconButton 1.0 BarIconButton.qml
+BarWidget 1.0 BarWidget.qml
 Button 1.0 Button.qml
+KeyboardPanel 1.0 KeyboardPanel.qml
+Panel 1.0 Panel.qml
+PanelActionButton 1.0 PanelActionButton.qml
+PanelHero 1.0 PanelHero.qml
+PanelKeyCatcher 1.0 PanelKeyCatcher.qml
 TextField 1.0 Button.qml
 singleton Color 1.0 Tokens.qml
 singleton Style 1.0 Tokens.qml
