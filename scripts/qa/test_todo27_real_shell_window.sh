@@ -128,6 +128,11 @@ exit 1
 EOF
   cat >"${fake_bin}/hostname" <<'EOF'
 #!/usr/bin/env bash
+printf 'hostname argc=%s args=%s\n' "$#" "$*" >>"${TODO27_COMMAND_LOG}"
+if (( "$#" != 0 )); then
+  printf '%s\n' "hostname: unrecognized option '$1'" >&2
+  exit 64
+fi
 printf '%s\n' "${FAKE_HOST:-tomarchy}"
 EOF
   cat >"${fake_bin}/cp" <<'EOF'
@@ -309,6 +314,7 @@ grep -Fxq 'restoration_status=1' "${record_dir}/restoration.status"
 
 ! grep -Eq '(^|[[:space:]])(omarchy[[:space:]]+update|omarchy[[:space:]]+refresh|omarchy[[:space:]]+shell[[:space:]]+update)' "${command_log}"
 grep -Fxq 'omarchy shell shell ping' "${command_log}"
+grep -Fxq 'hostname argc=0 args=' "${command_log}"
 ! grep -Fq 'omarchy-shell' "${runner}"
 ! grep -Fq 'fixture' "${runner}"
 printf '%s\n' 'PASS: guarded fake-host cases prove public IPC spelling, exact state restoration, helper lifecycle comparison, and no update handoff'
