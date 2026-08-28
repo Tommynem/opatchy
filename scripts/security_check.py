@@ -33,7 +33,9 @@ URL_ALLOWLIST: Final = (
     "https://security.archlinux.org/",
     "https://www.cve.org/CVERecord?id=",
 )
-QML_IMPORTS: Final = frozenset({"QtQml", "QtQuick", "Quickshell.Io", "qs.Ui"})
+QML_IMPORTS: Final = frozenset(
+    {"QtQml", "QtQuick", "Quickshell.Io", "qs.Commons", "qs.Ui"}
+)
 OVERSIZED_ALLOWLIST: Final = frozenset(
     {ROOT / "helper" / "opatchy_helper" / "payload_parser.py"}
 )

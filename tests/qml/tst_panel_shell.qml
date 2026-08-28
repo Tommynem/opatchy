@@ -419,6 +419,31 @@ TestCase {
     view.destroy()
   }
 
+  function test_separate_host_modules_require_direct_panel_singleton_imports() {
+    const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+    verify(view !== null, "host fixture must load")
+    tryVerify(function() { return view.widget !== null }, 1000)
+
+    const button = view.widget.children.filter(function(child) {
+      return child.objectName === "opatchy-bar-icon"
+    })[0]
+    verify(button !== null, "bar widget must expose its real icon button")
+    mouseClick(button)
+
+    tryVerify(function() { return view.widget.panel !== null }, 1000)
+    tryCompare(view.widget, "opened", true, 1000)
+    const hostPanel = view.widget.panel.children.filter(function(child) {
+      return child.objectName === "opatchy-host-keyboard-panel"
+    })[0]
+    verify(hostPanel !== null, "the production panel must create the host keyboard panel")
+    tryVerify(function() { return hostPanel.geometryReady }, 1000)
+    verify(hostPanel.availableCardWidth > hostPanel.cardInset * 2, "preferred panel width must resolve through Style")
+    verify(hostPanel.availableCardHeight > hostPanel.cardInset * 2, "preferred panel height must resolve through Style")
+    verify(hostPanel.contentWidth > hostPanel.cardInset * 2, "fitted content width must remain positive")
+    verify(hostPanel.contentHeight > hostPanel.cardInset * 2, "fitted content height must remain positive")
+    view.destroy()
+  }
+
   function test_service_replacement_and_close_return_focus_preserve_host_ownership() {
     const state = shellStateComponent.createObject(root, {
       "service": serviceObject,

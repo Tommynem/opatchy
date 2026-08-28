@@ -1,4 +1,5 @@
 import QtQuick
+import qs.Commons
 import qs.Ui
 import "qml/components"
 import "qml/models/TabModel.js" as TabModel

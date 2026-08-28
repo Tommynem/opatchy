@@ -1,4 +1,5 @@
 import QtQuick
+import qs.Commons
 import qs.Ui
 import "../models/UpdateViewModel.js" as UpdateViewModel
 import "../models/StarViewModel.js" as StarViewModel
