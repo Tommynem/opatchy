@@ -238,8 +238,7 @@ restore() {
   if [[ -d "${record_dir}/backup/plugin" ]]; then
     cp -a "${record_dir}/backup/plugin" "${target_plugin}" || restore_status=1
   fi
-  shell_ipc rescanPlugins || restore_status=1
-  shell_ipc reloadConfig || restore_status=1
+  omarchy restart shell || restore_status=1
   restored_shell_digest="$(json_digest "${shell_json}")" || restore_status=1
   restored_file_digest="$(file_digest "${shell_json}")" || restore_status=1
   restored_plugin_digest="$(plugin_digest "${target_plugin}")" || restore_status=1
@@ -333,6 +332,7 @@ if config_contains_ids "${plugin_id}" 2>/dev/null; then
 fi
 rm -rf -- "${target_plugin}"
 mv "${staged_plugin}" "${target_plugin}"
+omarchy restart shell
 omarchy plugin validate "${target_plugin}" >/dev/null
 shell_ipc rescanPlugins
 wait_for_plugin_discovery

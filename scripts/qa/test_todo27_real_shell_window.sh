@@ -26,6 +26,23 @@ expect_failure() {
   [[ "${output}" == *"${expected}"* ]] || fail "missing failure ${expected}: ${output}"
 }
 
+assert_log_sequence() {
+  python3 - "${command_log}" "$@" <<'PY'
+from pathlib import Path
+import sys
+
+lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+cursor = -1
+for expected in sys.argv[2:]:
+    for index in range(cursor + 1, len(lines)):
+        if expected in lines[index]:
+            cursor = index
+            break
+    else:
+        raise SystemExit(f"missing ordered command event: {expected}")
+PY
+}
+
 tree_digest() {
   python3 - "$1" <<'PY'
 import hashlib
@@ -103,6 +120,19 @@ PY
     ;;
   "plugin disable") : ;;
   "bar move") : ;;
+  "restart shell")
+    if [[ "${FAIL_RESTART:-0}" == 1 ]]; then
+      printf '%s\n' 'restart failure' >&2
+      exit 1
+    fi
+    if [[ "${PERSIST_HELPER_AFTER_RESTORE:-0}" == 1 ]]; then
+      touch "$HOME/helper-running"
+    elif grep -Fq 'io.github.tomge.opatchy' "$HOME/.config/omarchy/shell.json" && [[ -d "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+      touch "$HOME/helper-running"
+    else
+      rm -f "$HOME/helper-running"
+    fi
+    ;;
   "shell shell")
     case "$3" in
       ping) printf 'ok\n' ;;
@@ -163,6 +193,7 @@ EOF
   cat >"${fake_bin}/cp" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf 'cp %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
 if [[ "${FAIL_COPY_SOURCE:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" ]]; then
   mkdir -p "$3"
   printf 'partial install\n' >"$3/partial.txt"
@@ -179,7 +210,13 @@ if [[ "${DISALLOW_WATCHED_COPY:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" &&
 fi
 command -p cp "$@"
 EOF
-  chmod +x "${fake_bin}/omarchy" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp"
+  cat >"${fake_bin}/mv" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'mv %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
+command -p mv "$@"
+EOF
+  chmod +x "${fake_bin}/omarchy" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp" "${fake_bin}/mv"
   python3 - "${runner}" "${fixture_runner}" "${fake_bin}/hostname" <<'PY'
 import sys
 
@@ -217,6 +254,7 @@ setup_fixture
 expect_failure 'refusing to mutate without --execute' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" --plugin-source "${source_plugin}" --record-dir "${fixture_root}/default-deny"
 [[ ! -e "${fixture_root}/default-deny" ]]
+! grep -Fq 'omarchy restart shell' "${command_log}"
 
 setup_fixture
 expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
@@ -238,6 +276,14 @@ printf 'RESTORE\n' | run_runner "${record_dir}" env DISALLOW_WATCHED_COPY=1
 [[ "$(<"${record_dir}/helper-count.during.txt")" == 1 ]]
 assert_restored "${record_dir}" absent 0
 [[ "$(<"${record_dir}/helper-monitor.status")" == stopped ]]
+assert_log_sequence \
+  "cp -a ${home}/.config/omarchy/shell.json ${record_dir}/backup/shell.json" \
+  "mv ${record_dir}/staged-plugin ${home}/.config/omarchy/plugins/io.github.tomge.opatchy" \
+  'omarchy restart shell' \
+  'omarchy plugin enable io.github.tomge.opatchy' \
+  "cp -a ${record_dir}/backup/shell.json ${home}/.config/omarchy/shell.json" \
+  'omarchy restart shell'
+[[ "$(grep -Fxc 'omarchy restart shell' "${command_log}")" == 2 ]]
 
 setup_fixture
 HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
@@ -277,6 +323,17 @@ existing_digest="$(tree_digest "${target_plugin}")"
 record_dir="${fixture_root}/load-failure-record"
 expect_failure 'target validation failure' run_runner "${record_dir}" env FAIL_VALIDATE_TARGET=1
 assert_restored "${record_dir}" "${existing_digest}" 0
+
+setup_fixture
+record_dir="${fixture_root}/restart-failure-record"
+expect_failure 'restart failure' run_runner "${record_dir}" env FAIL_RESTART=1
+cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
+[[ ! -e "${home}/.config/omarchy/plugins/io.github.tomge.opatchy" ]]
+grep -Fxq 'restoration_status=1' "${record_dir}/restoration.status"
+assert_log_sequence \
+  'omarchy restart shell' \
+  "cp -a ${record_dir}/backup/shell.json ${home}/.config/omarchy/shell.json" \
+  'omarchy restart shell'
 
 setup_fixture
 target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
