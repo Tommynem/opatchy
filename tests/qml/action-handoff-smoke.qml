@@ -80,9 +80,9 @@ ShellRoot {
           "sources": [health("security"), health("cisa-kev"), health("omarchy"), health("arch"), health("aur"), health("flatpak"), health("mise")],
           "summary": { "totalUpdates": 3, "watchedUpdates": 0, "securityFindings": 0, "degradedSources": 0 },
           "items": [
-            { "id": "omarchy:" + hostileValue, "source": "omarchy", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchable": true, "provenance": "live" },
-            { "id": "flatpak:user:app/" + hostileValue + "/x86_64/stable", "source": "flatpak", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchable": true, "provenance": "live" },
-            { "id": "flatpak:system:app/" + hostileValue + "/x86_64/stable", "source": "flatpak", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchable": true, "provenance": "live" }
+            { "id": "omarchy:" + hostileValue, "source": "omarchy", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchArmed": false, "watchable": true, "provenance": "live" },
+            { "id": "flatpak:user:app/" + hostileValue + "/x86_64/stable", "source": "flatpak", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchArmed": false, "watchable": true, "provenance": "live" },
+            { "id": "flatpak:system:app/" + hostileValue + "/x86_64/stable", "source": "flatpak", "label": hostileValue, "installed": hostileValue, "candidate": hostileValue, "installedFingerprint": hostileValue, "candidateFingerprint": hostileValue, "watchMode": "off", "watchArmed": false, "watchable": true, "provenance": "live" }
           ],
           "findings": [],
           "notifications": []
@@ -153,6 +153,7 @@ ShellRoot {
       property var capabilities: ({ "launcher": true, "omarchyUpdate": true, "flatpak": true })
       signal started()
       signal failed(string message)
+      signal finished(int exitCode)
 
       function start(actionName) {
         if (running) return false
@@ -188,6 +189,7 @@ ShellRoot {
           fakeLauncher.started()
         }
         onExited: function(exitCode) {
+          fakeLauncher.finished(exitCode)
           if (exitCode !== 0 && fakeLauncher.running) {
             fakeLauncher.running = false
             fakeLauncher.failed("fixture process failed")
