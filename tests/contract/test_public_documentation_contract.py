@@ -21,6 +21,12 @@ REQUIRED_TEMPLATES: Final = (
     ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/feature_request.yml",
 )
+PUBLIC_MATERIAL: Final = (
+    *DOCUMENTS,
+    *REQUIRED_TEMPLATES,
+    "CHANGELOG.md",
+    "DESIGN.md",
+)
 FORBIDDEN_CLAIMS: Final = (
     "curl | sh",
     "curl|sh",
@@ -71,6 +77,39 @@ class PublicDocumentationContractTests(unittest.TestCase):
 
         self.assertIn(HANDOFF_EXECUTABLE, handoff)
         self.assertIn(HANDOFF_EXECUTABLE, data_sources)
+
+    def test_each_closed_registry_entry_has_one_canonical_source_row(self) -> None:
+        rows = self.data_source_rows()
+
+        for identifier in self.registry_identifiers("CommandName"):
+            with self.subTest(identifier=identifier):
+                self.assertEqual(self.rows_with_token(rows, identifier), 1)
+
+        for identifier in self.registry_identifiers("EndpointName"):
+            with self.subTest(identifier=identifier):
+                self.assertEqual(self.rows_with_token(rows, identifier), 1)
+
+        for identifier, executable in (
+            ("helper-process", "/usr/bin/python3"),
+            ("terminal-probe", "/usr/bin/test"),
+            ("omarchy-handoff", "/usr/bin/omarchy-update"),
+        ):
+            with self.subTest(identifier=identifier):
+                matching_rows = tuple(
+                    row for row in rows if f"| `{identifier}` |" in row
+                )
+                self.assertEqual(len(matching_rows), 1)
+                self.assertIn(executable, matching_rows[0])
+
+    def test_documentation_preserves_notification_and_retention_limits(self) -> None:
+        data_sources = self.read("docs/data-sources.md")
+        architecture = self.read("docs/architecture.md")
+
+        self.assertIn("not dispatched by the production scan path", data_sources)
+        self.assertIn("`0700`", architecture)
+        self.assertIn("`0600`", architecture)
+        self.assertIn("180 days", architecture)
+        self.assertIn("5,000", architecture)
 
     def test_public_docs_keep_identity_paths_and_operating_limits(self) -> None:
         public_text = self.public_text()
@@ -136,6 +175,15 @@ class PublicDocumentationContractTests(unittest.TestCase):
         self.assertTrue(self.has_direct_pacman_advice(unsafe_pacman))
         self.assertFalse(self.has_direct_pacman_advice(self.read("README.md")))
 
+    def test_public_material_has_no_forbidden_claims_or_direct_pacman_advice(
+        self,
+    ) -> None:
+        for path in PUBLIC_MATERIAL:
+            with self.subTest(path=path):
+                text = self.read(path)
+                self.assertEqual(self.forbidden_claims(text), ())
+                self.assertFalse(self.has_direct_pacman_advice(text))
+
     def test_missing_endpoint_and_dependency_mutations_are_rejected(self) -> None:
         original = self.read("docs/data-sources.md")
 
@@ -146,6 +194,19 @@ class PublicDocumentationContractTests(unittest.TestCase):
 
         mutated_handoff = original.replace(HANDOFF_EXECUTABLE, "removed")
         self.assertNotIn(HANDOFF_EXECUTABLE, mutated_handoff)
+
+        for identifier in (
+            *self.registry_identifiers("CommandName"),
+            *self.registry_identifiers("EndpointName"),
+        ):
+            with self.subTest(identifier=identifier):
+                mutated = original.replace(f"`{identifier}`", "`removed`")
+                self.assertEqual(
+                    self.rows_with_token(
+                        self.data_source_rows_for(mutated), identifier
+                    ),
+                    0,
+                )
 
     def read(self, relative_path: str) -> str:
         return (REPOSITORY_ROOT / relative_path).read_text(encoding="utf-8")
@@ -160,8 +221,37 @@ class PublicDocumentationContractTests(unittest.TestCase):
     def missing_runtime_tokens(self, text: str) -> tuple[str, ...]:
         return tuple(token for token in REQUIRED_RUNTIME_TOKENS if token not in text)
 
+    def data_source_rows(self) -> tuple[str, ...]:
+        return self.data_source_rows_for(self.read("docs/data-sources.md"))
+
+    def data_source_rows_for(self, text: str) -> tuple[str, ...]:
+        return tuple(
+            line
+            for line in text.splitlines()
+            if line.startswith("| ") and not line.startswith("| ---")
+        )
+
+    def registry_identifiers(self, enum_name: str) -> tuple[str, ...]:
+        source = self.read("helper/opatchy_helper/runner_types.py")
+        pattern = rf"class {enum_name}.*?(?=^class |^@|\\Z)"
+        match = re.search(pattern, source, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(match)
+        assert match is not None
+        return tuple(
+            re.findall(r'^    [A-Z_]+ = "([^"]+)"$', match.group(), re.MULTILINE)
+        )
+
+    def rows_with_token(self, rows: tuple[str, ...], token: str) -> int:
+        return sum(f"| `{token}` |" in row for row in rows)
+
     def has_direct_pacman_advice(self, text: str) -> bool:
-        return re.search(r"```sh\s*pacman -Syu", text) is not None
+        return any(
+            re.search(r"\b(?:sudo\s+)?pacman\s+-Syu\b", line) is not None
+            and not re.search(
+                r"\b(?:do not|does not|did not|forbidden|never)\b", line, re.IGNORECASE
+            )
+            for line in text.splitlines()
+        )
 
 
 if __name__ == "__main__":
