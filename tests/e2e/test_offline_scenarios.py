@@ -230,3 +230,33 @@ def test_offline_hostile_state_and_future_schema_never_escape_temp_roots(
     # Then: the future document remains intact and no hostile side effect escaped.
     assert store.state_path.read_bytes() == future
     assert not sentinel.exists()
+
+
+def test_offline_snapshot_crosses_the_qml_protocol_and_presentation_seams(
+    tmp_path: Path,
+) -> None:
+    # Given: a complete persisted snapshot generated from isolated offline inputs.
+    store = _store(tmp_path)
+    _scan(store, collector(), 1)
+    snapshot = store.load_snapshot()
+
+    # When: the end-to-end presentation runner receives its serialized protocol bytes.
+    assert snapshot is not None
+    from tests.e2e.offline_scenario_runner import assert_qml_presentation
+
+    assert_qml_presentation(snapshot)
+
+
+def test_offline_malformed_and_future_protocol_bytes_reach_the_qml_rejection_boundary() -> (
+    None
+):
+    # Given: malformed and future helper output that never originated from a trusted parser.
+    from tests.e2e.offline_scenario_runner import assert_qml_rejects
+
+    # When: each payload enters the actual ProtocolValidator consumer runner.
+    malformed = b"{"
+    future = b'{"protocolVersion":2,"kind":"snapshot","generatedAt":"2026-08-26T12:00:00.000000Z","generationId":"future","payload":{}}\n'
+
+    # Then: QML declines both unsupported documents before model dispatch.
+    assert_qml_rejects(malformed)
+    assert_qml_rejects(future)
