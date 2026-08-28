@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import QtQuick.Window 2.15
 import QtTest 1.3
 import "../../qml/components"
 
@@ -140,6 +141,56 @@ TestCase {
   }
 
   Component {
+    id: emptyStatePanelComponent
+
+    Window {
+      id: host
+      visible: true
+      width: 640
+      height: 480
+      property alias state: state
+      readonly property var widget: widgetLoader.item
+      property var manifest: ({
+        "id": "io.github.tomge.opatchy",
+        "__sourceDir": Qt.resolvedUrl("../..").toString()
+      })
+
+      QtObject {
+        id: registry
+        property var installedPlugins: ({ "io.github.tomge.opatchy": host.manifest })
+      }
+
+      QtObject {
+        id: shell
+        property var pluginRegistry: registry
+        function serviceFor() { return null }
+      }
+
+      QtObject {
+        id: bar
+        property var shell: shell
+        property color foreground: "black"
+        property color urgent: "red"
+        property string fontFamily: "Sans Serif"
+      }
+
+      PanelShellState {
+        id: state
+      }
+
+      Loader {
+        id: widgetLoader
+        source: Qt.resolvedUrl("../../BarWidget.qml")
+        onLoaded: {
+          item.width = 32
+          item.height = 32
+          item.bar = bar
+        }
+      }
+    }
+  }
+
+  Component {
     id: anchorComponent
     QtObject {
       property int focusCalls: 0
@@ -229,6 +280,22 @@ TestCase {
     missingService.open()
     compare(missingService.pendingOperation, "")
     missingService.destroy()
+  }
+
+  function test_click_without_a_validated_result_queues_and_opens_the_panel() {
+    const view = emptyStatePanelComponent.createObject(root)
+    verify(view !== null, "empty-state bar widget must load on the installed host button contract")
+    tryVerify(function() { return view.widget !== null }, 1000)
+    const button = view.widget.children.filter(function(child) {
+      return child.objectName === "opatchy-bar-icon"
+    })[0]
+    verify(button !== null, "bar widget must expose its real icon button")
+
+    mouseClick(button)
+    tryVerify(function() { return view.widget.panel !== null }, 1000)
+    tryCompare(view.widget, "opened", true, 1000)
+    compare(view.widget.panel.statusText, "Service unavailable")
+    view.destroy()
   }
 
   function test_service_replacement_and_close_return_focus_preserve_host_ownership() {
