@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "helper"))
 from opatchy_helper.adapters.arch import ArchUpdates
 from opatchy_helper.adapters.omarchy import OmarchyAvailability
 from opatchy_helper.adapters.security import SecurityCollected
-from opatchy_helper.adapters.security_kev import KevCatalog, KevUnavailable
+from opatchy_helper.adapters.security_kev import KevCatalog
 from opatchy_helper.models import (
     ArchStatus,
     FindingId,
@@ -17,6 +17,7 @@ from opatchy_helper.models import (
     ItemId,
     ItemSource,
     KevStatus,
+    NormalizedItem,
     Provenance,
     SecurityFinding,
     SecurityFindingGroup,
@@ -32,6 +33,13 @@ from opatchy_helper.runner_types import (
     CommandSucceeded,
 )
 from opatchy_helper.scan import ScanCollector, ScanCoordinator, ScanRequest
+from opatchy_helper.stars import (
+    CachedInventory,
+    FreshSourceScan,
+    StarClick,
+    apply_durable_event,
+    cached_item,
+)
 from opatchy_helper.storage import Storage, SystemAtomicOperations
 from opatchy_helper.storage_types import PersistentState, WatchRecord
 
@@ -170,56 +178,91 @@ def test_offline_watches_and_security_notifications_survive_restart(
 def test_offline_temporary_watch_resolves_and_notification_failure_restarts(
     tmp_path: Path,
 ) -> None:
-    # Given: a temporary watch whose candidate is current and a failing notifier.
+    # Given: a user-created temporary watch and a failing notifier.
     store = _store(tmp_path)
     source = collector()
     _scan(store, source, 1)
+    snapshot = store.load_snapshot()
+    assert snapshot is not None
+    watched = next(
+        item for item in snapshot.payload.items if item.item_id == ItemId("arch:linux")
+    )
+    _ = apply_durable_event(
+        store,
+        StarClick(watched.item_id, CachedInventory((cached_item(watched),))),
+    )
+    state = store.load_state().state
     store.save_state(
         PersistentState(
             (
+                *state.watches,
                 WatchRecord(
-                    ItemId("arch:linux"), WatchMode.PERMANENT, None, None, False
+                    ItemId("omarchy:omarchy"), WatchMode.PERMANENT, None, None, False
                 ),
             ),
-            (),
-            store.load_state().state.sources,
+            state.ledger,
+            state.sources,
         )
     )
     failed_runner = RecordingNotificationRunner((CommandExited(1, b"", b""),), [])
-    first = store.load_snapshot()
-    assert first is not None
-    pending = NotificationCoordinator(store, failed_runner, lambda: NOW).dispatch(first)
+    pending = NotificationCoordinator(store, failed_runner, lambda: NOW).dispatch(
+        snapshot
+    )
 
-    # When: a restart observes the recorded failure and a subsequent scan resolves updates.
-    resolved = FakeCollector(
-        OmarchyAvailability(SourceStatus.OK, (), None),
-        ArchUpdates(()),
-        SecurityCollected((), Provenance.LIVE, KevUnavailable("offline")),
+    # When: a restart observes the recorded failure and a fresh scan sees the installed version advance.
+    resolved = collector(
+        arch=ArchUpdates(
+            (item(ItemSource.ARCH, "linux", installed="2", candidate="3"),)
+        )
     )
     _scan(store, resolved, 2)
+    observed = item(ItemSource.ARCH, "linux", installed="2", candidate="3")
+    _ = apply_durable_event(
+        store,
+        FreshSourceScan(ItemSource.ARCH, CachedInventory((cached_item(observed),))),
+    )
     restarted = Storage(
         store.state_path, store.cache_path, lambda: NOW, SystemAtomicOperations()
     )
     current = restarted.load_snapshot()
 
-    # Then: the failed delivery is durable and the resolved generation has no updates.
+    # Then: the failed delivery is durable and the temporary watch is resolved durably.
     assert pending[0].status.value == "pending"
     assert current is not None
-    assert current.payload.summary.total_updates == 0
-    assert restarted.load_state().state.watches[0].mode is WatchMode.PERMANENT
+    assert current.payload.summary.total_updates == 2
+    assert restarted.load_state().state.watches == (
+        WatchRecord(ItemId("omarchy:omarchy"), WatchMode.PERMANENT, None, None, False),
+    )
 
 
-def test_offline_hostile_state_and_future_schema_never_escape_temp_roots(
+def test_offline_hostile_presentation_data_and_future_schema_never_escape_temp_roots(
     tmp_path: Path,
 ) -> None:
-    # Given: a hostile permanent identity and a future schema stored under isolated roots.
+    # Given: a hostile package label and a future schema stored under isolated roots.
     store = _store(tmp_path)
     sentinel = tmp_path.parent / "outside-temp-root"
+    hostile = NormalizedItem(
+        ItemId("arch:linux"),
+        ItemSource.ARCH,
+        f"linux $(touch {sentinel})",
+        "1",
+        "2",
+        WatchMode.OFF,
+        True,
+        Provenance.LIVE,
+    )
+    _scan(store, collector(arch=ArchUpdates((hostile,))), 1)
+    snapshot = store.load_snapshot()
+    assert snapshot is not None
+    from tests.e2e.offline_scenario_runner import assert_qml_presentation
+
+    # When: the hostile payload crosses the real protocol and presentation consumer.
+    assert_qml_presentation(snapshot)
     future = b'{"schemaVersion":999,"watches":[]}'
-    store.state_path.parent.mkdir(parents=True)
+    store.state_path.parent.mkdir(parents=True, exist_ok=True)
     _ = store.state_path.write_bytes(future)
 
-    # When: the storage boundary loads the unsupported persisted schema.
+    # And when: the storage boundary loads the unsupported persisted schema.
     from opatchy_helper.storage import StateSchemaIncompatible
 
     try:
@@ -227,7 +270,7 @@ def test_offline_hostile_state_and_future_schema_never_escape_temp_roots(
     except StateSchemaIncompatible:
         pass
 
-    # Then: the future document remains intact and no hostile side effect escaped.
+    # Then: the future document remains intact and hostile text caused no outside-root side effect.
     assert store.state_path.read_bytes() == future
     assert not sentinel.exists()
 
