@@ -111,7 +111,7 @@ Panel {
             width: parent.width
             title: "Opatchy"
             meta: root.panelView.summaryText
-            detail: root.serviceAvailable ? "Source health" : "Unavailable"
+            detail: ""
             foreground: root.barForeground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
 
@@ -126,7 +126,8 @@ Panel {
 
             trailingControl: Component {
               PanelActionButton {
-                iconText: root.panelView.refreshText === "Refreshing" ? "..." : "R"
+                objectName: "refresh-source-scan"
+                iconText: "\uf0450"
                 tooltipText: root.panelView.refreshText + " source scan"
                 foreground: root.barForeground
                 fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
@@ -137,6 +138,18 @@ Panel {
             }
           }
 
+          PanelProblemSummary {
+            width: parent.width
+            title: root.panelView.problemTitle
+            detail: root.panelView.problemDetail
+            evidence: root.panelView.failureText !== ""
+              ? root.panelView.failureText
+              : "Last attempt " + root.panelView.lastAttemptText + "; last validated result " + root.panelView.lastSuccessText + "."
+            glyph: root.panelView.problemGlyph
+            foreground: root.barForeground
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
+
           SourceTabStrip {
             width: parent.width
             tabs: root.panelView.tabs
@@ -144,17 +157,6 @@ Panel {
             foreground: root.barForeground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
             onSelected: function(tab) { tabState.select(tab, true) }
-          }
-
-          Text {
-            width: parent.width
-            visible: root.panelView.bannerText !== ""
-            text: root.panelView.bannerText
-            textFormat: Text.PlainText
-            color: root.barForeground
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            wrapMode: Text.Wrap
           }
 
           SourceContent {
@@ -168,39 +170,6 @@ Panel {
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
 
-          Text {
-            width: parent.width
-            visible: root.panelView.failureText !== ""
-            text: root.panelView.failureText
-            textFormat: Text.PlainText
-            color: root.barForeground
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            wrapMode: Text.Wrap
-          }
-
-          Text {
-            width: parent.width
-            text: root.serviceAvailable
-              ? tabState.selectedTab + ": " + root.panelView.tabs[TabModel.TAB_NAMES.indexOf(tabState.selectedTab)].count
-                + " updates or findings. " + root.panelView.tabs[TabModel.TAB_NAMES.indexOf(tabState.selectedTab)].healthText
-              : "Service unavailable. Source results cannot be shown."
-            textFormat: Text.PlainText
-            color: root.barForeground
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.body
-            wrapMode: Text.Wrap
-          }
-
-          Text {
-            width: parent.width
-            text: "Last scan attempt: " + root.panelView.lastAttemptText + ". Last successful result: " + root.panelView.lastSuccessText + "."
-            textFormat: Text.PlainText
-            color: root.barForeground
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.font.bodySmall
-            wrapMode: Text.Wrap
-          }
         }
       }
 
