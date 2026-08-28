@@ -224,3 +224,17 @@ test("records only the latest handoff and coalesces it into one delayed scan", (
   controller.wake(600_002);
   assert.equal(starts.length, 3);
 });
+
+test("connects update-all sequencing only to terminal completion without shell composition", () => {
+  const service = readFileSync(servicePath, "utf8");
+  const handoff = readFileSync(handoffPath, "utf8");
+
+  assert.match(service, /function requestUpdateAll\(/);
+  assert.match(service, /ActionPolicy\.UPDATE_ALL_ACTIONS\.slice\(\)/);
+  assert.match(service, /ActionPolicy\.isEligible\(lastSnapshot, actionName, actionCapabilities\)/);
+  assert.match(service, /handoffTransport\.finished/);
+  assert.match(service, /handoffTransport\.finished\.connect\(handleHandoffFinished\)/);
+  assert.match(handoff, /signal finished\(int exitCode\)/);
+  assert.doesNotMatch(service, /\/bin\/sh/);
+  assert.doesNotMatch(service, /handoffTransport\.start\(\[/);
+});

@@ -18,6 +18,8 @@ Item {
     : localPath(sourceDir) + "/helper/opatchy.py"
   property var _controller: null
   property var handoffTransport: terminalHandoff
+  property var _updateAllActions: []
+  property bool _updateAllActive: false
   property var _state: ({
     "lastSnapshot": null,
     "inventories": {},
@@ -59,6 +61,8 @@ Item {
   readonly property bool canOpenOmarchyUpdate: canOpenAction("omarchy")
   readonly property bool canOpenFlatpakUserUpdate: canOpenAction("flatpak-user")
   readonly property bool canOpenFlatpakSystemUpdate: canOpenAction("flatpak-system")
+  readonly property bool canUpdateAll: handoffTransport && handoffTransport.finished !== undefined && !_updateAllActive && !handoffTransport.running
+    && ActionPolicy.eligibleUpdateActions(lastSnapshot, actionCapabilities).length > 0
 
   signal snapshotChanged(var snapshot)
   signal inventoryChanged(string source, var inventory, var operation)
@@ -105,6 +109,14 @@ Item {
     return openAction("flatpak-system")
   }
 
+  function requestUpdateAll() {
+    if (!canUpdateAll) return false
+    _updateAllActions = ActionPolicy.UPDATE_ALL_ACTIONS.slice()
+    _updateAllActive = true
+    startNextUpdateAll()
+    return true
+  }
+
   function openAction(name) {
     var action = ActionPolicy.actionFor(name)
     if (action === null || !canOpenAction(name)) return false
@@ -119,6 +131,33 @@ Item {
     handoffStarted(handoffAt)
   }
 
+  function startNextUpdateAll() {
+    if (!_updateAllActive || !handoffTransport || handoffTransport.running) return
+    while (_updateAllActions.length > 0) {
+      var actionName = _updateAllActions.shift()
+      if (!ActionPolicy.isEligible(lastSnapshot, actionName, actionCapabilities)) continue
+      if (openAction(actionName)) return
+      finishUpdateAll()
+      return
+    }
+    finishUpdateAll()
+  }
+
+  function finishUpdateAll() {
+    _updateAllActions = []
+    _updateAllActive = false
+  }
+
+  function handleHandoffFinished(exitCode) {
+    if (!_updateAllActive) return
+    if (exitCode !== 0) {
+      finishUpdateAll()
+      reportHandoffFailure()
+      return
+    }
+    startNextUpdateAll()
+  }
+
   function reportHandoffFailure() {
     var message = "Open update terminal could not be started"
     _state = Object.assign({}, _state, { "lastError": message })
@@ -128,7 +167,11 @@ Item {
   function bindHandoffTransport() {
     if (!handoffTransport || !handoffTransport.started || !handoffTransport.failed) return
     handoffTransport.started.connect(recordHandoff)
-    handoffTransport.failed.connect(reportHandoffFailure)
+    handoffTransport.failed.connect(function() {
+      finishUpdateAll()
+      reportHandoffFailure()
+    })
+    if (handoffTransport.finished) handoffTransport.finished.connect(handleHandoffFinished)
   }
 
   function applyState(state) {

@@ -10,6 +10,7 @@ QtObject {
   property bool flatpakAvailable: false
   property int probeIndex: 0
   property bool pendingStart: false
+  property bool launched: false
   readonly property bool running: launcherProcess.running || pendingStart
   readonly property var capabilities: ({
     "launcher": launcherAvailable,
@@ -19,11 +20,13 @@ QtObject {
 
   signal started()
   signal failed(string message)
+  signal finished(int exitCode)
 
   function start(actionName) {
     if (running) return false
     var action = ActionPolicy.actionFor(actionName)
     if (action === null) return false
+    launched = false
     pendingStart = true
     launcherProcess.command = action.argv
     launcherProcess.running = true
@@ -71,12 +74,19 @@ QtObject {
     onStarted: {
       if (!root.pendingStart) return
       root.pendingStart = false
+      root.launched = true
       root.started()
     }
-    onExited: function() {
-      if (!root.pendingStart) return
-      root.pendingStart = false
-      root.failed("Open update terminal could not be started")
+    onExited: function(exitCode) {
+      if (root.pendingStart) {
+        root.pendingStart = false
+        root.failed("Open update terminal could not be started")
+        return
+      }
+      if (root.launched) {
+        root.launched = false
+        root.finished(exitCode)
+      }
     }
   }
 
