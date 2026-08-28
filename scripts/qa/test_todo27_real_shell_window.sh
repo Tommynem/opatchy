@@ -92,28 +92,39 @@ document["bar"]["layout"]["right"].append({"id": sys.argv[2]})
 open(path, "w", encoding="utf-8").write(json.dumps(document))
 PY
     touch "$HOME/enabled"
+    touch "$HOME/helper-running"
     ;;
   "bar move") : ;;
-  *) exit 1 ;;
-esac
-EOF
-  cat >"${fake_bin}/omarchy-shell" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf 'omarchy-shell %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
-case "$2" in
-  ping) printf 'ok\n' ;;
-  listPlugins)
-    printf '%s\n' 'akitaonrails.ai-usagebar io.github.sirjul1337.lock-explorer mirador omaplug jkoestinger.vpn'
-    [[ -f "$HOME/enabled" ]] && printf '%s\n' 'io.github.tomge.opatchy'
+  "shell shell")
+    case "$3" in
+      ping) printf 'ok\n' ;;
+      listPlugins)
+        printf '%s\n' 'akitaonrails.ai-usagebar io.github.sirjul1337.lock-explorer mirador omaplug jkoestinger.vpn'
+        grep -Fq 'io.github.tomge.opatchy' "$HOME/.config/omarchy/shell.json" && printf '%s\n' 'io.github.tomge.opatchy'
+        ;;
+      rescanPlugins) : ;;
+      reloadConfig)
+        if [[ "${PERSIST_HELPER_AFTER_RESTORE:-0}" == 1 ]]; then
+          touch "$HOME/helper-running"
+        elif grep -Fq 'io.github.tomge.opatchy' "$HOME/.config/omarchy/shell.json" && [[ -d "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+          touch "$HOME/helper-running"
+        else
+          rm -f "$HOME/helper-running"
+        fi
+        ;;
+      *) exit 1 ;;
+    esac
     ;;
-  rescanPlugins|reloadConfig) : ;;
   *) exit 1 ;;
 esac
 EOF
   cat >"${fake_bin}/pgrep" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' '123 /temporary/plugin/helper/opatchy.py'
+if [[ -f "$HOME/helper-running" ]]; then
+  printf '%s\n' "123 $HOME/.config/omarchy/plugins/io.github.tomge.opatchy/helper/opatchy.py"
+  exit 0
+fi
+exit 1
 EOF
   cat >"${fake_bin}/hostname" <<'EOF'
 #!/usr/bin/env bash
@@ -134,7 +145,7 @@ if [[ "${FAIL_COPY_BACKUP:-0}" == 1 && "$2" == "$HOME/.config/omarchy/plugins/io
 fi
 command -p cp "$@"
 EOF
-  chmod +x "${fake_bin}/omarchy" "${fake_bin}/omarchy-shell" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp"
+  chmod +x "${fake_bin}/omarchy" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp"
   python3 - "${runner}" "${fixture_runner}" "${fake_bin}/hostname" <<'PY'
 import sys
 
@@ -158,10 +169,12 @@ run_runner() {
 }
 
 assert_restored() {
-  local record_dir="$1" expected_plugin="$2"
+  local record_dir="$1" expected_plugin="$2" expected_helpers="$3"
   cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
   [[ "$(tree_digest "${home}/.config/omarchy/plugins/io.github.tomge.opatchy")" == "${expected_plugin}" ]] || fail "plugin tree was not restored"
   grep -Fxq 'restoration_status=0' "${record_dir}/restoration.status"
+  [[ "$(<"${record_dir}/helper-count.before.txt")" == "${expected_helpers}" ]]
+  [[ "$(<"${record_dir}/helper-count.after.txt")" == "${expected_helpers}" ]]
   grep -Fq 'akitaonrails.ai-usagebar' "${home}/.config/omarchy/shell.json"
   grep -Fq 'jkoestinger.vpn' "${home}/.config/omarchy/shell.json"
 }
@@ -188,8 +201,8 @@ rm "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
 
 record_dir="${fixture_root}/absent-record"
 printf 'RESTORE\n' | run_runner "${record_dir}" env
-assert_restored "${record_dir}" absent
-[[ "$(<"${record_dir}/helper-count.txt")" == 1 ]]
+[[ "$(<"${record_dir}/helper-count.during.txt")" == 1 ]]
+assert_restored "${record_dir}" absent 0
 [[ "$(<"${record_dir}/helper-monitor.status")" == stopped ]]
 
 setup_fixture
@@ -200,7 +213,7 @@ chmod 700 "${target_plugin}/nested/retained.txt"
 existing_digest="$(tree_digest "${target_plugin}")"
 record_dir="${fixture_root}/existing-record"
 printf 'RESTORE\n' | run_runner "${record_dir}" env
-assert_restored "${record_dir}" "${existing_digest}"
+assert_restored "${record_dir}" "${existing_digest}" 0
 [[ -d "${target_plugin}/empty" && -x "${target_plugin}/nested/retained.txt" ]]
 
 setup_fixture
@@ -210,7 +223,7 @@ printf 'prior state\n' >"${target_plugin}/retained.txt"
 existing_digest="$(tree_digest "${target_plugin}")"
 record_dir="${fixture_root}/load-failure-record"
 expect_failure 'target validation failure' run_runner "${record_dir}" env FAIL_VALIDATE_TARGET=1
-assert_restored "${record_dir}" "${existing_digest}"
+assert_restored "${record_dir}" "${existing_digest}" 0
 
 setup_fixture
 target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
@@ -219,7 +232,7 @@ printf 'prior state\n' >"${target_plugin}/retained.txt"
 existing_digest="$(tree_digest "${target_plugin}")"
 record_dir="${fixture_root}/partial-install-record"
 expect_failure 'partial install' run_runner "${record_dir}" env FAIL_COPY_SOURCE=1
-assert_restored "${record_dir}" "${existing_digest}"
+assert_restored "${record_dir}" "${existing_digest}" 0
 
 setup_fixture
 target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
@@ -256,12 +269,46 @@ run_interrupted_case() {
   if wait "${runner_pid}"; then
     fail "${signal} interruption unexpectedly succeeded"
   fi
-  assert_restored "${record_dir}" "${expected_plugin}"
+  assert_restored "${record_dir}" "${expected_plugin}" 0
 }
 
 run_interrupted_case INT
 run_interrupted_case TERM
 
+setup_fixture
+target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+mkdir -p "${target_plugin}"
+printf 'prior state\n' >"${target_plugin}/retained.txt"
+python3 - "${home}/.config/omarchy/shell.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+document = json.load(open(path, encoding="utf-8"))
+document["bar"]["layout"]["right"].append({"id": "io.github.tomge.opatchy"})
+open(path, "w", encoding="utf-8").write(json.dumps(document))
+PY
+cp "${home}/.config/omarchy/shell.json" "${fixture_root}/original-shell.json"
+touch "${home}/helper-running"
+existing_digest="$(tree_digest "${target_plugin}")"
+record_dir="${fixture_root}/active-record"
+printf 'RESTORE\n' | run_runner "${record_dir}" env
+assert_restored "${record_dir}" "${existing_digest}" 1
+[[ "$(<"${record_dir}/helper-count.during.txt")" == 1 ]]
+
+setup_fixture
+record_dir="${fixture_root}/persistent-helper-record"
+if printf 'RESTORE\n' | run_runner "${record_dir}" env PERSIST_HELPER_AFTER_RESTORE=1; then
+  fail 'expected persistent helper restoration to fail'
+fi
+cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
+[[ ! -e "${home}/.config/omarchy/plugins/io.github.tomge.opatchy" ]]
+grep -Fxq 'restoration_status=1' "${record_dir}/restoration.status"
+[[ "$(<"${record_dir}/helper-count.before.txt")" == 0 ]]
+[[ "$(<"${record_dir}/helper-count.after.txt")" == 1 ]]
+
 ! grep -Eq '(^|[[:space:]])(omarchy[[:space:]]+update|omarchy[[:space:]]+refresh|omarchy[[:space:]]+shell[[:space:]]+update)' "${command_log}"
+grep -Fxq 'omarchy shell shell ping' "${command_log}"
+! grep -Fq 'omarchy-shell' "${runner}"
 ! grep -Fq 'fixture' "${runner}"
-printf '%s\n' 'PASS: guarded fake-host cases restore absent and existing trees, exact shell bytes/order/settings, failure and signal paths, monitor cleanup, and no update handoff'
+printf '%s\n' 'PASS: guarded fake-host cases prove public IPC spelling, exact state restoration, helper lifecycle comparison, and no update handoff'

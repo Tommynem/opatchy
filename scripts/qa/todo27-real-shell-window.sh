@@ -22,6 +22,7 @@ restoring=false
 monitor_pid=""
 trap_status=0
 signal_status=0
+original_helper_count=""
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -150,8 +151,12 @@ write_record() {
   printf '%s\n' "$2" >"${record_dir}/$1"
 }
 
+shell_ipc() {
+  omarchy shell shell "$@"
+}
+
 shell_ping() {
-  [[ "$(omarchy-shell shell ping)" == "ok" ]] || fail "shell ping did not return ok"
+  [[ "$(shell_ipc ping)" == "ok" ]]
 }
 
 helper_count() {
@@ -199,8 +204,8 @@ restore() {
   if [[ -d "${record_dir}/backup/plugin" ]]; then
     cp -a "${record_dir}/backup/plugin" "${target_plugin}" || restore_status=1
   fi
-  omarchy-shell shell rescanPlugins || restore_status=1
-  omarchy-shell shell reloadConfig || restore_status=1
+  shell_ipc rescanPlugins || restore_status=1
+  shell_ipc reloadConfig || restore_status=1
   restored_shell_digest="$(json_digest "${shell_json}")" || restore_status=1
   restored_file_digest="$(file_digest "${shell_json}")" || restore_status=1
   restored_plugin_digest="$(plugin_digest "${target_plugin}")" || restore_status=1
@@ -208,7 +213,11 @@ restore() {
   [[ "${restored_file_digest}" == "$(<"${record_dir}/shell.json.bytes.sha256")" ]] || restore_status=1
   [[ "${restored_plugin_digest}" == "$(<"${record_dir}/plugin.sha256")" ]] || restore_status=1
   config_contains_ids "${retained_ids[@]}" || restore_status=1
-  [[ "$(omarchy-shell shell ping)" == "ok" ]] || restore_status=1
+  shell_ping || restore_status=1
+  restored_helper_count="$(helper_count)" || restore_status=1
+  write_record "helper-count.after.txt" "${restored_helper_count}"
+  [[ "${restored_helper_count}" == "${original_helper_count}" ]] || restore_status=1
+  [[ "${original_plugin_digest}" != absent || "${restored_helper_count}" == 0 ]] || restore_status=1
   printf 'restoration_status=%s\noriginal_status=%s\n' "${restore_status}" "${original_status}" >"${record_dir}/restoration.status"
   (( restore_status == 0 )) || exit "${restore_status}"
   exit "${original_status}"
@@ -252,9 +261,11 @@ require_no_symlink_components "${target_plugin}"
 plugin_digest "${plugin_source}" >/dev/null || fail "plugin source contains an unsafe tree entry"
 plugin_digest "${target_plugin}" >/dev/null || fail "target plugin directory is not backup-safe"
 
-shell_ping
+shell_ping || fail "shell ping did not return ok"
 omarchy plugin validate "${plugin_source}" >/dev/null
 config_contains_ids "${retained_ids[@]}" || fail "retained plugin inventory prerequisite failed"
+original_helper_count="$(helper_count)"
+[[ "${original_helper_count}" -le 1 ]] || fail "more than one Opatchy helper observed before mutation"
 
 umask 077
 mkdir -m 700 "${record_dir}"
@@ -270,6 +281,7 @@ original_plugin_digest="$(plugin_digest "${target_plugin}")" || fail "target plu
 write_record "shell.json.semantic.sha256" "${original_shell_digest}"
 write_record "shell.json.bytes.sha256" "${original_file_digest}"
 write_record "plugin.sha256" "${original_plugin_digest}"
+write_record "helper-count.before.txt" "${original_helper_count}"
 printf 'host=%s\nwindow_id=%s\napproval=%s\nmode=read-only-except-install-enable-restore\n' "${host}" "${window_id}" "${approval}" >"${record_dir}/window.txt"
 backup_ready=true
 
@@ -280,17 +292,17 @@ trap 'signal_status=143; exit 143' TERM
 rm -rf -- "${target_plugin}"
 cp -a "${plugin_source}" "${target_plugin}"
 omarchy plugin validate "${target_plugin}" >/dev/null
-omarchy-shell shell rescanPlugins
+shell_ipc rescanPlugins
 omarchy plugin enable "${plugin_id}"
 omarchy bar move "${plugin_id}" --section right
 target_is_right_widget
-omarchy-shell shell listPlugins >"${record_dir}/plugins.after-enable.json"
+shell_ipc listPlugins >"${record_dir}/plugins.after-enable.json"
 grep -Fq "${plugin_id}" "${record_dir}/plugins.after-enable.json" || fail "target plugin was not discovered after enable"
 shell_ping
 
-helper_count="$(helper_count)"
-[[ "${helper_count}" -le 1 ]] || fail "more than one Opatchy helper observed"
-write_record "helper-count.txt" "${helper_count}"
+current_helper_count="$(helper_count)"
+[[ "${current_helper_count}" -le 1 ]] || fail "more than one Opatchy helper observed"
+write_record "helper-count.during.txt" "${current_helper_count}"
 write_record "handoff-policy.txt" "The QA runner invokes no update handoff command and the checklist forbids activating any update-terminal control."
 monitor_helpers "$$" &
 monitor_pid="$!"
