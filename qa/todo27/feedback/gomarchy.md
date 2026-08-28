@@ -1,6 +1,6 @@
 # Gomarchy QA Feedback
 
-Status: UNSIGNED. Complete only in the separately approved gomarchy window.
+Status: UNSIGNED. Stage B only: complete in the separately approved gomarchy window.
 
 | Scenario | Pass/Fail | Severity | Expected | Actual | Reproduction | Scrubbed attachment | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
