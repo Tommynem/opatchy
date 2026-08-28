@@ -41,7 +41,7 @@ bash scripts/qa/todo27-real-shell-window.sh \
 
 For the separate `gomarchy` window, change `--host`, the host-bound approval
 identifier, exact host-bound approval, and `--record-dir`. The selected host must
-match the trusted system `hostname --static` result.
+match the trusted system `/usr/bin/hostname` result with no arguments.
 Do not run either command during Stage A. The runner refuses missing approval,
 missing `--execute`, invalid source, failed shell ping, failed validator,
 missing retained IDs, symlinks, or a nonempty record directory. It backs up
