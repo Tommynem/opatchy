@@ -16,7 +16,9 @@ user-approved, scheduled windows.
   screenshots, inventory, usernames, paths, package lists, or hostnames.
 - Stop and let the EXIT trap restore if shell ping fails, a retained plugin is
   missing, validation fails, a reload loops, more than one helper is observed,
-  or any restoration comparison fails.
+  or any restoration comparison fails. The public shell health command is
+  `omarchy shell shell ping`; the runner records helper counts before, during,
+  and after restoration and fails if the final count differs from the initial one.
 - Do not use SSH, `omarchy dev link`, symlinks, `omarchy update`, Flatpak
   update commands, an update-terminal button, `omarchy refresh`, or an update
   handoff. The runner has no handoff command and records this prohibition.
@@ -55,13 +57,15 @@ restores both and compares semantic JSON/plugin digests before returning.
 3. Trigger one manual source refresh and wait for completion. Inspect each tab
    only; do not activate any control labelled `Open update terminal`.
 4. Observe the Opatchy helper while the read-only scan is active. Record the
-   runner's `helper-count.txt`; it must never exceed one. Confirm the single
-   service remains available to both bar and panel.
+   runner's `helper-count.during.txt`; it must never exceed one. Confirm the
+   single service remains available to both bar and panel.
 5. Record only a user-scrubbed real current-state capture if the user chooses.
    It must not be substituted for the fixture screenshots below.
-6. Let the runner exit normally. Confirm `restoration.status` is zero, shell
-   ping is `ok`, the target plugin is absent or exactly restored, and retained
-   plugin IDs/order/settings match the pre-window semantic snapshot.
+6. Let the runner exit normally. Confirm `restoration.status` is zero,
+   `omarchy shell shell ping` is `ok`, `helper-count.before.txt` equals
+   `helper-count.after.txt` (zero for an absent/disabled target), the target
+   plugin is absent or exactly restored, and retained plugin IDs/order/settings
+   match the pre-window semantic snapshot.
 
 When the checks are complete, return to the runner terminal and type `RESTORE`.
 The runner monitors the helper count until that confirmation, then restores.
