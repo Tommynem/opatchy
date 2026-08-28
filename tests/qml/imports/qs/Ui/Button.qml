@@ -3,10 +3,11 @@ import QtQuick.Controls
 
 Button {
   property string tooltipText: ""
-  property string accessibleName: ""
+  property string iconText: ""
   property string placeholderText: ""
   property bool focusable: true
   property bool bordered: true
+  property bool selected: false
   property color foreground: "black"
   property string fontFamily: ""
   property real fontSize: 12

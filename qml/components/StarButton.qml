@@ -17,7 +17,6 @@ Button {
 
   text: view.pending ? "… Updating " + view.shortLabel : view.glyph + " " + view.shortLabel
   tooltipText: view.tooltip
-  accessibleName: view.accessibleName
   enabled: view.enabled
   opacity: 1
   focusable: true
