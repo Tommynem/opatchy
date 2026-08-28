@@ -24,19 +24,22 @@ user-approved, scheduled windows.
 ## User-Approved Command For Each Separate Window
 
 Run this command locally on the named host only after the user supplies an
-approval identifier and a private, empty record directory:
+scheduled UTC window identifier and a private, empty record directory. The
+approval value must be exactly `todo27:<host>:<window-id>`:
 
 ```sh
 bash scripts/qa/todo27-real-shell-window.sh \
   --host tomarchy \
-  --approval '<user-approved-window-id>' \
+  --window-id '<YYYYMMDDTHHMMZ>' \
+  --approval 'todo27:tomarchy:<YYYYMMDDTHHMMZ>' \
   --plugin-source "$PWD" \
   --record-dir '/absolute/private/path/opatchy-todo27-tomarchy' \
   --execute
 ```
 
 For the separate `gomarchy` window, change `--host`, the host-bound approval
-identifier, and `--record-dir`. The selected host must match `hostname --static`.
+identifier, exact host-bound approval, and `--record-dir`. The selected host must
+match the trusted system `hostname --static` result.
 Do not run either command during Stage A. The runner refuses missing approval,
 missing `--execute`, invalid source, failed shell ping, failed validator,
 missing retained IDs, symlinks, or a nonempty record directory. It backs up
