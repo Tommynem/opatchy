@@ -8,10 +8,10 @@ handoffs. It is not a privilege boundary and does not perform package mutation.
 
 ## Report a suspected issue
 
-Use GitHub's private security-advisory reporting for this repository when it is
-available. If that path is unavailable, contact the maintainer through the
-repository profile at https://github.com/tomge/opatchy and request a private
-channel before sending details.
+Use GitHub's private security-advisory reporting for the published repository
+when that path is available. This checkout has no published Opatchy repository
+or alternate private reporting channel. Do not send details through a public
+issue, a guessed repository URL, or an unverified contact address.
 
 Include the affected revision, Omarchy version, clear reproduction steps,
 observed impact, and minimal relevant logs. Don't publish a proof of concept,
@@ -27,5 +27,5 @@ availability. No response promise is implied by this document.
 ## Limits
 
 Security-feed matching, stale markers, and native update handoffs do not prove
-that a machine is safe or that a vulnerability is exploitable. Review the
+that a system is safe or that a vulnerability is exploitable. Review the
 [threat model](docs/threat-model.md) before relying on Opatchy output.

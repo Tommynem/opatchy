@@ -12,10 +12,16 @@ has no runtime telemetry.
 ## Install, enable, disable, remove
 
 Opatchy targets Omarchy 4 with plugin manifest schema v1. Install it from a
-reviewed git checkout, not a curl-to-shell command:
+reviewed Git remote, not a curl-to-shell command. This checkout has no published
+Opatchy remote, so there is no supported `omarchy plugin add` command to run
+today. The previously planned `https://github.com/tomge/opatchy` URL is not a
+published repository. Do not replace the missing remote with a guessed URL.
+
+When a reviewed Opatchy Git remote is published, install it with the URL shown
+by that release:
 
 ```sh
-omarchy plugin add https://github.com/tomge/opatchy.git --enable
+omarchy plugin add <reviewed-git-url> --enable
 omarchy plugin list
 ```
 
@@ -56,11 +62,11 @@ set-star --item-id ID --mode {off|temporary|permanent}
 ```
 
 Stars are local watches. A temporary watch is armed for the next matching
-update and clears after the observed update is installed. A permanent watch
-stays recorded until it is turned off. Notification policy exists for eligible
-permanent watches and fresh, fixed high or critical Arch findings, but this
-release does not wire notification dispatch into the production scan path. It
-does not inspect Do Not Disturb state or replay notifications.
+update and clears when a later fresh scan observes a changed installed version
+or a confirmed removal; it does not verify that a particular candidate update
+completed. A permanent watch stays recorded until it is turned off. Notification
+policy exists for eligible permanent watches and fresh, fixed high or critical
+Arch findings, but this release does not wire notification dispatch into the production scan path. It does not inspect Do Not Disturb state or replay notifications.
 
 The manifest exposes refresh interval, watch notifications, reduced motion,
 security notifications, minimum security severity, CISA KEV inclusion, and last
@@ -74,8 +80,7 @@ Opatchy never runs a generic command from update data. When current eligible
 evidence exists, it may open one fixed native workflow in Omarchy's presentation
 terminal: `omarchy-update`, `flatpak --user update`, or
 `flatpak --system update`. Opening a terminal only starts that workflow. It does
-not prove that an update completed. Opatchy intentionally does not recommend
-direct `pacman -Syu`.
+not prove that an update completed. Opatchy intentionally does not recommend direct `pacman -Syu`.
 
 ## Dependencies and troubleshooting
 
