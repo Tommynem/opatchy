@@ -7,6 +7,7 @@ var FLATPAK = "/usr/bin/flatpak"
 var OMARCHY_ARGV = [PRESENTATION_LAUNCHER, OMARCHY_UPDATE]
 var FLATPAK_USER_ARGV = [PRESENTATION_LAUNCHER, FLATPAK, "--user", "update"]
 var FLATPAK_SYSTEM_ARGV = [PRESENTATION_LAUNCHER, FLATPAK, "--system", "update"]
+var UPDATE_ALL_ACTIONS = ["omarchy", "flatpak-user", "flatpak-system"]
 
 function actionFor(name) {
   switch (name) {
@@ -35,6 +36,10 @@ function isEligible(snapshot, name, capabilities) {
   default:
     return false
   }
+}
+
+function eligibleUpdateActions(snapshot, capabilities) {
+  return UPDATE_ALL_ACTIONS.filter(function(name) { return isEligible(snapshot, name, capabilities) })
 }
 
 function hasCapabilities(action, capabilities) {

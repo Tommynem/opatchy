@@ -101,6 +101,21 @@ test("enables only current applicable sources and matching update scopes", () =>
   assert.equal(policy.isEligible(state, "flatpak-system", capabilities()), true);
 });
 
+test("orders update-all as a closed set and rechecks each action's current eligibility", () => {
+  const policy = loadPolicy();
+  const updates = [
+    { id: "omarchy:omarchy", source: "omarchy", candidate: "0.2" },
+    { id: "flatpak:user:app/org.example.App/x86_64/stable", source: "flatpak", candidate: "2" },
+    { id: "flatpak:system:app/org.example.Tool/x86_64/stable", source: "flatpak", candidate: "3" },
+  ];
+  const state = snapshot(updates);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(policy.UPDATE_ALL_ACTIONS)), ["omarchy", "flatpak-user", "flatpak-system"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(policy.eligibleUpdateActions(state, capabilities()))), ["omarchy", "flatpak-user", "flatpak-system"]);
+  state.payload.sources.find((entry) => entry.source === "flatpak").scopes[0].status = "stale";
+  assert.deepEqual(JSON.parse(JSON.stringify(policy.eligibleUpdateActions(state, capabilities()))), ["omarchy", "flatpak-system"]);
+});
+
 test("routes System, AUR, mise, and Omarchy updates through the full native workflow", () => {
   const policy = loadPolicy();
 
