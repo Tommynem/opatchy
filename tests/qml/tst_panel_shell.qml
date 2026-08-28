@@ -247,7 +247,7 @@ TestCase {
     compare(state.opened, false)
 
     state.panel = panel
-    state.runPendingOperation()
+    state.runPendingOperation(panel)
     compare(panel.openCalls, 1)
     compare(state.pendingOperation, "")
     compare(state.opened, true)
@@ -263,9 +263,46 @@ TestCase {
     state.close()
     compare(state.pendingOperation, "")
     state.panel = panel
-    state.runPendingOperation()
+    state.runPendingOperation(panel)
     compare(panel.openCalls, 0)
     compare(state.opened, false)
+    state.destroy()
+  }
+
+  function test_pending_lifecycle_operation_coalesces_after_panel_load_until_replay() {
+    const state = shellStateComponent.createObject(root, { "service": serviceObject })
+
+    state.open()
+    state.panel = panel
+    state.toggle()
+    compare(state.pendingOperation, "toggle")
+    compare(panel.openCalls, 0)
+    compare(panel.toggleCalls, 0)
+
+    state.runPendingOperation(panel)
+    compare(state.pendingOperation, "")
+    compare(panel.openCalls, 0)
+    compare(panel.toggleCalls, 1)
+    compare(state.opened, true)
+    state.destroy()
+  }
+
+  function test_deferred_replay_ignores_a_replaced_panel() {
+    const state = shellStateComponent.createObject(root, { "service": serviceObject })
+    const replacement = fakePanelComponent.createObject(root)
+
+    state.open()
+    state.panel = panel
+    state.panel = replacement
+    state.runPendingOperation(panel)
+    compare(state.pendingOperation, "open")
+    compare(panel.openCalls, 0)
+    compare(replacement.openCalls, 0)
+
+    state.runPendingOperation(replacement)
+    compare(state.pendingOperation, "")
+    compare(replacement.openCalls, 1)
+    replacement.destroy()
     state.destroy()
   }
 
@@ -316,6 +353,22 @@ TestCase {
     tryVerify(function() { return view.widget.panel !== null }, 1000)
     tryCompare(view.widget, "opened", true, 1000)
     compare(view.widget.panel.statusText, "Service unavailable")
+    view.destroy()
+  }
+
+  function test_lazy_loaded_pending_toggle_waits_for_deferred_replay() {
+    const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+    verify(view !== null, "host fixture must load")
+    tryVerify(function() { return view.widget !== null }, 1000)
+
+    view.widget.open()
+    const loadedPanel = view.widget.panel
+    verify(loadedPanel !== null, "the lazy loader must create a panel before deferred replay")
+    compare(view.widget.opened, false)
+    view.widget.toggle()
+    compare(view.widget.opened, false, "the second request must remain queued until replay")
+    tryCompare(view.widget, "opened", true, 1000)
+    compare(view.widget.panel, loadedPanel, "deferred replay must retain the loaded panel")
     view.destroy()
   }
 

@@ -21,6 +21,10 @@ QtObject {
 
   function invoke(operation) {
     if (loaderFailed) return
+    if (pendingOperation !== "") {
+      pendingOperation = operation
+      return
+    }
     if (!panel) {
       loaderRequested = true
       pendingOperation = operation
@@ -39,11 +43,12 @@ QtObject {
 
   function toggle() { invoke("toggle") }
 
-  function runPendingOperation() {
-    if (!panel || pendingOperation === "") return
+  function runPendingOperation(expectedPanel) {
+    if (!panel || panel !== expectedPanel || pendingOperation === "") return
     var operation = pendingOperation
     pendingOperation = ""
-    if (typeof panel[operation] === "function") panel[operation]()
+    if (panel === expectedPanel && typeof panel[operation] === "function")
+      panel[operation]()
   }
 
   function returnFocus() {
