@@ -32,14 +32,6 @@ QtObject {
       cycleTab(reverse ? -1 : 1)
       return true
     }
-    if (key === Qt.Key_Left || key === Qt.Key_Up) {
-      cycleTab(-1)
-      return true
-    }
-    if (key === Qt.Key_Right || key === Qt.Key_Down) {
-      cycleTab(1)
-      return true
-    }
     if (key === Qt.Key_Escape) {
       closeRequested()
       return true

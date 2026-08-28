@@ -2,7 +2,7 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-Item {
+FocusScope {
   id: root
 
   property var tabs: []
@@ -10,6 +10,24 @@ Item {
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
   signal selected(string tab)
+
+  activeFocusOnTab: true
+  Keys.priority: Keys.BeforeItem
+  Keys.onLeftPressed: function(event) {
+    root.selectRelative(-1)
+    event.accepted = true
+  }
+  Keys.onRightPressed: function(event) {
+    root.selectRelative(1)
+    event.accepted = true
+  }
+  Keys.onPressed: function(event) {
+    if (event.modifiers !== Qt.NoModifier) return
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+      root.selected(root.selectedTab)
+      event.accepted = true
+    }
+  }
 
   readonly property int tabButtonCount: tabs && typeof tabs.length === "number" ? tabs.length : 0
   readonly property real minimumTabWidth: Style.font.bodySmall * 12 + Style.spacing.md * 2
@@ -46,7 +64,8 @@ Item {
         iconText: ""
         tooltipText: modelData.name + ": " + modelData.count + ". " + modelData.tooltip
         selected: root.selectedTab === modelData.name
-        focusable: true
+        hasCursor: root.activeFocus && root.selectedTab === modelData.name
+        focusable: false
         bordered: true
         clip: true
         horizontalPadding: 0
@@ -54,7 +73,10 @@ Item {
         foreground: root.foreground
         fontFamily: root.fontFamily
         fontSize: Style.font.bodySmall
-        onClicked: root.selected(modelData.name)
+        onClicked: {
+          root.forceActiveFocus()
+          root.selected(modelData.name)
+        }
 
         Column {
           id: tabContent
@@ -105,4 +127,10 @@ Item {
   }
 
   function tabButtonAt(index) { return tabRepeater.itemAt(index) }
+  function selectRelative(direction) {
+    if (tabButtonCount === 0) return
+    var index = tabs.map(function(tab) { return tab.name }).indexOf(selectedTab)
+    if (index < 0) index = 0
+    root.selected(tabs[(index + direction + tabButtonCount) % tabButtonCount].name)
+  }
 }

@@ -53,7 +53,7 @@ TestCase {
     }
   }
 
-  function test_keyboard_cycles_in_the_approved_order_and_wraps() {
+  function test_global_shortcuts_keep_ctrl_tab_compatibility_without_consuming_vertical_navigation() {
     const state = stateComponent.createObject(root)
 
     compare(state.selectedTab, "Security")
@@ -61,10 +61,11 @@ TestCase {
     compare(state.selectedTab, "Omarchy")
     verify(state.handleKey(Qt.Key_Backtab, Qt.ControlModifier | Qt.ShiftModifier))
     compare(state.selectedTab, "Security")
-    verify(state.handleKey(Qt.Key_Left, Qt.NoModifier))
-    compare(state.selectedTab, "mise")
-    verify(state.handleKey(Qt.Key_Up, Qt.NoModifier))
-    compare(state.selectedTab, "Flatpak")
+    compare(state.handleKey(Qt.Key_Left, Qt.NoModifier), false)
+    compare(state.handleKey(Qt.Key_Right, Qt.NoModifier), false)
+    compare(state.handleKey(Qt.Key_Up, Qt.NoModifier), false)
+    compare(state.handleKey(Qt.Key_Down, Qt.NoModifier), false)
+    compare(state.selectedTab, "Security")
     compare(state.handleKey(Qt.Key_Tab, Qt.NoModifier), false)
     state.destroy()
   }
