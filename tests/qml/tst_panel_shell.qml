@@ -116,6 +116,24 @@ TestCase {
   }
 
   Component {
+    id: panelServiceComponent
+
+    QtObject {
+      property var lastSnapshot: null
+      property bool refreshing: false
+      property var lastAttemptAt: null
+      property var lastSuccessAt: null
+      property string lastFailureKind: ""
+
+      signal inventoryChanged(var source, var inventory, var operation)
+      signal starResultChanged(var result, var operation)
+      signal starFailed(var operation, string message)
+
+      function requestRefresh() { }
+    }
+  }
+
+  Component {
     id: fakePanelComponent
     QtObject {
       property bool opened: false
@@ -150,6 +168,7 @@ TestCase {
       height: 480
       property alias state: state
       readonly property var widget: widgetLoader.item
+      property var service: null
       property var manifest: ({
         "id": "io.github.tomge.opatchy",
         "__sourceDir": Qt.resolvedUrl("../..").toString()
@@ -163,7 +182,7 @@ TestCase {
       QtObject {
         id: shell
         property var pluginRegistry: registry
-        function serviceFor() { return null }
+        function serviceFor() { return host.service }
       }
 
       QtObject {
@@ -172,6 +191,8 @@ TestCase {
         property color foreground: "black"
         property color urgent: "red"
         property string fontFamily: "Sans Serif"
+        property real hostCardWidth: 520
+        property real hostCardHeight: 360
       }
 
       PanelShellState {
@@ -202,7 +223,7 @@ TestCase {
   }
 
   function init() {
-    serviceObject = Qt.createQmlObject("import QtQml; QtObject {}", root)
+    serviceObject = panelServiceComponent.createObject(root)
     replacementService = Qt.createQmlObject("import QtQml; QtObject {}", root)
     anchor = anchorComponent.createObject(root)
     panel = fakePanelComponent.createObject(root)
@@ -295,6 +316,53 @@ TestCase {
     tryVerify(function() { return view.widget.panel !== null }, 1000)
     tryCompare(view.widget, "opened", true, 1000)
     compare(view.widget.panel.statusText, "Service unavailable")
+    view.destroy()
+  }
+
+  function test_lazy_click_waits_for_host_card_geometry_before_opening() {
+    const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+    verify(view !== null, "host fixture must load")
+    tryVerify(function() { return view.widget !== null }, 1000)
+    compare(view.widget.panel, null, "the outer panel must remain lazy before the first request")
+
+    const button = view.widget.children.filter(function(child) {
+      return child.objectName === "opatchy-bar-icon"
+    })[0]
+    verify(button !== null, "bar widget must expose its real icon button")
+    mouseClick(button)
+
+    tryVerify(function() { return view.widget.panel !== null }, 1000)
+    const panel = view.widget.panel
+    compare(panel.bar, view.widget.bar)
+    compare(panel.anchorItem, button)
+    compare(panel.hostWidget, view.widget)
+    verify(panel.settings !== null, "settings must be injected before opening")
+    compare(panel.injectedService, serviceObject)
+
+    const hostPanel = panel.children.filter(function(child) {
+      return child.objectName === "opatchy-host-keyboard-panel"
+    })[0]
+    verify(hostPanel !== null, "the host keyboard panel facade must exist")
+    tryVerify(function() { return hostPanel.geometryReady }, 1000)
+    tryCompare(view.widget, "opened", true, 1000)
+
+    const card = hostPanel.children.filter(function(child) {
+      return child.objectName === "opatchy-host-card"
+    })[0]
+    const content = card.children.filter(function(child) {
+      return child.objectName === "opatchy-host-content"
+    })[0]
+    verify(card.width > hostPanel.cardInset * 2, "opened card width must exceed an inset strip")
+    verify(card.height > hostPanel.cardInset * 2, "opened card height must exceed an inset strip")
+    verify(content.width > hostPanel.cardInset * 2, "content width must be materially positive")
+    verify(content.height > hostPanel.cardInset * 2, "content height must be materially positive")
+
+    const identity = panel
+    mouseClick(button)
+    tryCompare(view.widget, "opened", false, 1000)
+    mouseClick(button)
+    tryCompare(view.widget, "opened", true, 1000)
+    compare(view.widget.panel, identity, "close/reopen must reuse the lazy panel")
     view.destroy()
   }
 

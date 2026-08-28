@@ -80,7 +80,6 @@ BarWidget {
   onServiceChanged: injectPanel()
   onPanelChanged: {
     injectPanel()
-    panelState.runPendingOperation()
   }
 
   Loader {
@@ -89,10 +88,15 @@ BarWidget {
     source: root.sourceDir === "" ? "" : root.sourceDir + "/Panel.qml"
     visible: false
     onLoaded: {
+      const loadedPanel = panel
       root.injectPanel()
       Qt.callLater(function() {
+        if (panel !== loadedPanel || panelState.panel !== loadedPanel) return
         root.injectPanel()
-        panelState.runPendingOperation()
+        Qt.callLater(function() {
+          if (panel === loadedPanel && panelState.panel === loadedPanel)
+            panelState.runPendingOperation(loadedPanel)
+        })
       })
     }
   }
