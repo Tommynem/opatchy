@@ -16,6 +16,7 @@ FocusScope {
   property bool watchedOnly: false
   property bool notifyPermanent: true
   property bool reducedMotion: false
+  property Item previousFocusItem: null
   readonly property alias starState: stars
   readonly property Item primaryControl: tab === "Security" ? securityView.primaryControl : browseButton
   readonly property var rows: UpdateViewModel.updateRows(snapshot, tab)
@@ -53,6 +54,7 @@ FocusScope {
       snapshot: root.snapshot
       starState: stars
       canRefresh: root.service !== null
+      previousFocusItem: root.previousFocusItem
       notifyPermanent: root.notifyPermanent
       foreground: root.foreground
       fontFamily: root.fontFamily

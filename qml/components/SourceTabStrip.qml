@@ -7,6 +7,7 @@ FocusScope {
 
   property var tabs: []
   property string selectedTab: "Security"
+  property Item previousFocusItem: null
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
   signal selected(string tab)
@@ -22,6 +23,11 @@ FocusScope {
     event.accepted = true
   }
   Keys.onPressed: function(event) {
+    if (event.key === Qt.Key_Backtab && root.previousFocusItem) {
+      root.previousFocusItem.forceActiveFocus()
+      event.accepted = true
+      return
+    }
     if (event.modifiers !== Qt.NoModifier) return
     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
       root.selected(root.selectedTab)

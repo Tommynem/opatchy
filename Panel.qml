@@ -137,6 +137,7 @@ Panel {
             spacing: Style.spacing.xs
 
             Button {
+              id: updateAllButton
               objectName: "update-all"
               text: "Update all"
               tooltipText: "Open each eligible native update workflow in order"
@@ -146,10 +147,18 @@ Panel {
               focusable: true
               bordered: true
               enabled: root.serviceAvailable && root.service.canUpdateAll
+              KeyNavigation.tab: refreshButton
+              Keys.priority: Keys.BeforeItem
+              Keys.onTabPressed: function(event) {
+                if (event.modifiers !== Qt.NoModifier) return
+                refreshButton.forceActiveFocus()
+                event.accepted = true
+              }
               onClicked: root.requestUpdateAll()
             }
 
             Button {
+              id: refreshButton
               objectName: "refresh-source-scan"
               text: root.panelView.refreshText
               tooltipText: root.panelView.refreshText + " source scan"
@@ -159,6 +168,20 @@ Panel {
               focusable: true
               bordered: true
               enabled: root.serviceAvailable
+              KeyNavigation.backtab: updateAllButton
+              KeyNavigation.tab: sourceTabs
+              Keys.priority: Keys.BeforeItem
+              Keys.onTabPressed: function(event) {
+                if (event.modifiers === Qt.NoModifier) sourceTabs.forceActiveFocus()
+                else if (event.modifiers === Qt.ShiftModifier) updateAllButton.forceActiveFocus()
+                else return
+                event.accepted = true
+              }
+              Keys.onPressed: function(event) {
+                if (event.key !== Qt.Key_Backtab) return
+                updateAllButton.forceActiveFocus()
+                event.accepted = true
+              }
               onClicked: root.requestRefresh()
             }
 
@@ -188,19 +211,32 @@ Panel {
           }
 
           SourceTabStrip {
+            id: sourceTabs
+            objectName: "opatchy-source-tabs"
             width: parent.width
             tabs: root.panelView.tabs
             selectedTab: tabState.selectedTab
+            previousFocusItem: refreshButton
             foreground: root.barForeground
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            KeyNavigation.backtab: refreshButton
+            KeyNavigation.tab: sourceContent.primaryControl
+            Keys.onTabPressed: function(event) {
+              if (event.modifiers === Qt.NoModifier && sourceContent.primaryControl) sourceContent.primaryControl.forceActiveFocus()
+              else if (event.modifiers === Qt.ShiftModifier) refreshButton.forceActiveFocus()
+              else return
+              event.accepted = true
+            }
             onSelected: function(tab) { tabState.select(tab, true) }
           }
 
           SourceContent {
             id: sourceContent
+            objectName: "opatchy-source-content"
             width: parent.width
             tab: tabState.selectedTab
             service: root.service
+            previousFocusItem: sourceTabs
             snapshot: root.service ? root.service.lastSnapshot : null
             notifyPermanent: setting("notifyPermanent", true) === true
             reducedMotion: setting("reducedMotion", false) === true
@@ -213,7 +249,7 @@ Panel {
 
       PanelTabState {
         id: tabState
-        onSelectionRequested: root.persistSelectedTab(tab)
+        onSelectionRequested: function(tab) { root.persistSelectedTab(tab) }
         onCloseRequested: root.close()
       }
     }

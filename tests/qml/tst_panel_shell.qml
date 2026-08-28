@@ -121,6 +121,7 @@ TestCase {
     QtObject {
       property var lastSnapshot: null
       property bool refreshing: false
+      property bool canUpdateAll: true
       property var lastAttemptAt: null
       property var lastSuccessAt: null
       property string lastFailureKind: ""
@@ -130,6 +131,9 @@ TestCase {
       signal starFailed(var operation, string message)
 
       function requestRefresh() { }
+      function requestUpdateAll() { }
+      function requestInventory() { return true }
+      function setStar() { return true }
     }
   }
 
@@ -295,6 +299,39 @@ TestCase {
       }
       view.destroy()
     }
+  }
+
+  function test_full_panel_tab_and_backtab_reach_enabled_controls_without_settings() {
+    serviceObject.lastSnapshot = hostSummarySnapshot()
+    const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+    const panel = openProductionPanel(view)
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
+    const updateAll = named(panel, "update-all")
+    const refresh = named(panel, "refresh-source-scan")
+    const settings = named(panel, "settings-coming-later")
+    const tabs = named(panel, "opatchy-source-tabs")
+    const securityRefresh = named(panel, "security-refresh")
+    verify(updateAll !== null && refresh !== null && settings !== null && tabs !== null && securityRefresh !== null, "full panel must expose its keyboard route")
+    verify(updateAll.enabled && refresh.enabled && securityRefresh.enabled)
+    compare(settings.focusable, false)
+    compare(settings.activeFocusOnTab, false)
+
+    updateAll.forceActiveFocus()
+    tryVerify(function() { return updateAll.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return refresh.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return tabs.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return securityRefresh.activeFocus }, 1000)
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return tabs.activeFocus }, 1000)
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return refresh.activeFocus }, 1000)
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return updateAll.activeFocus }, 1000)
+    view.destroy()
   }
 
   function test_open_waits_for_the_one_lazy_panel_then_forwards_to_it() {

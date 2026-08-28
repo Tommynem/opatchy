@@ -12,6 +12,7 @@ Item {
   property var starState: null
   property bool canRefresh: false
   property bool notifyPermanent: true
+  property Item previousFocusItem: null
   readonly property var view: presentation.view
   readonly property Item primaryControl: groupRepeater.count > 0 && groupRepeater.itemAt(0)
     ? groupRepeater.itemAt(0).primaryControl
@@ -67,6 +68,18 @@ Item {
       focusable: true
       bordered: true
       enabled: root.canRefresh
+      KeyNavigation.backtab: root.previousFocusItem
+      Keys.priority: Keys.BeforeItem
+      Keys.onTabPressed: function(event) {
+        if (event.modifiers !== Qt.ShiftModifier || !root.previousFocusItem) return
+        root.previousFocusItem.forceActiveFocus()
+        event.accepted = true
+      }
+      Keys.onPressed: function(event) {
+        if (event.key !== Qt.Key_Backtab || !root.previousFocusItem) return
+        root.previousFocusItem.forceActiveFocus()
+        event.accepted = true
+      }
       onClicked: root.refreshRequested()
     }
 
