@@ -84,7 +84,7 @@ function sourceHealth(snapshot, source) {
   var sources = snapshot && snapshot.payload && Array.isArray(snapshot.payload.sources) ? snapshot.payload.sources : []
   var value = sources.filter(function(candidate) { return candidate && candidate.source === source })[0]
   var status = value && typeof value.status === "string" ? value.status : "invalid"
-  return "Source health: " + healthText(status)
+  return "Evidence: " + healthText(status)
 }
 
 function row(item, context) {
