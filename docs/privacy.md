@@ -20,10 +20,12 @@ yourself if you also want to discard its retained local data.
 
 ## Network requests
 
-Opatchy fetches only the public Arch security feed and, when enabled, the CISA
-Known Exploited Vulnerabilities feed. Requests reveal ordinary network metadata
-to those services, such as the user's network address, request timing, and the
-`Opatchy/1` User-Agent. See [data sources](data-sources.md) for exact endpoints.
+Opatchy fetches only the public Arch security and CISA Known Exploited
+Vulnerabilities feeds. Requests reveal ordinary network metadata to those
+services, such as the user's network address, request timing, and the
+`Opatchy/1` User-Agent. The manifest's CISA setting is not currently connected
+to collection, so it does not suppress that request. See [data
+sources](data-sources.md) for exact endpoints.
 
 ## Notifications
 

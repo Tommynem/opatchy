@@ -33,6 +33,11 @@ state file is `$XDG_STATE_HOME/opatchy/state.json`. It uses `XDG_CACHE_HOME` or
 `~/.cache` as a fallback, with cache content under `$XDG_CACHE_HOME/opatchy/`.
 Relative XDG values are rejected. State writes use a lock and atomic replacement.
 Invalid or incompatible retained state is unavailable rather than trusted.
+The storage writer sets its directories to `0700` and its files, including
+`state.json` and `state.lock`, to `0600`. The remote transport-cache writer
+uses the process umask while creating its cache path before the storage writer
+subsequently normalizes that directory; do not treat cache-path permissions as
+a secrecy guarantee beyond the current user account.
 
 The state contains watches and the notification ledger. The cache contains the
 latest validated snapshot, source inventories, a generation record, remote
@@ -40,6 +45,12 @@ transport validators and bodies, and parser-validated last-good security feed
 bytes. Transport and semantic feed records are deliberately separate. Retained
 data can be presented as last-known evidence but is not promoted to current
 evidence merely because it exists.
+
+Watches have no time-based expiry. Inactive notification-ledger entries are
+retained for at most 180 days and the newest 5,000 entries; active entries are
+not age-pruned. Snapshots, inventories, and feed caches have no time-based
+retention limit. Invalid retained records are discarded or quarantined rather
+than used.
 
 There is no cloud account, analytics queue, or Opatchy telemetry retention path.
 

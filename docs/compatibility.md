@@ -5,10 +5,10 @@ ID is `io.github.tomge.opatchy` and its version is `0.1.0`. The manifest declare
 a combined `service` and `bar-widget` plugin, with the widget placed in the
 right section by default and only one instance allowed.
 
-This is a compatibility target, not a universal compatibility promise. The host
-must provide Omarchy's plugin CLI and shell runtime. The plugin is loaded by the
-long-lived `omarchy-shell` process and therefore requires a compatible
-Quickshell environment supplied by Omarchy.
+This is a compatibility target, not a promise that it works in every
+environment. The host must provide Omarchy's plugin CLI and shell runtime. The
+plugin is loaded by the long-lived `omarchy-shell` process and therefore
+requires a compatible Quickshell environment supplied by Omarchy.
 
 The plugin uses host-provided `/usr/bin` programs when their source is enabled:
 `omarchy-update-available`, `pacman`, `checkupdates`, `vercmp`, `yay`, `paru`,
