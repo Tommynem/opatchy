@@ -1,30 +1,39 @@
 # Contributing to Opatchy
 
-## Before contributing
+Thanks for helping improve Opatchy. Small, focused changes are easiest to
+review. Start by reading the README, [architecture](docs/architecture.md), and
+[threat model](docs/threat-model.md).
 
-Opatchy is planned for Omarchy 4/schema v1 under the permanent ID
-`io.github.tomge.opatchy`. Keep changes compatible with the MIT license, the
-public product boundary, and the dependency-free runtime requirement.
+## Before you start
 
-Do not add installers, package mutation, privilege escalation, telemetry,
-curl-to-shell instructions, or security assurances that exceed available
-evidence. Runtime work must keep native update workflows separate from package
-management.
+Opatchy is an Omarchy 4/schema v1 plugin with permanent ID
+`io.github.tomge.opatchy`. Preserve its read-mostly boundary. Don't add an
+installer, curl-to-shell instruction, package mutation, privilege escalation,
+telemetry, arbitrary-command execution, or security assurance.
 
-## Checks
+Keep user-facing wording honest about current, stale, unavailable, invalid, and
+not-applicable evidence. New source or endpoint behavior needs a matching row in
+`docs/data-sources.md`, a privacy review, and focused tests.
 
-Run the current repository contract before sending a change:
-
-```sh
-python3 -m unittest discover -s tests/contract -p 'test_*.py'
-```
-
-Later tasks will provide the full development checks:
+## Development loop
 
 ```sh
 uv sync --group dev
 make validate
 ```
 
-Keep public documentation concise, record behavior changes in
-`CHANGELOG.md`, and include focused tests with implementation changes.
+For a quick public-contract check:
+
+```sh
+python3 -m unittest discover -s tests/contract -p 'test_*.py'
+```
+
+Don't edit generated screenshots or preview artifacts as part of ordinary
+runtime changes. Include tests with behavior changes and update `CHANGELOG.md`
+when a user-visible behavior changes.
+
+## Pull requests
+
+Explain the user impact, source and privacy effects, validation run, and any
+Omarchy version assumptions. Keep commits narrow. Never include local XDG state,
+cache files, tokens, package inventories, or `.omo` planning material.
