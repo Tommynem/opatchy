@@ -127,7 +127,30 @@ def test_security_check_rejects_unsafe_qml_process_boundary_edits() -> None:
     with temporary_repository(REPOSITORY_ROOT) as repository:
         path = repository.path("qml/models/TerminalHandoff.qml")
         with path.open("a", encoding="utf-8") as handle:
-            _ = handle.write('\nvar unsafe = ["/usr/bin/pacman", "-Syu"]\n')
+            _ = handle.write(
+                '\nvar unsafe = ["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/pacman", "-Syu"]\n'
+            )
+        result = _run(repository)
+
+    assert result.returncode != 0
+    assert "SECURITY POLICY VIOLATION(mutation-command)" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "argv",
+    (
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--user", "update", "org.example.App"]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--assumeyes", "--user", "update"]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "update"]',
+        '["/usr/bin/flatpak", "/usr/bin/omarchy-launch-floating-terminal-with-presentation", "--user", "update"]',
+        '["/usr/bin/omarchy-launch-floating-terminal-with-presentation", "/usr/bin/flatpak", "--user", "update", "--assumeyes"]',
+    ),
+)
+def test_security_check_rejects_modified_fixed_flatpak_handoffs(argv: str) -> None:
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        path = repository.path("qml/models/TerminalHandoff.qml")
+        with path.open("a", encoding="utf-8") as handle:
+            _ = handle.write(f"\nvar unsafe = {argv}\n")
         result = _run(repository)
 
     assert result.returncode != 0

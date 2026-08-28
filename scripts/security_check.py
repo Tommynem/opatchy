@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Final
 
 ROOT: Final = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 PYTHON_ROOTS: Final = (
     ROOT / "helper" / "opatchy.py",
     ROOT / "helper" / "opatchy_helper",
@@ -37,9 +39,6 @@ OVERSIZED_ALLOWLIST: Final = frozenset(
 )
 MUTATION_PATTERN: Final = re.compile(
     r"(?:pacman|yay|paru|flatpak)[^\n]{0,160}(?:-(?:S|R|U)[A-Za-z]*|--(?:sync|remove|install|uninstall|upgrade)|\b(?:install|uninstall|remove|upgrade)\b)"
-)
-QML_MUTATION_PATTERN: Final = re.compile(
-    r"\[\s*[\"'](?:/usr/bin/)?(?:pacman|yay|paru|flatpak)[\"'][^\]\n]{0,160}(?:-[SRU][A-Za-z]*|--(?:sync|remove|install|uninstall|upgrade)|\b(?:install|uninstall|remove|upgrade)\b)"
 )
 SHELL_PATTERN: Final = re.compile(
     r"shell\s*=\s*True|\bos\.(?:system|popen)\(|\b(?:eval|exec)\("
@@ -162,14 +161,18 @@ def _from_import_violations(
 
 
 def _qml_violations(path: Path, text: str) -> tuple[Violation, ...]:
+    from scripts.security_qml import mutation_array_lines
+
     violations: list[Violation] = []
     for pattern, rule in (
-        (QML_MUTATION_PATTERN, "mutation-command"),
         (RICH_TEXT_PATTERN, "rich-text"),
         (PALETTE_PATTERN, "hardcoded-palette"),
     ):
         for match in pattern.finditer(text):
             violations.append(Violation(rule, path, _line_number(text, match.start())))
+    violations.extend(
+        Violation("mutation-command", path, line) for line in mutation_array_lines(text)
+    )
     for match in URL_PATTERN.finditer(text):
         if not match.group().startswith(URL_ALLOWLIST):
             violations.append(
