@@ -38,6 +38,9 @@ OVERSIZED_ALLOWLIST: Final = frozenset(
 MUTATION_PATTERN: Final = re.compile(
     r"(?:pacman|yay|paru|flatpak)[^\n]{0,160}(?:-(?:S|R|U)[A-Za-z]*|--(?:sync|remove|install|uninstall|upgrade)|\b(?:install|uninstall|remove|upgrade)\b)"
 )
+QML_MUTATION_PATTERN: Final = re.compile(
+    r"\[\s*[\"'](?:/usr/bin/)?(?:pacman|yay|paru|flatpak)[\"'][^\]\n]{0,160}(?:-[SRU][A-Za-z]*|--(?:sync|remove|install|uninstall|upgrade)|\b(?:install|uninstall|remove|upgrade)\b)"
+)
 SHELL_PATTERN: Final = re.compile(
     r"shell\s*=\s*True|\bos\.(?:system|popen)\(|\b(?:eval|exec)\("
 )
@@ -161,6 +164,7 @@ def _from_import_violations(
 def _qml_violations(path: Path, text: str) -> tuple[Violation, ...]:
     violations: list[Violation] = []
     for pattern, rule in (
+        (QML_MUTATION_PATTERN, "mutation-command"),
         (RICH_TEXT_PATTERN, "rich-text"),
         (PALETTE_PATTERN, "hardcoded-palette"),
     ):

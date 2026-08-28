@@ -43,6 +43,11 @@ def test_security_check_accepts_the_product_source_tree() -> None:
             "mutation-command",
         ),
         (
+            "qml/models/E2eMutation.qml",
+            'QtObject { property var command: ["/usr/bin/pacman", "-Syu"] }\n',
+            "mutation-command",
+        ),
+        (
             "helper/opatchy_helper/e2e_shell.py",
             'import os\nos.system("unsafe")\n',
             "shell-api",
@@ -112,6 +117,17 @@ def test_security_check_rejects_unsafe_edits_to_the_process_boundary() -> None:
         path = repository.path("helper/opatchy_helper/runner_process.py")
         with path.open("a", encoding="utf-8") as handle:
             _ = handle.write('\nsubprocess.run(["/usr/bin/pacman", "-Syu"])\n')
+        result = _run(repository)
+
+    assert result.returncode != 0
+    assert "SECURITY POLICY VIOLATION(mutation-command)" in result.stderr
+
+
+def test_security_check_rejects_unsafe_qml_process_boundary_edits() -> None:
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        path = repository.path("qml/models/TerminalHandoff.qml")
+        with path.open("a", encoding="utf-8") as handle:
+            _ = handle.write('\nvar unsafe = ["/usr/bin/pacman", "-Syu"]\n')
         result = _run(repository)
 
     assert result.returncode != 0
