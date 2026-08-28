@@ -156,4 +156,5 @@ fi
 run_gate js node --test "${node_test_files[@]}" tests/js/*.test.mjs
 run_gate repository-contract /usr/bin/python3 -m unittest discover -s tests/contract -p 'test_*.py'
 run_gate runtime "${repository_root}/scripts/runtime_without_venv.sh"
+run_gate security-policy /usr/bin/python3 scripts/security_check.py
 run_gate static git diff --check
