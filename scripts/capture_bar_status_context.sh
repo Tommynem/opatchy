@@ -11,6 +11,9 @@ for capture in "${output}"/*transparent*.png; do
   alpha_range="$(identify -format '%[fx:minima.a] %[fx:maxima.a]' "${capture}")"
   [[ "${alpha_range}" == "0 1" ]] || { printf 'expected transparent pixels in %s, got alpha range %s\n' "${capture}" "${alpha_range}" >&2; exit 1; }
 done
-sha256sum "${root}/qml/components/BarStatusIcon.qml" "${root}/qml/components/BarStatusPresentation.qml" "${root}/qml/models/BarStatusModel.js" "${root}/tests/qml/BarStatusContextCapture.qml" >"${manifest}"
+(
+  cd "${root}"
+  sha256sum qml/components/BarStatusIcon.qml qml/components/BarStatusPresentation.qml qml/models/BarStatusModel.js tests/qml/BarStatusContextCapture.qml
+) >"${manifest}"
 file "${output}"/*.png
 identify -format '%f %wx%h\n' "${output}"/*.png

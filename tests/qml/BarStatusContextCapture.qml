@@ -36,7 +36,7 @@ Item {
         x: bar.vertical ? 0 : bar.width - 43; y: bar.vertical ? bar.height - 27 : 0
         BarStatusIcon {
         id: statusIcon; anchors.centerIn: parent; width: 16; height: 16
-        icon: presentation.status.icon; badge: presentation.status.badge; stale: presentation.status.stale; refreshing: presentation.status.spinner
+        icon: presentation.status.icon; badge: presentation.status.badge; stale: presentation.status.stale; refreshing: presentation.status.spinner; reducedMotion: true
         foreground: root.currentFixture.dark || root.currentFixture.contrast || root.currentFixture.transparent ? "#f7f9fc" : "#172033"
         urgent: root.currentFixture.dark ? "#ff9990" : "#bd1830"
         fontFamily: root.productionIconFont; fontSize: 13
@@ -48,7 +48,7 @@ Item {
       width: bar.vertical ? stage.width - 108 : stage.width - 56; height: bar.vertical ? stage.height - 36 : 128
       radius: 10; border.width: 1; border.color: root.currentFixture.dark || root.currentFixture.contrast ? "#59657a" : "#b9c2cf"
       color: root.currentFixture.dark || root.currentFixture.contrast ? "#2b313c" : "#ffffff"
-      Text { id: tooltipText; anchors.fill: tooltip; anchors.margins: 18; text: presentation.status.tooltip; wrapMode: Text.WordWrap; maximumLineCount: 5; elide: Text.ElideRight; color: root.currentFixture.dark || root.currentFixture.contrast ? "#f7f9fc" : "#172033"; font.pixelSize: 15; verticalAlignment: Text.AlignVCenter }
+      Text { id: tooltipText; anchors.fill: tooltip; anchors.margins: 18; text: presentation.status.tooltip; wrapMode: Text.WordWrap; maximumLineCount: 5; elide: Text.ElideRight; color: root.currentFixture.dark || root.currentFixture.contrast ? "#f7f9fc" : "#172033"; font.pixelSize: 15; verticalAlignment: Text.AlignVCenter; renderType: Text.QtRendering; visible: false }
     }
   }
   Component.onCompleted: captureNext()
