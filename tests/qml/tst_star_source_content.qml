@@ -159,7 +159,7 @@ TestCase {
     view.sourceContent.watchedOnly = true
     compare(view.sourceContent.displayedRows.length, 1)
     compare(view.sourceContent.displayedRows[0].target, "arch:demo")
-    compare(view.sourceContent.displayedRows[0].healthText, "Source health: Last known")
+    compare(view.sourceContent.displayedRows[0].healthText, "Evidence: Last known")
     view.destroy()
   }
 }

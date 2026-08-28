@@ -105,7 +105,10 @@ Item {
           visible: !root.browsing
           width: parent.width
           rows: root.displayedRows
-          emptyText: root.watchedOnly ? "No watched updates in this source." : "No actionable updates in this source."
+          emptyTitle: root.watchedOnly ? "No watched items" : "Nothing needs action"
+          emptyDetail: root.watchedOnly
+            ? "This source has no temporary or permanent watches to review."
+            : "This source has no actionable updates in the current evidence."
           starState: stars
           notifyPermanent: root.notifyPermanent
           foreground: root.foreground
