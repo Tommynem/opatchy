@@ -6,7 +6,8 @@ Item {
   id: root
 
   property var rows: []
-  property string emptyText: "No actionable updates in this source."
+  property string emptyTitle: "Nothing needs action"
+  property string emptyDetail: "Current source data has no actionable updates."
   property var starState: null
   property bool notifyPermanent: true
   property color foreground: Color.foreground
@@ -22,12 +23,28 @@ Item {
     Text {
       visible: root.rows.length === 0
       width: parent.width
-      text: root.emptyText
+      text: root.emptyTitle
+      textFormat: Text.PlainText
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: true
+      wrapMode: Text.Wrap
+      maximumLineCount: 2
+      elide: Text.ElideRight
+    }
+
+    Text {
+      visible: root.rows.length === 0 && root.emptyDetail !== ""
+      width: parent.width
+      text: root.emptyDetail
       textFormat: Text.PlainText
       color: Qt.darker(root.foreground, 1.4)
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
       wrapMode: Text.Wrap
+      maximumLineCount: 3
+      elide: Text.ElideRight
     }
 
     Repeater {

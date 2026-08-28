@@ -2,10 +2,11 @@
 
 ## 1. Atmosphere & Identity
 
-Opatchy is a quiet, host-native operations panel: compact evidence first, with
-meaning carried by explicit text rather than color or decoration. Its signature
-is a readable evidence trail that remains clear when data is current, retained,
-or unavailable.
+Opatchy is a quiet, host-native operations panel. Its focal hierarchy starts
+with one evidence summary, then a plainly labelled problem or current-state
+message, then the selected source. Meaning is carried by explicit text and
+Nerd Font glyphs rather than color or decoration, so current, retained,
+unavailable, and incompatible evidence cannot be mistaken for one another.
 
 ## 2. Color
 
@@ -32,17 +33,42 @@ rendering.
 
 ## 4. Spacing & Layout
 
-Use `Style.spacing.xs` for evidence within a finding and `Style.spacing.sm` for
-groups and controls. The panel is one responsive column; all children bind to
-their parent width and long external text wraps, elides, and has a bounded line
-count.
+Use `Style.spacing.xs` within an evidence row and `Style.spacing.sm` between
+the hero, problem summary, tab grid, and selected source. The panel is one
+responsive column; all children bind to their parent width and long external
+text wraps, elides, and has a bounded line count. Tab navigation uses three,
+two, or one columns according to the token-derived minimum readable tab width;
+narrow panels use one column so health text wraps visibly instead of being
+clipped or hidden behind a tooltip. It never horizontally clips a tab strip.
 
 ## 5. Components
 
 ### Source Tab Strip
-- **Structure**: horizontal native `Button` list.
-- **States**: selected, focus, disabled.
-- **Accessibility**: keyboard focus and textual health.
+- **Structure**: responsive native `Button` grid in the mandatory Security,
+  Omarchy, System, AUR, Flatpak, mise order. It uses three columns only when
+  the token-derived cell width remains readable, then two or one columns.
+- **States**: selected, focus, current, last-known, unavailable, incompatible,
+  and not-applicable health.
+- **Accessibility**: every tab remains discoverable without horizontal
+  scrolling; its bounded visible glyph, name/count, and health text identify
+  state for keyboard users, while the tooltip supplements rather than replaces
+  that text. Native Enter and Space activation remain on the host button.
+
+### Panel Problem Summary
+- **Structure**: one leading Nerd Font warning glyph followed by a short,
+  problem-first title, an actionable explanation, and one scan-evidence line.
+- **States**: all current, source attention required, update required, and
+  service unavailable.
+- **Accessibility**: problem state is named in text and glyph shape, never
+  color alone. It is the only panel-global failure message, preventing repeated
+  incompatible/unavailable prose.
+
+### Empty Evidence State
+- **Structure**: a short outcome title followed by one source-specific next
+  step, rather than blank space or repeated source-health metadata.
+- **States**: no actionable updates, no watched items, no cached matches.
+- **Accessibility**: the title and detail remain plain text and fit the same
+  bounded responsive column as populated rows.
 
 ### Bar Status Indicator
 - **Structure**: `BarStatusPresentation` provides one Nerd Fonts MDI glyph,
@@ -77,7 +103,9 @@ count.
 ## 6. Motion & Interaction
 
 No decorative motion is used. Native controls retain host focus and press
-feedback; no layout property is animated.
+feedback; no layout property is animated. The host `md-refresh` glyph
+(`\uf0450`) remains visible for refresh whether or not reduced motion disables
+the separate bar refresh rotation.
 
 ## 7. Depth & Surface
 
@@ -87,6 +115,9 @@ shadows, borders, or color literals.
 ## 8. Accessibility Constraints & Accepted Debt
 
 The UI targets keyboard-complete navigation, visible host-native focus, plain
-external text, bounded hostile strings, and non-color status copy. Standalone
-Qt tests verify presentation seams; compositor and screen-reader signoff remain
-host-level validation outside this repository's offscreen capability.
+external text, bounded hostile strings, and non-color status copy. It must
+remain usable at narrow widths, with CJK/RTL/long labels, and when reduced
+motion is enabled. Standalone Qt tests verify presentation seams; compositor
+and screen-reader signoff remain host-level validation outside this repository's
+offscreen capability. Human visual approval and real-host compatibility remain
+explicitly unproven by this contract.

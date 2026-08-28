@@ -46,7 +46,10 @@ Item {
     UpdateListView {
       width: parent.width
       rows: root.displayedRows
-      emptyText: ""
+      emptyTitle: root.watchedOnly ? "No watched cached items" : "No cached matches"
+      emptyDetail: root.watchedOnly
+        ? "No temporary or permanent watches match this cached source."
+        : "Adjust the search or refresh this source to request current cached inventory."
       starState: root.starState
       notifyPermanent: root.notifyPermanent
       foreground: root.foreground
