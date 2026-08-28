@@ -38,12 +38,22 @@ def test_security_check_accepts_the_product_source_tree() -> None:
             "mutation-command",
         ),
         (
+            "helper/opatchy_helper/e2e_mutation.py",
+            'COMMAND = ("/usr/bin/pacman", "-Syu")\n',
+            "mutation-command",
+        ),
+        (
             "helper/opatchy_helper/e2e_shell.py",
             'import os\nos.system("unsafe")\n',
             "shell-api",
         ),
         (
             "qml/components/E2eRichText.qml",
+            'Item { property string text: "<b>unsafe</b>" }\n',
+            "rich-text",
+        ),
+        (
+            "Panel.qml",
             'Item { property string text: "<b>unsafe</b>" }\n',
             "rich-text",
         ),
@@ -58,12 +68,27 @@ def test_security_check_accepts_the_product_source_tree() -> None:
             "hardcoded-palette",
         ),
         (
+            "qml/components/E2ePalette.qml",
+            "Item { property color foreground: Qt.rgba(1, 0, 1, 1) }\n",
+            "hardcoded-palette",
+        ),
+        (
             "helper/opatchy_helper/e2e_dependency.py",
             "import requests\n",
             "runtime-dependency",
         ),
         (
+            "helper/opatchy_helper/e2e_dependency.py",
+            '__import__("requests")\n',
+            "runtime-dependency",
+        ),
+        (
             "helper/opatchy_helper/e2e_oversized.py",
+            "value = 0\n" * 251,
+            "oversized-module",
+        ),
+        (
+            "qml/models/E2eOversized.js",
             "value = 0\n" * 251,
             "oversized-module",
         ),
@@ -80,3 +105,14 @@ def test_security_check_rejects_each_prohibited_source_mutation(
 
     assert result.returncode != 0
     assert f"SECURITY POLICY VIOLATION({rule})" in result.stderr
+
+
+def test_security_check_rejects_unsafe_edits_to_the_process_boundary() -> None:
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        path = repository.path("helper/opatchy_helper/runner_process.py")
+        with path.open("a", encoding="utf-8") as handle:
+            _ = handle.write('\nsubprocess.run(["/usr/bin/pacman", "-Syu"])\n')
+        result = _run(repository)
+
+    assert result.returncode != 0
+    assert "SECURITY POLICY VIOLATION(mutation-command)" in result.stderr
