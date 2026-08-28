@@ -87,6 +87,15 @@ FocusScope {
             fontSize: Style.font.bodySmall
             focusable: true
             bordered: true
+            Keys.priority: Keys.BeforeItem
+            Keys.onTabPressed: function(event) {
+              watchedButton.forceActiveFocus()
+              event.accepted = true
+            }
+            Keys.onBacktabPressed: function(event) {
+              if (root.previousFocusItem) root.previousFocusItem.forceActiveFocus()
+              event.accepted = true
+            }
             onClicked: root.toggleBrowse()
           }
         }
@@ -97,6 +106,7 @@ FocusScope {
           spacing: Style.spacing.sm
 
           Button {
+            id: watchedButton
             width: parent.width
             text: root.watchedOnly ? "Show all" : "Watched"
             tooltipText: root.watchedOnly ? "Show all available rows" : "Show temporary and permanent watches, including last-known permanent entries"
@@ -105,6 +115,16 @@ FocusScope {
             fontSize: Style.font.bodySmall
             focusable: true
             bordered: true
+            Keys.priority: Keys.BeforeItem
+            Keys.onTabPressed: function(event) {
+              const firstAction = footerActions.itemAt(0)
+              if (firstAction) firstAction.forceActiveFocus()
+              event.accepted = true
+            }
+            Keys.onBacktabPressed: function(event) {
+              browseButton.forceActiveFocus()
+              event.accepted = true
+            }
             onClicked: { root.watchedOnly = !root.watchedOnly; if (root.watchedOnly && !root.browsing) root.toggleBrowse() }
           }
         }
@@ -140,9 +160,11 @@ FocusScope {
           spacing: Style.spacing.sm
 
           Repeater {
+            id: footerActions
             model: root.actions
 
             delegate: Button {
+              required property int index
               required property var modelData
               width: parent.width
               text: modelData.text
@@ -153,6 +175,18 @@ FocusScope {
               focusable: true
               bordered: true
               enabled: modelData.enabled
+              Keys.priority: Keys.BeforeItem
+              Keys.onTabPressed: function(event) {
+                const nextAction = footerActions.itemAt(index + 1)
+                if (!nextAction) return
+                nextAction.forceActiveFocus()
+                event.accepted = true
+              }
+              Keys.onBacktabPressed: function(event) {
+                const previousAction = index > 0 ? footerActions.itemAt(index - 1) : watchedButton
+                previousAction.forceActiveFocus()
+                event.accepted = true
+              }
               onClicked: root.dispatch(modelData.kind)
             }
           }

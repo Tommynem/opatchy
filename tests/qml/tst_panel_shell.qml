@@ -122,6 +122,9 @@ TestCase {
       property var lastSnapshot: null
       property bool refreshing: false
       property bool canUpdateAll: true
+      property bool canOpenOmarchyUpdate: true
+      property bool canOpenFlatpakUserUpdate: true
+      property bool canOpenFlatpakSystemUpdate: true
       property var lastAttemptAt: null
       property var lastSuccessAt: null
       property string lastFailureKind: ""
@@ -134,6 +137,9 @@ TestCase {
       function requestUpdateAll() { }
       function requestInventory() { return true }
       function setStar() { return true }
+      function openOmarchyUpdate() { }
+      function openFlatpakUserUpdate() { }
+      function openFlatpakSystemUpdate() { }
     }
   }
 
@@ -252,6 +258,17 @@ TestCase {
     return null
   }
 
+  function buttonWithText(item, text) {
+    if (!item) return null
+    if (item.text === text) return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index += 1) {
+      const result = buttonWithText(children[index], text)
+      if (result) return result
+    }
+    return null
+  }
+
   function openProductionPanel(view) {
     tryVerify(function() { return view.widget !== null }, 1000)
     const button = named(view.widget, "opatchy-bar-icon")
@@ -275,6 +292,22 @@ TestCase {
         findings: []
       }
     }
+  }
+
+  function flatpakActionsSnapshot() {
+    const snapshot = hostSummarySnapshot()
+    const flatpak = snapshot.payload.sources.filter(function(source) {
+      return source.source === "flatpak"
+    })[0]
+    flatpak.scopes = ["user", "system"].map(function(scope) {
+      return { scope: scope, status: "ok", provenance: "live" }
+    })
+    snapshot.payload.summary.totalUpdates = 2
+    snapshot.payload.items = [
+      { id: "flatpak:user:app/example", source: "flatpak", label: "User fixture", installed: "1", candidate: "2", watchMode: "off", watchArmed: false, watchable: true },
+      { id: "flatpak:system:app/example", source: "flatpak", label: "System fixture", installed: "1", candidate: "2", watchMode: "off", watchArmed: false, watchable: true }
+    ]
+    return snapshot
   }
 
   function test_header_summary_and_actions_are_bounded_at_host_and_narrow_widths() {
@@ -331,6 +364,39 @@ TestCase {
     tryVerify(function() { return refresh.activeFocus }, 1000)
     keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
     tryVerify(function() { return updateAll.activeFocus }, 1000)
+    view.destroy()
+  }
+
+  function test_full_panel_tab_and_backtab_reach_each_enabled_flatpak_terminal_action() {
+    serviceObject.lastSnapshot = flatpakActionsSnapshot()
+    const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+    const panel = openProductionPanel(view)
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
+    const tabs = named(panel, "opatchy-source-tabs")
+    verify(tabs !== null && tabs.tabButtonAt(4) !== null, "the one-stop tab strip must expose Flatpak")
+    tabs.selected("Flatpak")
+    tryCompare(tabs, "selectedTab", "Flatpak", 1000)
+
+    const browse = named(panel, "browse-primary-control")
+    const watched = buttonWithText(panel, "Watched")
+    const userAction = buttonWithText(panel, "Open update terminal (user)")
+    const systemAction = buttonWithText(panel, "Open update terminal (system)")
+    verify(browse !== null && watched !== null && userAction !== null && systemAction !== null, "Flatpak content must expose its keyboard route and both terminal actions")
+    verify(userAction.enabled && systemAction.enabled)
+
+    tabs.forceActiveFocus()
+    tryVerify(function() { return tabs.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return browse.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return watched.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return userAction.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return systemAction.activeFocus }, 1000)
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return userAction.activeFocus }, 1000)
     view.destroy()
   }
 
