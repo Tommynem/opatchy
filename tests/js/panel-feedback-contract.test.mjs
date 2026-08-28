@@ -10,12 +10,13 @@ const design = () => readFileSync(resolve(repositoryRoot, "DESIGN.md"), "utf8");
 const updates = () => readFileSync(resolve(repositoryRoot, "qml/components/UpdateListView.qml"), "utf8");
 const updateModel = () => readFileSync(resolve(repositoryRoot, "qml/models/UpdateViewModel.js"), "utf8");
 
-test("uses the established Nerd Font refresh glyph with a text-equivalent tooltip", () => {
+test("uses an explicit text-only Refresh control after the glyph rejection", () => {
   const source = panel();
 
-  assert.match(source, /iconText:\s*"\\uf0450"/);
+  assert.match(source, /text:\s*root\.panelView\.refreshText/);
   assert.match(source, /tooltipText:\s*root\.panelView\.refreshText \+ " source scan"/);
   assert.doesNotMatch(source, /iconText: root\.panelView\.refreshText === "Refreshing" \? "\.\.\." : "R"/);
+  assert.doesNotMatch(source, /\\uf0450/);
 });
 
 test("uses a problem-first panel structure instead of a vague source-health label", () => {
@@ -38,6 +39,18 @@ test("uses a responsive tab grid with visible bounded health content", () => {
   assert.match(source, /readonly property int tabButtonCount/);
   assert.match(source, /Text \{[\s\S]*id: tabHealthItem[\s\S]*text: modelData\.healthText/);
   assert.match(source, /wrapMode: Text\.Wrap/);
+test("groups the requested top-right controls with a truthful settings placeholder", () => {
+  const source = panel();
+
+  assert.match(source, /objectName:\s*"update-all"/);
+  assert.match(source, /text:\s*"Update all"/);
+  assert.match(source, /onClicked:\s*root\.requestUpdateAll\(\)/);
+  assert.match(source, /objectName:\s*"settings-coming-later"/);
+  assert.match(source, /text:\s*"Settings \(coming later\)"/);
+  assert.match(source, /tooltipText:\s*"Settings coming later\."/);
+  assert.match(source, /enabled:\s*false/);
+});
+
   assert.match(source, /clip: true/);
   assert.doesNotMatch(source, /ListView/);
   assert.doesNotMatch(source, /HorizontalFlick/);

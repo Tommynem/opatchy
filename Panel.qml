@@ -55,6 +55,10 @@ Panel {
     if (serviceAvailable) service.requestRefresh()
   }
 
+  function requestUpdateAll() {
+    if (serviceAvailable) service.requestUpdateAll()
+  }
+
   PanelShellLayout {
     id: layout
     edge: panel.barPos
@@ -125,15 +129,46 @@ Panel {
             }
 
             trailingControl: Component {
-              PanelActionButton {
-                objectName: "refresh-source-scan"
-                iconText: "\uf0450"
-                tooltipText: root.panelView.refreshText + " source scan"
-                foreground: root.barForeground
-                fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                focusable: true
-                enabled: root.serviceAvailable
-                onClicked: root.requestRefresh()
+              Row {
+                spacing: Style.spacing.xs
+
+                Button {
+                  objectName: "update-all"
+                  text: "Update all"
+                  tooltipText: "Open each eligible native update workflow in order"
+                  foreground: root.barForeground
+                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  fontSize: Style.font.bodySmall
+                  focusable: true
+                  bordered: true
+                  enabled: root.serviceAvailable && root.service.canUpdateAll
+                  onClicked: root.requestUpdateAll()
+                }
+
+                Button {
+                  objectName: "refresh-source-scan"
+                  text: root.panelView.refreshText
+                  tooltipText: root.panelView.refreshText + " source scan"
+                  foreground: root.barForeground
+                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  fontSize: Style.font.bodySmall
+                  focusable: true
+                  bordered: true
+                  enabled: root.serviceAvailable
+                  onClicked: root.requestRefresh()
+                }
+
+                Button {
+                  objectName: "settings-coming-later"
+                  text: "Settings (coming later)"
+                  tooltipText: "Settings coming later."
+                  foreground: root.barForeground
+                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  fontSize: Style.font.bodySmall
+                  focusable: false
+                  bordered: true
+                  enabled: false
+                }
               }
             }
           }
@@ -160,6 +195,7 @@ Panel {
           }
 
           SourceContent {
+            id: sourceContent
             width: parent.width
             tab: tabState.selectedTab
             service: root.service
