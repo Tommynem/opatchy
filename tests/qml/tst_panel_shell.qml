@@ -167,6 +167,7 @@ TestCase {
       width: 640
       height: 480
       property alias state: state
+      property alias bar: bar
       readonly property var widget: widgetLoader.item
       property var service: null
       property var manifest: ({
@@ -191,7 +192,7 @@ TestCase {
         property color foreground: "black"
         property color urgent: "red"
         property string fontFamily: "Sans Serif"
-        property real hostCardWidth: 520
+        property real hostCardWidth: 607
         property real hostCardHeight: 360
       }
 
@@ -234,6 +235,66 @@ TestCase {
     if (anchor) anchor.destroy()
     if (replacementService) replacementService.destroy()
     if (serviceObject) serviceObject.destroy()
+  }
+
+  function named(item, objectName) {
+    if (!item) return null
+    if (item.objectName === objectName) return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index += 1) {
+      const result = named(children[index], objectName)
+      if (result) return result
+    }
+    return null
+  }
+
+  function openProductionPanel(view) {
+    tryVerify(function() { return view.widget !== null }, 1000)
+    const button = named(view.widget, "opatchy-bar-icon")
+    verify(button !== null, "bar widget must expose its real icon button")
+    mouseClick(button)
+    tryVerify(function() { return view.widget.panel !== null }, 1000)
+    tryCompare(view.widget, "opened", true, 1000)
+    return view.widget.panel
+  }
+
+  function hostSummarySnapshot() {
+    const current = function(source) {
+      return { source: source, status: "ok", provenance: "live" }
+    }
+    return {
+      payload: {
+        scanState: "complete",
+        summary: { totalUpdates: 0, watchedUpdates: 0, securityFindings: 0, degradedSources: 0 },
+        sources: [current("security"), current("cisa-kev"), current("omarchy"), current("arch"), current("aur"), current("flatpak"), current("mise")],
+        items: [],
+        findings: []
+      }
+    }
+  }
+
+  function test_header_summary_and_actions_are_bounded_at_host_and_narrow_widths() {
+    serviceObject.lastSnapshot = hostSummarySnapshot()
+    for (const width of [607, 320]) {
+      const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+      view.bar.hostCardWidth = width
+      const panel = openProductionPanel(view)
+      const hostPanel = named(panel, "opatchy-host-keyboard-panel")
+      const content = named(hostPanel, "opatchy-host-content")
+      const summary = named(panel, "opatchy-panel-hero-meta")
+      verify(hostPanel !== null && content !== null && summary !== null, "host composition must expose the header geometry")
+      tryVerify(function() { return summary.width > 0 }, 1000)
+      if (width === 607)
+        verify(!summary.truncated, "summary must receive its full rendered width at the active host width")
+      for (const objectName of ["update-all", "refresh-source-scan", "settings-coming-later"]) {
+        const control = named(panel, objectName)
+        verify(control !== null, objectName + " must be instantiated by the production panel")
+        const origin = control.mapToItem(content, 0, 0)
+        verify(origin.x >= 0 && origin.y >= 0, objectName + " must start inside the panel")
+        verify(origin.x + control.width <= content.width && origin.y + control.height <= content.height, objectName + " must stay within the panel")
+      }
+      view.destroy()
+    }
   }
 
   function test_open_waits_for_the_one_lazy_panel_then_forwards_to_it() {

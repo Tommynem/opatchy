@@ -127,49 +127,51 @@ Panel {
                 font.pixelSize: Style.font.display
               }
             }
+          }
 
-            trailingControl: Component {
-              Row {
-                spacing: Style.spacing.xs
+          Flow {
+            id: topActions
+            objectName: "opatchy-panel-top-actions"
+            width: parent.width
+            height: implicitHeight
+            spacing: Style.spacing.xs
 
-                Button {
-                  objectName: "update-all"
-                  text: "Update all"
-                  tooltipText: "Open each eligible native update workflow in order"
-                  foreground: root.barForeground
-                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                  fontSize: Style.font.bodySmall
-                  focusable: true
-                  bordered: true
-                  enabled: root.serviceAvailable && root.service.canUpdateAll
-                  onClicked: root.requestUpdateAll()
-                }
+            Button {
+              objectName: "update-all"
+              text: "Update all"
+              tooltipText: "Open each eligible native update workflow in order"
+              foreground: root.barForeground
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              fontSize: Style.font.bodySmall
+              focusable: true
+              bordered: true
+              enabled: root.serviceAvailable && root.service.canUpdateAll
+              onClicked: root.requestUpdateAll()
+            }
 
-                Button {
-                  objectName: "refresh-source-scan"
-                  text: root.panelView.refreshText
-                  tooltipText: root.panelView.refreshText + " source scan"
-                  foreground: root.barForeground
-                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                  fontSize: Style.font.bodySmall
-                  focusable: true
-                  bordered: true
-                  enabled: root.serviceAvailable
-                  onClicked: root.requestRefresh()
-                }
+            Button {
+              objectName: "refresh-source-scan"
+              text: root.panelView.refreshText
+              tooltipText: root.panelView.refreshText + " source scan"
+              foreground: root.barForeground
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              fontSize: Style.font.bodySmall
+              focusable: true
+              bordered: true
+              enabled: root.serviceAvailable
+              onClicked: root.requestRefresh()
+            }
 
-                Button {
-                  objectName: "settings-coming-later"
-                  text: "Settings (coming later)"
-                  tooltipText: "Settings coming later."
-                  foreground: root.barForeground
-                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                  fontSize: Style.font.bodySmall
-                  focusable: false
-                  bordered: true
-                  enabled: false
-                }
-              }
+            Button {
+              objectName: "settings-coming-later"
+              text: "Settings (coming later)"
+              tooltipText: "Settings coming later."
+              foreground: root.barForeground
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              fontSize: Style.font.bodySmall
+              focusable: false
+              bordered: true
+              enabled: false
             }
           }
 
