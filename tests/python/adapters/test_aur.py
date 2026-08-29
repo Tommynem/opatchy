@@ -81,6 +81,23 @@ def test_collect_aur_updates_prefers_yay_and_preserves_opaque_versions() -> None
     ]
 
 
+def test_collect_aur_updates_accepts_yay_candidate_age_metadata() -> None:
+    # Given: the installed yay shape adds its non-version candidate age metadata.
+    run = RecordingRunner(
+        (
+            CommandSucceeded(b"foo 1.0\n", b""),
+            CommandSucceeded(b"foo 1.0 -> 2.0 [1d5h]\n", b""),
+        )
+    )
+
+    # When: the AUR adapter parses the closed yay command output.
+    result = collect_aur_updates(run)
+
+    # Then: the age is accepted as metadata and never becomes candidate evidence.
+    assert isinstance(result, AurCollected)
+    assert result.items[0].candidate == "2.0"
+
+
 def test_collect_aur_updates_uses_paru_only_when_yay_is_missing() -> None:
     # Given: yay is absent and paru has update evidence.
     run = RecordingRunner(

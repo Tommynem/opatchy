@@ -72,6 +72,31 @@ def test_collect_mise_updates_preserves_multiple_backend_qualified_records() -> 
     ]
 
 
+def test_collect_mise_updates_accepts_current_additive_record_shape() -> None:
+    # Given: the installed mise JSON adds its current named metadata fields.
+    payload = b"""{
+        "claude": {
+            "name": "claude",
+            "requested": "latest",
+            "current": "2.1.241",
+            "bump": null,
+            "latest": "2.1.247",
+            "source": {"type": "mise.toml", "path": "/home/test/.config/mise/config.toml"}
+        }
+    }"""
+    run, _ = _runner_for(CommandSucceeded(payload, b""))
+
+    # When: the adapter parses the current closed command output.
+    result = mise.collect_mise_updates(run)
+
+    # Then: the required update evidence remains a truthful current record.
+    assert isinstance(result, mise.MiseCollected)
+    assert [
+        (record.item.item_id, record.current, record.latest)
+        for record in result.records
+    ] == [("mise:claude", "2.1.241", "2.1.247")]
+
+
 @pytest.mark.parametrize(
     "payload",
     [

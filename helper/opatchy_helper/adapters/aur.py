@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum, unique
 from typing import Protocol, assert_never
@@ -28,6 +29,8 @@ from opatchy_helper.runner_types import (
     CommandSucceeded,
     CommandTimedOut,
 )
+
+_YAY_AGE_SUFFIX = re.compile(r"^\[(?:[0-9]+[smhdw])+\]$")
 
 
 @unique
@@ -172,7 +175,13 @@ def _parse_helper_output(
             return AurInvalid(line)
         installed_fields = fields[0].split()
         candidate_fields = fields[1].split()
-        if len(installed_fields) != 2 or len(candidate_fields) != 1:
+        has_yay_age = (
+            len(candidate_fields) == 2
+            and _YAY_AGE_SUFFIX.fullmatch(candidate_fields[1]) is not None
+        )
+        if len(installed_fields) != 2 or not (
+            len(candidate_fields) == 1 or has_yay_age
+        ):
             return AurInvalid(line)
         name, installed = installed_fields
         candidate = candidate_fields[0]

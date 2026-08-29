@@ -28,6 +28,10 @@ from ..runner import (
 )
 
 _RECORD_FIELDS = frozenset({"requested", "current", "latest"})
+_CURRENT_RECORD_FIELDS = frozenset(
+    {"name", "requested", "current", "bump", "latest", "source"}
+)
+_CURRENT_SOURCE_FIELDS = frozenset({"type", "path"})
 
 
 class CommandRunner(Protocol):
@@ -146,8 +150,21 @@ def _parse_output(stdout: bytes) -> MiseResult:
 def _parse_record(key: str, value: JsonValue) -> MiseRecord | MiseInvalid:
     if type(value) is not dict:
         return MiseInvalid(f"mise.{key} must be an object")
-    if frozenset(value) != _RECORD_FIELDS:
+    fields = frozenset(value)
+    if fields not in (_RECORD_FIELDS, _CURRENT_RECORD_FIELDS):
         return MiseInvalid(f"mise.{key} must contain requested, current, and latest")
+    if fields == _CURRENT_RECORD_FIELDS:
+        name = value["name"]
+        bump = value["bump"]
+        source = value["source"]
+        if type(name) is not str or name != key:
+            return MiseInvalid(f"mise.{key}.name must match the record key")
+        if bump is not None:
+            return MiseInvalid(f"mise.{key}.bump must be null")
+        if type(source) is not dict or frozenset(source) != _CURRENT_SOURCE_FIELDS:
+            return MiseInvalid(f"mise.{key}.source must be a complete object")
+        if type(source["type"]) is not str or type(source["path"]) is not str:
+            return MiseInvalid(f"mise.{key}.source fields must be strings")
     requested = value["requested"]
     current = value["current"]
     latest = value["latest"]
