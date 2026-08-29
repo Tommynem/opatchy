@@ -55,7 +55,7 @@ QtObject {
     if (pending || !service || typeof service.setStar !== "function") return false
     var effectiveMode = modeFor(target, confirmedMode)
     var view = StarViewModel.presentation(effectiveMode, notifyPermanent, watchable, false)
-    if (!view.enabled || ["off", "temporary", "permanent"].indexOf(requestedMode) === -1 || requestedMode === effectiveMode) return false
+    if (!view.enabled || requestedMode !== view.nextMode) return false
     var request = { itemId: target, mode: requestedMode }
     if (condition !== undefined && condition !== null) {
       if (requestedMode !== "temporary" || !validCondition(target, condition)) return false

@@ -96,19 +96,21 @@ TestCase {
     state.destroy()
   }
 
-  function test_explicit_watch_mode_requests_respect_the_authoritative_current_mode() {
+  function test_explicit_mode_request_rejects_non_next_mode_from_effective_permanent() {
     const state = stateComponent.createObject(root)
     const service = { requests: [], setStar: function(request) { this.requests.push(request); return true } }
     state.service = service
     state.snapshotGeneration = "generation-1"
 
+    verify(state.requestMode("arch:demo", "off", true, "temporary"))
+    state.acceptResult({ payload: { itemId: "arch:demo", mode: "temporary", watchArmed: true } }, { kind: "set-star", itemId: "arch:demo", mode: "temporary" })
     verify(state.requestMode("arch:demo", "off", true, "permanent"))
-    compare(service.requests[0].mode, "permanent")
     state.acceptResult({ payload: { itemId: "arch:demo", mode: "permanent", watchArmed: false } }, { kind: "set-star", itemId: "arch:demo", mode: "permanent" })
     compare(state.modeFor("arch:demo", "off"), "permanent")
-    verify(!state.requestMode("arch:demo", "off", true, "permanent"), "the visible selected mode is not redundantly sent")
+    verify(!state.requestMode("arch:demo", "off", true, "temporary"))
+    compare(service.requests.length, 2)
     verify(state.requestMode("arch:demo", "off", true, "off"))
-    compare(service.requests[1].mode, "off")
+    compare(service.requests[2].mode, "off")
     state.destroy()
   }
 
