@@ -48,9 +48,12 @@ from opatchy_helper.notifications import (
 from opatchy_helper.runner_registry import COMMAND_SPECS
 from opatchy_helper.runner_types import (
     CommandExited,
+    CommandMissing,
     CommandName,
+    CommandOutputExceeded,
     CommandResult,
     CommandSucceeded,
+    CommandTimedOut,
 )
 from opatchy_helper.storage import Storage, SystemAtomicOperations
 from opatchy_helper.storage_state import prune_ledger
@@ -524,28 +527,36 @@ def test_coordinator_delivers_exact_closed_argv_once_per_kind_and_deduplicates_r
     assert not sentinel.exists()
 
 
-def test_coordinator_keeps_failure_pending_for_one_retry_then_marks_failed(
+@pytest.mark.parametrize(
+    "failure",
+    (
+        CommandExited(1, b"", b""),
+        CommandMissing("notify-send is unavailable"),
+        CommandTimedOut(b"", b""),
+        CommandOutputExceeded("stdout", b"", b""),
+    ),
+)
+def test_coordinator_keeps_repeated_delivery_failures_retryable(
     tmp_path: Path,
+    failure: CommandResult,
 ) -> None:
-    # Given: one fresh permanent watch and two nonzero notification deliveries.
+    # Given: one fresh permanent watch and two identical delivery failures.
     store = _store(tmp_path)
     store.save_state(_state(_permanent()))
     snapshot = _snapshot(items=(_item(),), sources=(_health(SourceName.ARCH),))
-    runner = RecordingRunner(
-        [CommandExited(1, b"", b""), CommandExited(1, b"", b"")], []
-    )
+    runner = RecordingRunner([failure, failure], [])
     coordinator = NotificationCoordinator(store, runner, lambda: NOW)
 
-    # When: the first delivery fails and the identical pending identity retries once.
+    # When: repeated eligible scans attempt the same delivery.
     first = coordinator.dispatch(snapshot)
     second = coordinator.dispatch(snapshot)
 
-    # Then: success is never recorded before exit zero, and retry is bounded.
+    # Then: each failure is released for a later eligible retry rather than terminalized.
     assert first[0].status is NotificationStatus.PENDING
     assert store.load_state().state.ledger[0].lease_token is None
     assert store.load_state().state.ledger[0].lease_expires_at is None
-    assert second[0].status is NotificationStatus.FAILED
-    assert store.load_state().state.ledger[0].status is NotificationStatus.FAILED
+    assert second[0].status is NotificationStatus.PENDING
+    assert store.load_state().state.ledger[0].status is NotificationStatus.PENDING
     assert len(runner.calls) == 2
 
 
@@ -1082,7 +1093,7 @@ def test_coordinator_batches_security_candidates_with_one_runner_call(
     assert "1 additional security update" in runner.calls[0][1][1]
 
 
-def test_failed_watch_batch_retries_once_and_accounts_for_every_fingerprint(
+def test_failed_watch_batch_remains_pending_for_every_fingerprint(
     tmp_path: Path,
 ) -> None:
     # Given: two eligible watched updates and two failed batch handoffs.
@@ -1101,16 +1112,16 @@ def test_failed_watch_batch_retries_once_and_accounts_for_every_fingerprint(
     first = coordinator.dispatch(snapshot)
     second = coordinator.dispatch(snapshot)
 
-    # Then: every fingerprint follows the bounded pending-to-failed transition.
+    # Then: every fingerprint remains eligible for a future scan without lease loss.
     assert [outcome.status for outcome in first] == [
         NotificationStatus.PENDING,
         NotificationStatus.PENDING,
     ]
     assert [outcome.status for outcome in second] == [
-        NotificationStatus.FAILED,
-        NotificationStatus.FAILED,
+        NotificationStatus.PENDING,
+        NotificationStatus.PENDING,
     ]
     assert len(runner.calls) == 2
     assert {entry.status for entry in store.load_state().state.ledger} == {
-        NotificationStatus.FAILED
+        NotificationStatus.PENDING
     }

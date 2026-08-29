@@ -65,7 +65,9 @@ class NotificationCoordinator:
     def dispatch(self, snapshot: SnapshotResponse) -> tuple[NotificationOutcome, ...]:
         now = self._clock()
         state = self._storage.load_state().state
-        candidates = notification_candidates(state, snapshot, now, self._settings)
+        candidates = notification_candidates(
+            state, snapshot, now, self._settings, self._run
+        )
         outcomes: list[NotificationOutcome] = []
         for kind in NotificationKind:
             batch = claim_batch(

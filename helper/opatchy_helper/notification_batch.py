@@ -81,10 +81,12 @@ def is_dispatchable(entry: LedgerEntry | None) -> bool:
 
 def failure_status(change: NotificationChange) -> NotificationStatus:
     match change:
-        case NotificationChange.FIRST | NotificationChange.NEW:
+        case (
+            NotificationChange.FIRST
+            | NotificationChange.NEW
+            | NotificationChange.UNCHANGED
+        ):
             return NotificationStatus.PENDING
-        case NotificationChange.UNCHANGED:
-            return NotificationStatus.FAILED
     assert_never(change)
 
 
@@ -244,8 +246,9 @@ def _delivery_status(
             CommandExited()
             | CommandMissing()
             | CommandOutputExceeded()
-            | CommandRejected()
             | CommandTimedOut()
         ):
             return failure_status(change)
+        case CommandRejected():
+            return NotificationStatus.FAILED
     assert_never(result)
