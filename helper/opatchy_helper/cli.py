@@ -24,12 +24,9 @@ def _response(arguments: tuple[str, ...]) -> Response:
         return execute(parse_command(arguments))
     except CliUsageError as error:
         return _error(ErrorCode.CLI_USAGE, error.message)
-    except (
-        CliUnavailableError,
-        StateSchemaIncompatible,
-        StoragePathError,
-        WatchTransitionError,
-    ):
+    except WatchTransitionError as error:
+        return _error(ErrorCode.STATE_UNAVAILABLE, error.reason)
+    except CliUnavailableError, StateSchemaIncompatible, StoragePathError:
         return _error(ErrorCode.STATE_UNAVAILABLE, "validated state is unavailable")
     except ProtocolError:
         return _error(ErrorCode.STATE_UNAVAILABLE, "validated state is unavailable")

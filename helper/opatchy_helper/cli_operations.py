@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import assert_never
+from typing import Final, assert_never
 from uuid import uuid4
 
 from .cli_requests import (
@@ -18,11 +18,15 @@ from .models import (
     NormalizedItem,
     Provenance,
     Response,
+    SnapshotPayload,
     SnapshotResponse,
+    SourceName,
+    SourceStatus,
     StarResultPayload,
     StarResultResponse,
     WatchMode,
 )
+from .notification_types import NotificationSettings
 from .protocol import utc_now
 from .scan import ScanCoordinator
 from .scan_types import RuntimeScanCollector, ScanRequest
@@ -36,12 +40,14 @@ from .stars import (
 from .storage import Storage
 from .storage_types import PersistentState, WatchRecord
 
+_DEFAULT_NOTIFICATION_SETTINGS: Final = NotificationSettings()
+
 
 def execute(command: CliCommand) -> Response:
     storage = Storage.from_environment(clock=utc_now)
     match command:
-        case ScanCommand(force=force):
-            return scan(storage, force)
+        case ScanCommand(force=force, notification_settings=notification_settings):
+            return scan(storage, force, notification_settings)
         case SnapshotCommand():
             return snapshot(storage)
         case InventoryCommand() as inventory:
@@ -51,10 +57,16 @@ def execute(command: CliCommand) -> Response:
     assert_never(command)
 
 
-def scan(storage: Storage, force: bool) -> SnapshotResponse:
+def scan(
+    storage: Storage,
+    force: bool,
+    notification_settings: NotificationSettings = _DEFAULT_NOTIFICATION_SETTINGS,
+) -> SnapshotResponse:
     previous = storage.load_generation()
     order = 0 if previous is None else previous.order + 1
-    request = ScanRequest(GenerationId(f"scan-{uuid4().hex}"), order, force)
+    request = ScanRequest(
+        GenerationId(f"scan-{uuid4().hex}"), order, force, notification_settings
+    )
     result = (
         ScanCoordinator(storage, RuntimeScanCollector(storage), utc_now)
         .run(request)
@@ -163,7 +175,9 @@ def _item_key(item: NormalizedItem) -> tuple[str, str, str]:
 
 def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
     def mutate(
-        state: PersistentState, inventories: tuple[InventoryResponse, ...]
+        state: PersistentState,
+        inventories: tuple[InventoryResponse, ...],
+        snapshot: SnapshotResponse | None,
     ) -> PersistentState:
         inventory = CachedInventory(
             tuple(
@@ -171,8 +185,21 @@ def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
                 for cached in inventories
                 for item in cached.payload.items
             )
+            + tuple(cached_item(item) for item in _current_omarchy_items(snapshot))
         )
         updated = transition(state, StarClick(command.item_id, inventory, True))
+        if command.condition is not None:
+            updated = PersistentState(
+                tuple(
+                    replace(watch, condition=command.condition)
+                    if watch.item_id == command.item_id
+                    and watch.mode is WatchMode.TEMPORARY
+                    else watch
+                    for watch in updated.watches
+                ),
+                updated.ledger,
+                updated.sources,
+            )
         watch = next(
             (watch for watch in updated.watches if watch.item_id == command.item_id),
             None,
@@ -196,3 +223,28 @@ def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
 
 def _sources() -> tuple[ItemSource, ...]:
     return (ItemSource.ARCH, ItemSource.AUR, ItemSource.FLATPAK, ItemSource.MISE)
+
+
+def _current_omarchy_items(
+    snapshot: SnapshotResponse | None,
+) -> tuple[NormalizedItem, ...]:
+    match snapshot:
+        case SnapshotResponse(payload=SnapshotPayload(sources=sources, items=items)):
+            health = next(
+                (source for source in sources if source.source is SourceName.OMARCHY),
+                None,
+            )
+            if (
+                health is not None
+                and health.status is SourceStatus.OK
+                and health.provenance is Provenance.LIVE
+            ):
+                return tuple(
+                    item
+                    for item in items
+                    if item.source is ItemSource.OMARCHY
+                    and item.provenance is Provenance.LIVE
+                )
+            return ()
+        case None:
+            return ()

@@ -1,5 +1,7 @@
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import final
 
 import pytest
 from opatchy_helper import cli_operations
@@ -11,9 +13,12 @@ from opatchy_helper.cli_requests import (
 from opatchy_helper.models import (
     ItemId,
     ItemSource,
+    Severity,
     SourceName,
     WatchMode,
 )
+from opatchy_helper.notification_types import NotificationSettings
+from opatchy_helper.scan_types import ScanCollector, ScanRequest, ScanResult
 from opatchy_helper.stars import WatchTransitionError
 from opatchy_helper.storage import Storage, SystemAtomicOperations
 from opatchy_helper.storage_types import PersistentState, SourceMetadata, WatchRecord
@@ -365,3 +370,45 @@ def test_scan_uses_runtime_coordinator_without_collecting_not_due_sources(
 
     # Then: the coordinator returns a cached-generation snapshot without network work.
     assert result.generation_id.startswith("scan-")
+
+
+def test_scan_operation_passes_explicit_notification_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: manifest-derived settings and a recording production-coordinator seam.
+    store = scan_store(tmp_path)
+    captured: list[NotificationSettings] = []
+
+    @final
+    class CapturingCoordinator:
+        storage: Storage
+        source: ScanCollector
+        clock: Callable[[], datetime]
+
+        def __init__(
+            self,
+            storage: Storage,
+            source: ScanCollector,
+            clock: Callable[[], datetime],
+        ) -> None:
+            self.storage = storage
+            self.source = source
+            self.clock = clock
+
+        def run(self, request: ScanRequest) -> ScanResult:
+            captured.append(request.notification_settings)
+            return run(
+                self.storage,
+                self.source,
+                request.generation_order,
+                force=request.force,
+            )
+
+    expected = NotificationSettings(False, True, Severity.CRITICAL)
+    monkeypatch.setattr(cli_operations, "ScanCoordinator", CapturingCoordinator)
+
+    # When: the CLI operation receives parsed notification configuration.
+    _ = cli_operations.scan(store, True, expected)
+
+    # Then: that setting reaches the concrete scan request rather than defaults.
+    assert captured == [expected]
