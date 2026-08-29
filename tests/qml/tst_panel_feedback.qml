@@ -221,15 +221,17 @@ TestCase {
 
   function test_one_tab_from_strip_reaches_first_watch_control_for_populated_security_content() {
     const view = sourceFocusComponent.createObject(root)
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
     view.sourceTab = "Security"
     view.source.snapshot = securitySnapshot([securityFinding()])
     view.strip.tabs = [tab("Security", 1, "Current"), tab("System", 1, "Current")]
 
-    tryVerify(function() { return view.source.primaryControl && view.source.primaryControl.objectName === "security-watch-arch:openssl" }, 1000)
+    tryVerify(function() { return view.source.primaryControl && view.source.primaryControl.objectName === "security-fixed-watch-arch:openssl-AVG-1" }, 1000)
     activateStrip(view)
     keyClick(Qt.Key_Tab)
     tryVerify(function() { return view.source.primaryControl.activeFocus }, 1000)
-    compare(view.source.primaryControl.objectName, "security-watch-arch:openssl")
+    compare(view.source.primaryControl.objectName, "security-fixed-watch-arch:openssl-AVG-1")
     verify(view.source.primaryControl.focusable)
     verify(view.source.primaryControl.enabled)
     view.destroy()

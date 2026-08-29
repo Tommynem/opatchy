@@ -17,6 +17,14 @@ function load(path, target) {
   return value[target];
 }
 
+function loadController() {
+  const value = context();
+  const source = readFileSync(modelPath("ServiceController.js"), "utf8")
+    .replace(".pragma library", "");
+  vm.runInContext(source, value, { filename: modelPath("ServiceController.js") });
+  return value.createController;
+}
+
 function validator() {
   const value = context();
   vm.runInContext(readFileSync(modelPath("StrictJson.js"), "utf8").replace(".pragma library", ""), value);
@@ -36,7 +44,7 @@ if (process.argv.includes("--reject")) {
 }
 
 assert.equal(parsed.ok, true, parsed.error);
-const createController = load(modelPath("ServiceController.js"), "createController");
+const createController = loadController();
 const updateRows = load(modelPath("UpdateViewModel.js"), "updateRows");
 const securityView = load(modelPath("SecurityViewModel.js"), "securityView");
 const started = [];

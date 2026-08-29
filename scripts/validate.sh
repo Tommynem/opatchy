@@ -19,11 +19,13 @@ readonly -a node_test_files=(
 )
 readonly -a qml_test_files=(
     tests/qml/tst_bar_status.qml
+    tests/qml/tst_dense_update_list.qml
     tests/qml/tst_lifecycle.qml
     tests/qml/tst_panel_layout.qml
     tests/qml/tst_panel_shell.qml
     tests/qml/tst_security_view.qml
     tests/qml/tst_star_interaction.qml
+    tests/qml/tst_star_source_content.qml
     tests/qml/tst_tab_navigation.qml
 )
 
