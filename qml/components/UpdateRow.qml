@@ -14,6 +14,8 @@ Item {
   property bool expanded: false
   property Item listControl: null
   property Item nextFocusItem: null
+  readonly property bool canClearWatch: root.row.watchable !== true && root.row.watchMode === "permanent"
+  readonly property bool canManageWatch: root.row.watchable === true || root.row.watchMode === "permanent"
   readonly property string failureText: boundedFailureText(starState && starState.errorTarget === row.target ? starState.errorText : "")
   property alias packageLabel: packageLabel
   property alias versionLine: versionLine
@@ -40,7 +42,7 @@ Item {
 
       Column {
         anchors.left: parent.left
-        anchors.right: row.watchable === true ? watchTrigger.left : watchUnavailable.left
+        anchors.right: root.canManageWatch ? watchTrigger.left : watchUnavailable.left
         anchors.rightMargin: Style.spacing.xs
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.spacing.xxs
@@ -72,7 +74,7 @@ Item {
 
       MouseArea {
         anchors.left: parent.left
-        anchors.right: row.watchable === true ? watchTrigger.left : watchUnavailable.left
+        anchors.right: root.canManageWatch ? watchTrigger.left : watchUnavailable.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         onClicked: root.activateRequested()
@@ -80,7 +82,7 @@ Item {
 
       StarButton {
         id: watchTrigger
-        visible: root.row.watchable === true
+        visible: root.canManageWatch
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         width: Style.space(62)
@@ -88,7 +90,7 @@ Item {
         starState: root.starState
         target: typeof root.row.target === "string" ? root.row.target : ""
         confirmedMode: typeof root.row.watchMode === "string" ? root.row.watchMode : "off"
-        watchable: true
+        watchable: root.row.watchable === true
         temporaryArmed: root.row.temporaryArmed === true
         lastKnown: typeof root.row.healthText === "string" && root.row.healthText.indexOf("Last known") !== -1
         notifyPermanent: root.notifyPermanent
@@ -96,14 +98,16 @@ Item {
         fontFamily: root.fontFamily
         fontSize: Style.font.caption
         compact: true
-        modeSelectorTrigger: true
-        focusable: false
+        modeSelectorTrigger: !root.canClearWatch
+        focusable: root.canClearWatch
+        KeyNavigation.tab: root.canClearWatch ? root.nextFocusItem : null
+        KeyNavigation.backtab: root.canClearWatch ? root.listControl : null
         onModeSelectorRequested: root.activateRequested()
       }
 
       Text {
         id: watchUnavailable
-        visible: root.row.watchable !== true
+        visible: !root.canManageWatch
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         text: "Watch unavailable"
@@ -129,7 +133,7 @@ Item {
         starState: root.starState
         target: typeof root.row.target === "string" ? root.row.target : ""
         confirmedMode: typeof root.row.watchMode === "string" ? root.row.watchMode : "off"
-        watchable: true
+        watchable: root.row.watchable === true
         previousFocusItem: root.listControl
         nextFocusItem: root.nextFocusItem
       }
