@@ -10,6 +10,7 @@ from .runner_types import CommandName, CommandResult
 class NotificationKind(StrEnum):
     WATCH = "watch"
     SECURITY = "security"
+    SECURITY_CONDITION = "security-condition"
 
 
 @unique

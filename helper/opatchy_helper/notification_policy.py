@@ -5,8 +5,14 @@ from datetime import datetime
 from html import escape
 from typing import Final, assert_never
 
+from .adapters.arch import CommandRunner
+from .conditional_security_policy import (
+    conditional_security_candidates,
+    conditional_security_owned_findings,
+)
 from .models import (
     ArchStatus,
+    FindingId,
     ItemSource,
     NotificationFingerprint,
     Provenance,
@@ -24,6 +30,7 @@ from .notification_types import (
     NotificationKind,
     NotificationSettings,
 )
+from .runner import run_command
 from .stars import watch_notification_reference
 from .storage_types import LedgerEntry, PersistentState
 
@@ -38,11 +45,17 @@ def notification_candidates(
     snapshot: SnapshotResponse,
     now: datetime,
     settings: NotificationSettings = _DEFAULT_SETTINGS,
+    run: CommandRunner = run_command,
 ) -> tuple[NotificationCandidate, ...]:
     """Return every fresh eligible candidate with durable identity classification."""
+    conditional_candidates = conditional_security_candidates(
+        state, snapshot, now, settings, run
+    )
+    owned_findings = conditional_security_owned_findings(state, snapshot)
     candidates = (
         *_watch_candidates(state, snapshot, now, settings),
-        *_security_candidates(state, snapshot, now, settings),
+        *_security_candidates(state, snapshot, now, settings, owned_findings),
+        *(candidate.candidate for candidate in conditional_candidates),
     )
     return tuple(
         sorted(
@@ -95,6 +108,7 @@ def _security_candidates(
     snapshot: SnapshotResponse,
     now: datetime,
     settings: NotificationSettings,
+    owned_findings: frozenset[FindingId],
 ) -> tuple[NotificationCandidate, ...]:
     if not settings.notify_security or not _fresh_source(
         snapshot, SourceName.SECURITY, now
@@ -104,8 +118,10 @@ def _security_candidates(
     for group in snapshot.payload.findings:
         for finding in group.findings:
             fixed = finding.fixed_version
-            if fixed is None or not _eligible_security(
-                finding, settings.security_minimum_severity
+            if (
+                finding.finding_id in owned_findings
+                or fixed is None
+                or not _eligible_security(finding, settings.security_minimum_severity)
             ):
                 continue
             reference_hash = _digest(
