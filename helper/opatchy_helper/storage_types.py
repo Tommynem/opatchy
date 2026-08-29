@@ -45,12 +45,20 @@ class StoragePathError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class SecurityFixCondition:
+    advisory_id: str
+    cve_ids: tuple[str, ...]
+    fixed_version: str
+
+
+@dataclass(frozen=True, slots=True)
 class WatchRecord:
     item_id: ItemId
     mode: WatchMode
     installed_fingerprint: str | None
     candidate_fingerprint: str | None
     armed: bool
+    condition: SecurityFixCondition | None = None
 
 
 @dataclass(frozen=True, slots=True)
