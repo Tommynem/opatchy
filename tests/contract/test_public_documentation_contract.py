@@ -105,7 +105,7 @@ class PublicDocumentationContractTests(unittest.TestCase):
         data_sources = self.read("docs/data-sources.md")
         architecture = self.read("docs/architecture.md")
 
-        self.assertIn("not dispatched by the production scan path", data_sources)
+        self.assertIn("Dispatch after a committed validated scan only", data_sources)
         self.assertIn("`0700`", architecture)
         self.assertIn("`0600`", architecture)
         self.assertIn("180 days", architecture)
@@ -133,10 +133,7 @@ class PublicDocumentationContractTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, public_text)
 
-        self.assertIn(
-            "does not wire notification dispatch into the production scan path",
-            self.read("README.md"),
-        )
+        self.assertIn("occurs after a committed scan", self.read("README.md"))
         self.assertIn(
             "does not recommend direct `pacman -Syu`",
             " ".join(self.read("README.md").split()),

@@ -68,13 +68,20 @@ characters, pages are limited to 100 rows, and offset is limited to 100000.
 
 ## Notification and settings limitation
 
-The helper includes a policy and `notify-send` adapter for fresh permanent-watch
-and high/critical fixed Arch security candidates. The production scan path does
-not currently instantiate that coordinator, so Opatchy does not promise desktop
-notification delivery. It does not inspect Do Not Disturb state or replay a
-notification history. The manifest also declares several notification and
-security settings that are not all wired into helper collection. Those settings
-are interface declarations, not a promise of current operating behavior.
+The helper dispatches notification policy only after `commit_generation` accepts
+a validated generation. The shared ledger claims and completes each dispatch,
+so delivery deduplicates across restart and command-missing, nonzero, timed-out,
+or output-limited notification commands remain retryable without rolling back
+scan, cache, or watch state. Each scan request carries typed permanent-watch,
+security, and minimum-severity notification settings to the coordinator. A conditional
+temporary security watch retains only canonical `arch:PACKAGE`, advisory/CVE,
+and fixed-version evidence. It is eligible only when fresh live Arch and
+Security evidence matches that condition, its Arch candidate is live, and native
+`/usr/bin/vercmp` confirms the installable candidate is at least the fixed
+version. The matching condition owns that finding's alert, while unrelated
+findings retain their generic security alerts. Notification delivery does not
+clear a watch; the normal fresh installed-fingerprint/removal state machine does.
+Opatchy does not inspect Do Not Disturb state or replay a notification history.
 
 ## Operating limits
 

@@ -55,24 +55,31 @@ not a current result. An unknown result is not a clean result.
 The helper accepts only these operations from the UI:
 
 ```text
-scan [--force]
+scan [--force] [--notify-permanent {true|false} --notify-security {true|false} --security-minimum-severity {high|critical}]
 snapshot
 inventory --source {arch|aur|flatpak|mise} --query TEXT --limit 1..100 --offset 0..100000
 set-star --item-id ID --mode {off|temporary|permanent}
+set-star --item-id arch:PACKAGE --mode temporary --security-advisory AVG-NUMBER --fixed-version VERSION --cve-ids CVE-ID[,CVE-ID...]
 ```
 
 Stars are local watches. A temporary watch is armed for the next matching
 update and clears when a later fresh scan observes a changed installed version
 or a confirmed removal; it does not verify that a particular candidate update
-completed. A permanent watch stays recorded until it is turned off. Notification
-policy exists for eligible permanent watches and fresh, fixed high or critical
-Arch findings, but this release does not wire notification dispatch into the production scan path. It does not inspect Do Not Disturb state or replay notifications.
+completed. A permanent watch stays recorded until it is turned off. A conditional
+temporary watch is attached to its canonical `arch:PACKAGE` identity and only
+notifies when fresh official Arch and Arch Security evidence name its selected
+advisory and CVEs, an installable candidate exists, and native `vercmp` confirms
+that candidate is at least the recorded fixed version. Notification dispatch
+occurs after a committed scan; delivery does not clear the watch, and a failed
+delivery remains retryable. Notifications identify evidence and available
+versions only: they do not claim installation, remediation, or security. Opatchy
+does not inspect Do Not Disturb state or replay notifications.
 
 The manifest exposes refresh interval, watch notifications, reduced motion,
 security notifications, minimum security severity, CISA KEV inclusion, and last
-selected tab. The current service schedules with a fixed 21600-second default;
-not every declared setting is connected to helper collection or notification
-delivery yet.
+selected tab. The helper scan contract accepts typed values for
+`notifyPermanent`, `notifySecurity`, and `securityMinimumSeverity`; those values
+gate post-commit notification dispatch rather than collection or watch state.
 
 ## Update handoffs
 

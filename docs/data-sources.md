@@ -22,7 +22,7 @@ not accept user-supplied commands or source URLs.
 | Local command | `flatpak-system-updates` | `/usr/bin/flatpak --system remote-ls --updates --columns=ref,version,origin` | Read system-scope Flatpak updates. |
 | Local command | `mise-outdated` | `/usr/bin/mise outdated --json` in the user's home directory | Read global/home-managed tool updates, never project data. |
 | Local command | `arch-audit` | `/usr/bin/arch-audit --json` | Read local Arch advisory matches. |
-| Local command | `notify` | `/usr/bin/notify-send -a Opatchy -u normal <title> <body>` | Adapter only: it is not dispatched by the production scan path, so no delivery or retained delivery result is promised. |
+| Local command | `notify` | `/usr/bin/notify-send -a Opatchy -u normal <title> <body>` | Dispatch after a committed validated scan only; normal urgency, ledger-deduplicated, retryable after command-missing, nonzero, timeout, or output-limit failures, and never evidence of installation or remediation. |
 | Remote endpoint | `arch-security` | `https://security.archlinux.org/all.json` | Fetch Arch advisory enrichment over HTTPS. |
 | Remote endpoint | `cisa-kev` | `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json` | Fetch CISA KEV enrichment over HTTPS; the declared setting does not currently disable collection. |
 | UI helper | `helper-process` | `/usr/bin/python3 helper/opatchy.py` plus the validated UI operations in the README | Produce versioned helper responses; no arbitrary helper argv is accepted. |
