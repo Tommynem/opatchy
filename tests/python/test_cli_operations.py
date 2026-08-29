@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import final
@@ -11,10 +12,23 @@ from opatchy_helper.cli_requests import (
     SetStarCommand,
 )
 from opatchy_helper.models import (
+    ErrorCode,
+    ErrorInfo,
+    GenerationId,
     ItemId,
     ItemSource,
+    NormalizedItem,
+    Provenance,
+    ScanState,
+    ScopeHealth,
     Severity,
+    SnapshotPayload,
+    SnapshotResponse,
+    SourceHealth,
     SourceName,
+    SourceScope,
+    SourceStatus,
+    Summary,
     WatchMode,
 )
 from opatchy_helper.notification_types import NotificationSettings
@@ -26,6 +40,65 @@ from opatchy_helper.storage_types import PersistentState, SourceMetadata, WatchR
 from tests.python.cli_support import NOW, item, storage, write_inventory
 from tests.python.scan_support import FakeCollector, collector, run
 from tests.python.scan_support import store as scan_store
+
+
+def _scope(scope: SourceScope, status: SourceStatus = SourceStatus.OK) -> ScopeHealth:
+    return ScopeHealth(scope, status, Provenance.LIVE, NOW, NOW, None)
+
+
+def _health(
+    source: SourceName,
+    status: SourceStatus = SourceStatus.OK,
+    provenance: Provenance = Provenance.LIVE,
+    scopes: tuple[ScopeHealth, ...] = (),
+) -> SourceHealth:
+    cause = (
+        None
+        if status in {SourceStatus.OK, SourceStatus.NOT_APPLICABLE}
+        else ErrorInfo(ErrorCode.SOURCE_UNAVAILABLE, "source is not current")
+    )
+    return SourceHealth(source, status, provenance, NOW, NOW, cause, scopes)
+
+
+def _not_applicable_health(source: SourceName) -> SourceHealth:
+    match source:
+        case SourceName.FLATPAK:
+            return _health(
+                source,
+                SourceStatus.NOT_APPLICABLE,
+                scopes=(
+                    _scope(SourceScope.USER, SourceStatus.NOT_APPLICABLE),
+                    _scope(SourceScope.SYSTEM, SourceStatus.NOT_APPLICABLE),
+                ),
+            )
+        case (
+            SourceName.SECURITY
+            | SourceName.CISA_KEV
+            | SourceName.OMARCHY
+            | SourceName.ARCH
+            | SourceName.AUR
+            | SourceName.MISE
+        ):
+            return _health(source, SourceStatus.NOT_APPLICABLE)
+
+
+def _snapshot_for_item(entry: NormalizedItem, health: SourceHealth) -> SnapshotResponse:
+    sources = tuple(
+        health if source is health.source else _not_applicable_health(source)
+        for source in SourceName
+    )
+    return SnapshotResponse(
+        NOW,
+        GenerationId("snapshot-generation"),
+        SnapshotPayload(
+            ScanState.COMPLETE,
+            sources,
+            Summary(1, 0, 0, 0),
+            (entry,),
+            (),
+            (),
+        ),
+    )
 
 
 def test_inventory_reads_valid_cache_and_adds_missing_permanent_id(
@@ -232,6 +305,158 @@ def test_set_star_uses_the_existing_three_state_transition(tmp_path: Path) -> No
         WatchMode.OFF,
     )
     assert store.load_state().state.watches == ()
+
+
+@pytest.mark.parametrize(
+    ("item_id", "source"),
+    (
+        ("arch:demo", ItemSource.ARCH),
+        ("aur:demo", ItemSource.AUR),
+        ("flatpak:user:demo", ItemSource.FLATPAK),
+        ("flatpak:system:demo", ItemSource.FLATPAK),
+        ("mise:demo", ItemSource.MISE),
+    ),
+)
+def test_set_star_cycles_current_live_snapshot_items_without_browse_inventory(
+    tmp_path: Path, item_id: str, source: ItemSource
+) -> None:
+    # Given: a stored validated live snapshot item without a browse inventory.
+    health = _health(SourceName.OMARCHY)
+    match source:
+        case ItemSource.FLATPAK:
+            health = _health(
+                SourceName.FLATPAK,
+                scopes=(_scope(SourceScope.USER), _scope(SourceScope.SYSTEM)),
+            )
+        case ItemSource.ARCH | ItemSource.AUR | ItemSource.MISE:
+            health = _health(SourceName(source.value))
+        case ItemSource.OMARCHY:
+            raise AssertionError("Omarchy is outside this regression")
+    store = storage(tmp_path)
+    store.save_snapshot(
+        _snapshot_for_item(
+            replace(item(item_id, source, "demo"), provenance=Provenance.LIVE),
+            health,
+        )
+    )
+
+    # When: the legal durable watch cycle is requested from that visible row.
+    temporary = cli_operations.set_star(
+        store, SetStarCommand(ItemId(item_id), WatchMode.TEMPORARY)
+    )
+    permanent = cli_operations.set_star(
+        store, SetStarCommand(ItemId(item_id), WatchMode.PERMANENT)
+    )
+    cleared = cli_operations.set_star(
+        store, SetStarCommand(ItemId(item_id), WatchMode.OFF)
+    )
+
+    # Then: every approved source reaches temporary, permanent, and off.
+    assert (temporary.payload.mode, permanent.payload.mode, cleared.payload.mode) == (
+        WatchMode.TEMPORARY,
+        WatchMode.PERMANENT,
+        WatchMode.OFF,
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "provenance", "item_provenance"),
+    (
+        (SourceStatus.STALE, Provenance.LAST_GOOD, Provenance.LIVE),
+        (SourceStatus.ERROR, Provenance.LIVE, Provenance.LIVE),
+        (SourceStatus.OK, Provenance.LIVE, Provenance.CACHE),
+    ),
+)
+@pytest.mark.parametrize(
+    ("starting_mode", "requested_mode"),
+    (
+        (WatchMode.OFF, WatchMode.TEMPORARY),
+        (WatchMode.TEMPORARY, WatchMode.PERMANENT),
+    ),
+)
+def test_set_star_rejects_noncurrent_snapshot_evidence_for_creation_or_promotion(
+    tmp_path: Path,
+    status: SourceStatus,
+    provenance: Provenance,
+    item_provenance: Provenance,
+    starting_mode: WatchMode,
+    requested_mode: WatchMode,
+) -> None:
+    # Given: a visible row whose item or source evidence is not current and live.
+    state = PersistentState.empty()
+    match starting_mode:
+        case WatchMode.OFF:
+            pass
+        case WatchMode.TEMPORARY:
+            state = PersistentState(
+                (
+                    WatchRecord(
+                        ItemId("arch:demo"), WatchMode.TEMPORARY, "1", "2", True
+                    ),
+                ),
+                (),
+                (),
+            )
+        case WatchMode.PERMANENT:
+            raise AssertionError("permanent cannot start a creation or promotion")
+    store = storage(tmp_path)
+    store.save_state(state)
+    store.save_snapshot(
+        _snapshot_for_item(
+            replace(
+                item("arch:demo", ItemSource.ARCH, "demo"),
+                provenance=item_provenance,
+            ),
+            _health(SourceName.ARCH, status, provenance),
+        )
+    )
+
+    # When: a new watch or temporary-watch promotion is requested.
+    with pytest.raises(WatchTransitionError):
+        _ = cli_operations.set_star(
+            store, SetStarCommand(ItemId("arch:demo"), requested_mode)
+        )
+
+    # Then: noncurrent snapshot evidence cannot change durable state.
+    assert store.load_state().state == state
+
+
+@pytest.mark.parametrize(
+    ("item_id", "system_status"),
+    (
+        ("flatpak:system:demo", SourceStatus.NOT_APPLICABLE),
+        ("flatpak:unknown:demo", SourceStatus.OK),
+    ),
+)
+def test_set_star_requires_current_and_well_scoped_flatpak_snapshot_evidence(
+    tmp_path: Path, item_id: str, system_status: SourceStatus
+) -> None:
+    # Given: a system row without current system health or a malformed scope ID.
+    store = storage(tmp_path)
+    store.save_snapshot(
+        _snapshot_for_item(
+            replace(
+                item(item_id, ItemSource.FLATPAK, "demo"),
+                provenance=Provenance.LIVE,
+            ),
+            _health(
+                SourceName.FLATPAK,
+                scopes=(
+                    _scope(SourceScope.USER),
+                    _scope(SourceScope.SYSTEM, system_status),
+                ),
+            ),
+        )
+    )
+
+    # When: the Flatpak row requests its first durable transition.
+    with pytest.raises(WatchTransitionError):
+        _ = cli_operations.set_star(
+            store, SetStarCommand(ItemId(item_id), WatchMode.TEMPORARY)
+        )
+
+    # Then: an unrelated scope or malformed identity cannot authorize the row.
+    assert store.load_state().state == PersistentState.empty()
 
 
 def test_set_star_rejects_a_requested_mode_outside_the_cycle(tmp_path: Path) -> None:

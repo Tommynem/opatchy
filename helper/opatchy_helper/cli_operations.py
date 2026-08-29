@@ -20,7 +20,8 @@ from .models import (
     Response,
     SnapshotPayload,
     SnapshotResponse,
-    SourceName,
+    SourceHealth,
+    SourceScope,
     SourceStatus,
     StarResultPayload,
     StarResultResponse,
@@ -185,7 +186,7 @@ def set_star(storage: Storage, command: SetStarCommand) -> StarResultResponse:
                 for cached in inventories
                 for item in cached.payload.items
             )
-            + tuple(cached_item(item) for item in _current_omarchy_items(snapshot))
+            + tuple(cached_item(item) for item in _current_snapshot_items(snapshot))
         )
         updated = transition(state, StarClick(command.item_id, inventory, True))
         if command.condition is not None:
@@ -225,26 +226,51 @@ def _sources() -> tuple[ItemSource, ...]:
     return (ItemSource.ARCH, ItemSource.AUR, ItemSource.FLATPAK, ItemSource.MISE)
 
 
-def _current_omarchy_items(
+def _current_snapshot_items(
     snapshot: SnapshotResponse | None,
 ) -> tuple[NormalizedItem, ...]:
     match snapshot:
         case SnapshotResponse(payload=SnapshotPayload(sources=sources, items=items)):
-            health = next(
-                (source for source in sources if source.source is SourceName.OMARCHY),
-                None,
+            return tuple(
+                item for item in items if _current_snapshot_item(item, sources)
             )
-            if (
-                health is not None
-                and health.status is SourceStatus.OK
-                and health.provenance is Provenance.LIVE
-            ):
-                return tuple(
-                    item
-                    for item in items
-                    if item.source is ItemSource.OMARCHY
-                    and item.provenance is Provenance.LIVE
-                )
-            return ()
         case None:
             return ()
+
+
+def _current_snapshot_item(
+    item: NormalizedItem, sources: tuple[SourceHealth, ...]
+) -> bool:
+    health = next(
+        (source for source in sources if source.source.value == item.source.value),
+        None,
+    )
+    if (
+        item.provenance is not Provenance.LIVE
+        or health is None
+        or health.status is not SourceStatus.OK
+        or health.provenance is not Provenance.LIVE
+    ):
+        return False
+    match item.source:
+        case ItemSource.FLATPAK:
+            return _current_flatpak_scope(item, health)
+        case ItemSource.OMARCHY | ItemSource.ARCH | ItemSource.AUR | ItemSource.MISE:
+            return True
+    assert_never(item.source)
+
+
+def _current_flatpak_scope(item: NormalizedItem, health: SourceHealth) -> bool:
+    match str(item.item_id):
+        case value if value.startswith("flatpak:user:"):
+            scope = SourceScope.USER
+        case value if value.startswith("flatpak:system:"):
+            scope = SourceScope.SYSTEM
+        case _:
+            return False
+    return any(
+        entry.scope is scope
+        and entry.status is SourceStatus.OK
+        and entry.provenance is Provenance.LIVE
+        for entry in health.scopes
+    )
