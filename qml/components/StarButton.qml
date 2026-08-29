@@ -11,17 +11,23 @@ Button {
   property bool temporaryArmed: false
   property bool lastKnown: false
   property bool notifyPermanent: true
+  property bool compact: false
+  property bool modeSelectorTrigger: false
   readonly property var view: starState
     ? starState.stateFor(target, confirmedMode, watchable, temporaryArmed, lastKnown)
     : ({ glyph: "☆", shortLabel: "Unavailable", label: "Not watched", tooltip: "Watch state is unavailable.", accessibleName: "Watch state is unavailable", enabled: false, errorText: "" })
 
-  text: view.pending ? "… Updating " + view.shortLabel : view.glyph + " " + view.shortLabel
+  text: view.pending ? "… Updating " + view.shortLabel : (compact ? view.shortLabel : view.glyph + " " + view.shortLabel)
   tooltipText: view.tooltip
   enabled: view.enabled
   opacity: 1
   focusable: true
   bordered: true
-  onClicked: if (starState) starState.request(target, confirmedMode, watchable)
+  signal modeSelectorRequested()
+  onClicked: {
+    if (modeSelectorTrigger) modeSelectorRequested()
+    else if (starState) starState.request(target, confirmedMode, watchable)
+  }
 
   StarFeedbackConsumer {
     id: feedbackConsumer
