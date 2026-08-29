@@ -8,6 +8,7 @@ const repositoryRoot = resolve(import.meta.dirname, "../..");
 const servicePath = resolve(repositoryRoot, "Service.qml");
 const policyPath = resolve(repositoryRoot, "qml/models/ActionPolicy.js");
 const controllerPath = resolve(repositoryRoot, "qml/models/ServiceController.js");
+const requestValidationPath = resolve(repositoryRoot, "qml/models/RequestValidation.js");
 const handoffPath = resolve(repositoryRoot, "qml/models/TerminalHandoff.qml");
 
 function loadPolicy() {
@@ -21,7 +22,15 @@ function loadPolicy() {
 function loadController() {
   const source = readFileSync(controllerPath, "utf8").replace(".pragma library", "");
   const context = vm.createContext({ JSON, Math, Number, Object, String });
-  vm.runInContext(source, context, { filename: controllerPath });
+  const requestValidation = readFileSync(requestValidationPath, "utf8").replace(".pragma library", "");
+  vm.runInContext(requestValidation, context, { filename: requestValidationPath });
+  context.RequestValidation = {
+    hasSecurityWatchRequest: context.hasSecurityWatchRequest,
+    operationIdentity: context.operationIdentity,
+    validInventoryRequest: context.validInventoryRequest,
+    validStarRequest: context.validStarRequest,
+  };
+  vm.runInContext(source.replace('.import "RequestValidation.js" as RequestValidation', ""), context, { filename: controllerPath });
   return context.createController;
 }
 

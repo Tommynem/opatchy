@@ -7,13 +7,23 @@ import vm from "node:vm";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const controllerPath = resolve(repositoryRoot, "qml/models/ServiceController.js");
+const requestValidationPath = resolve(repositoryRoot, "qml/models/RequestValidation.js");
 const strictJsonPath = resolve(repositoryRoot, "qml/models/StrictJson.js");
 const validatorPath = resolve(repositoryRoot, "qml/models/ProtocolValidator.js");
 
 function loadController() {
   const context = vm.createContext({ JSON, Math, Number, Object, String });
+  const requestValidation = readFileSync(requestValidationPath, "utf8").replace(".pragma library", "");
+  vm.runInContext(requestValidation, context, { filename: requestValidationPath });
+  context.RequestValidation = {
+    hasSecurityWatchRequest: context.hasSecurityWatchRequest,
+    operationIdentity: context.operationIdentity,
+    validInventoryRequest: context.validInventoryRequest,
+    validStarRequest: context.validStarRequest,
+  };
   const source = readFileSync(controllerPath, "utf8")
-    .replace(".pragma library", "");
+    .replace(".pragma library", "")
+    .replace('.import "RequestValidation.js" as RequestValidation', "");
   vm.runInContext(source, context, { filename: controllerPath });
   return context.createController;
 }
@@ -218,24 +228,64 @@ test("rejects duplicate JSON keys with Python decoder parity", () => {
   assert.equal(parseResponse(literalUnpairedLow).ok, false);
 });
 
-test("coalesces simultaneous refreshes into one queued rescan", () => {
+test("coalesces repeated manual refreshes into one forced follow-up", () => {
   const { controller, starts } = fixture();
   controller.start();
   const initial = starts[0];
 
-  controller.requestRefresh();
-  controller.requestRefresh();
-  controller.requestRefresh();
+  assert.equal(controller.requestRefresh(), true);
+  assert.equal(controller.requestRefresh(), false);
+  assert.equal(controller.requestRefresh(), false);
   complete(controller, initial, snapshot("generation-1"));
 
-  assert.deepEqual(starts.map((operation) => operation.kind), ["snapshot", "scan"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(starts.map((operation) => operation.argv))), [
+    ["snapshot"],
+    ["scan", "--force"],
+  ]);
   const scan = starts[1];
-  controller.requestRefresh();
-  controller.requestRefresh();
-  controller.requestRefresh();
+  assert.equal(controller.requestRefresh(), true);
+  assert.equal(controller.requestRefresh(), false);
+  assert.equal(controller.requestRefresh(), false);
   complete(controller, scan, snapshot("generation-2"));
 
-  assert.deepEqual(starts.map((operation) => operation.kind), ["snapshot", "scan", "scan"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(starts.map((operation) => operation.argv))), [
+    ["snapshot"],
+    ["scan", "--force"],
+    ["scan", "--force"],
+  ]);
+});
+
+test("upgrades an ordinary queued refresh to force and never downgrades a manual one", () => {
+  const freshUntil = "1970-01-01T00:05:00.000Z";
+  const ordinaryThenManual = fixture();
+  ordinaryThenManual.controller.start();
+  complete(ordinaryThenManual.controller, ordinaryThenManual.starts[0], snapshot("ordinary", freshUntil));
+  ordinaryThenManual.controller.requestInventory({ source: "arch", query: "", limit: 20, offset: 0 });
+  const ordinaryThenManualInventory = ordinaryThenManual.starts[1];
+  ordinaryThenManual.controller.wake(300_000);
+  assert.equal(ordinaryThenManual.controller.requestRefresh(), false);
+  complete(ordinaryThenManual.controller, ordinaryThenManualInventory, inventory("ordinary-inventory"));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(ordinaryThenManual.starts.map((operation) => operation.argv))), [
+    ["snapshot"],
+    ["inventory", "--source", "arch", "--query", "", "--limit", "20", "--offset", "0"],
+    ["scan", "--force"],
+  ]);
+
+  const manualThenOrdinary = fixture();
+  manualThenOrdinary.controller.start();
+  complete(manualThenOrdinary.controller, manualThenOrdinary.starts[0], snapshot("manual", freshUntil));
+  manualThenOrdinary.controller.requestInventory({ source: "arch", query: "", limit: 20, offset: 0 });
+  const manualThenOrdinaryInventory = manualThenOrdinary.starts[1];
+  assert.equal(manualThenOrdinary.controller.requestRefresh(), true);
+  manualThenOrdinary.controller.wake(300_000);
+  complete(manualThenOrdinary.controller, manualThenOrdinaryInventory, inventory("manual-inventory"));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(manualThenOrdinary.starts.map((operation) => operation.argv))), [
+    ["snapshot"],
+    ["inventory", "--source", "arch", "--query", "", "--limit", "20", "--offset", "0"],
+    ["scan", "--force"],
+  ]);
 });
 
 test("records only source scans as attempts and uses the snapshot generation time as success", () => {
@@ -469,19 +519,41 @@ test("surfaces a typed helper error even when the helper exits with status two",
   assert.equal(controller.state.lastError, "STATE_UNAVAILABLE: validated state is unavailable");
 });
 
-test("schedules initial, earliest-source, and post-handoff scans deterministically", () => {
+test("keeps initial, periodic, retry, and post-handoff scans ordinary", () => {
   const { controller, starts } = fixture();
   controller.start();
   assert.equal(controller.state.nextWakeAt, 30_000);
 
   controller.wake(30_000);
   complete(controller, starts[0], snapshot("generation-1", "1970-01-01T00:05:00.000Z"));
-  assert.equal(controller.state.nextWakeAt, 300_000);
-
-  controller.schedulePostHandoffScan(0);
-  assert.equal(controller.state.nextWakeAt, 300_000);
+  const initial = starts[1];
+  complete(controller, initial, snapshot("generation-2", "1970-01-01T00:05:00.000Z"));
+  controller.wake(60_000);
+  const periodic = starts[2];
   controller.wake(300_000);
-  assert.deepEqual(starts.map((operation) => operation.kind), ["snapshot", "scan"]);
+  complete(controller, periodic, snapshot("generation-3", "1970-01-01T00:05:00.000Z"));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(starts.map((operation) => operation.argv))), [
+    ["snapshot"],
+    ["scan"],
+    ["scan"],
+    ["scan"],
+  ]);
+
+  const handoff = fixture();
+  handoff.controller.start();
+  handoff.controller.wake(30_000);
+  complete(handoff.controller, handoff.starts[0], snapshot("handoff", "1970-01-01T00:00:00.000Z"));
+  const initialHandoffScan = handoff.starts[1];
+  handoff.controller.recordHandoff(0);
+  handoff.controller.wake(600_000);
+  complete(handoff.controller, initialHandoffScan, snapshot("handoff-initial", "1970-01-01T00:00:00.000Z"));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(handoff.starts.map((operation) => operation.argv))), [
+    ["snapshot"],
+    ["scan"],
+    ["scan"],
+  ]);
 });
 
 test("shutdown drops queued work and invalidates the active callback", () => {

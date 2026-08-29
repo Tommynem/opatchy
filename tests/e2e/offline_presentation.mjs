@@ -19,8 +19,17 @@ function load(path, target) {
 
 function loadController() {
   const value = context();
+  const validationPath = modelPath("RequestValidation.js");
+  vm.runInContext(readFileSync(validationPath, "utf8").replace(".pragma library", ""), value, { filename: validationPath });
+  value.RequestValidation = {
+    hasSecurityWatchRequest: value.hasSecurityWatchRequest,
+    operationIdentity: value.operationIdentity,
+    validInventoryRequest: value.validInventoryRequest,
+    validStarRequest: value.validStarRequest,
+  };
   const source = readFileSync(modelPath("ServiceController.js"), "utf8")
-    .replace(".pragma library", "");
+    .replace(".pragma library", "")
+    .replace('.import "RequestValidation.js" as RequestValidation', "");
   vm.runInContext(source, value, { filename: modelPath("ServiceController.js") });
   return value.createController;
 }
