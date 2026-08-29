@@ -8,20 +8,35 @@ Item {
   property var rows: []
   property string emptyTitle: "Nothing needs action"
   property string emptyDetail: "Current source data has no actionable updates."
+  property string resultNoun: "updates"
   property var starState: null
   property bool notifyPermanent: true
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
+  property int viewportHeight: Style.space(180)
+  property Item previousFocusItem: null
+  property Item nextFocusItem: null
+  property int expandedIndex: -1
+  readonly property alias listControl: list
+  readonly property alias verticalScrollBar: verticalScrollBar
+  readonly property alias topControl: topButton
+  readonly property alias positionCue: positionCue
+  readonly property int currentIndex: list.currentIndex
+  readonly property int firstVisibleIndex: Math.max(0, list.indexAt(1, list.contentY + 1))
+  readonly property int visibleDelegateCount: list.contentItem.children.length
 
-  implicitHeight: content.implicitHeight
+  implicitHeight: root.rows.length === 0 ? emptyContent.implicitHeight : listHeader.height + Style.spacing.xs + viewportHeight
+  height: implicitHeight
+
+  onExpandedIndexChanged: positionCurrentRow()
 
   Column {
-    id: content
+    id: emptyContent
+    visible: root.rows.length === 0
     width: parent.width
     spacing: Style.spacing.xs
 
     Text {
-      visible: root.rows.length === 0
       width: parent.width
       text: root.emptyTitle
       textFormat: Text.PlainText
@@ -35,7 +50,7 @@ Item {
     }
 
     Text {
-      visible: root.rows.length === 0 && root.emptyDetail !== ""
+      visible: root.emptyDetail !== ""
       width: parent.width
       text: root.emptyDetail
       textFormat: Text.PlainText
@@ -46,19 +61,200 @@ Item {
       maximumLineCount: 3
       elide: Text.ElideRight
     }
+  }
 
-    Repeater {
-      model: root.rows
+  Item {
+    id: listHeader
+    visible: root.rows.length > 0
+    width: parent.width
+    height: Style.spacing.controlHeight
 
-      delegate: UpdateRow {
-        required property var modelData
-        width: parent.width
-        row: modelData
-        starState: root.starState
-        notifyPermanent: root.notifyPermanent
-        foreground: root.foreground
-        fontFamily: root.fontFamily
+    Text {
+      id: positionCue
+      objectName: "update-list-position-cue"
+      anchors.left: parent.left
+      anchors.right: topButton.left
+      anchors.rightMargin: Style.spacing.xs
+      anchors.verticalCenter: parent.verticalCenter
+      text: root.rows.length + " " + root.resultNoun + " | " + (root.firstVisibleIndex + 1) + " of " + root.rows.length
+      textFormat: Text.PlainText
+      color: Qt.darker(root.foreground, 1.4)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      elide: Text.ElideRight
+      maximumLineCount: 1
+    }
+
+    Button {
+      id: topButton
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(42)
+      height: Style.spacing.controlHeight
+      text: "Top"
+      tooltipText: "Return to the first update"
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      fontSize: Style.font.caption
+      focusable: true
+      bordered: true
+      enabled: list.contentY > 0
+      Keys.priority: Keys.BeforeItem
+      Keys.onTabPressed: function(event) {
+        list.forceActiveFocus()
+        event.accepted = true
+      }
+      Keys.onBacktabPressed: function(event) {
+        if (root.previousFocusItem) root.previousFocusItem.forceActiveFocus()
+        event.accepted = root.previousFocusItem !== null
+      }
+      onClicked: root.returnToTop()
+    }
+  }
+
+  ListView {
+    id: list
+    objectName: "opatchy-update-list"
+    visible: root.rows.length > 0
+    anchors.top: listHeader.bottom
+    anchors.topMargin: Style.spacing.xs
+    width: parent.width
+    height: root.viewportHeight
+    clip: true
+    focus: true
+    activeFocusOnTab: true
+    model: root.rows
+    spacing: Style.spacing.xxs
+    reuseItems: true
+    cacheBuffer: Style.space(72)
+    boundsBehavior: Flickable.StopAtBounds
+    flickableDirection: Flickable.VerticalFlick
+    keyNavigationEnabled: false
+    currentIndex: root.rows.length > 0 ? 0 : -1
+
+    onCurrentIndexChanged: {
+      if (root.expandedIndex !== currentIndex) root.expandedIndex = -1
+    }
+    onContentHeightChanged: {
+      if (root.expandedIndex === currentIndex && currentIndex >= 0) root.positionCurrentRow()
+    }
+
+    Keys.priority: Keys.BeforeItem
+    Keys.onPressed: function(event) {
+      switch (event.key) {
+      case Qt.Key_Up: root.moveToIndex(currentIndex - 1); break
+      case Qt.Key_Down: root.moveToIndex(currentIndex + 1); break
+      case Qt.Key_PageUp: root.moveToIndex(currentIndex - root.pageStep()); break
+      case Qt.Key_PageDown: root.moveToIndex(currentIndex + root.pageStep()); break
+      case Qt.Key_Home: root.moveToIndex(0); break
+      case Qt.Key_End: root.moveToIndex(count - 1); break
+      case Qt.Key_Return:
+      case Qt.Key_Enter:
+      case Qt.Key_Space: root.toggleCurrentRow(); break
+      default: return
+      }
+      event.accepted = true
+    }
+    Keys.onReturnPressed: function(event) {
+      root.toggleCurrentRow()
+      event.accepted = true
+    }
+    Keys.onSpacePressed: function(event) {
+      root.toggleCurrentRow()
+      event.accepted = true
+    }
+    Keys.onTabPressed: function(event) {
+      root.focusWatchSelectorOrNext()
+      event.accepted = true
+    }
+    Keys.onBacktabPressed: function(event) {
+      if (topButton.enabled) {
+        topButton.forceActiveFocus()
+        event.accepted = true
+      } else if (root.previousFocusItem) {
+        root.previousFocusItem.forceActiveFocus()
+        event.accepted = true
       }
     }
+
+    delegate: UpdateRow {
+      id: delegateRoot
+      required property int index
+      required property var modelData
+      objectName: "opatchy-update-row-" + index
+      width: list.width - verticalScrollBar.width - Style.spacing.xxs
+      row: modelData
+      starState: root.starState
+      notifyPermanent: root.notifyPermanent
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      selected: ListView.isCurrentItem
+      expanded: root.expandedIndex === index
+      listControl: list
+      nextFocusItem: root.nextFocusItem
+      onActivateRequested: root.activateRow(index)
+    }
+
+  }
+
+  BoundedScrollIndicator {
+    id: verticalScrollBar
+    anchors.top: list.top
+    anchors.bottom: list.bottom
+    anchors.right: list.right
+    flickable: list
+  }
+
+  function activateRow(index) {
+    if (index < 0 || index >= rows.length) return
+    if (list.currentIndex !== index) list.currentIndex = index
+    expandedIndex = expandedIndex === index ? -1 : index
+    positionCurrentRow()
+  }
+
+  function toggleCurrentRow() {
+    activateRow(list.currentIndex)
+  }
+
+  function moveToIndex(index) {
+    if (rows.length === 0) return
+    list.currentIndex = Math.max(0, Math.min(rows.length - 1, index))
+    positionCurrentRow()
+  }
+
+  function positionCurrentRow() {
+    Qt.callLater(function() {
+      list.forceLayout()
+      list.positionViewAtIndex(list.currentIndex, ListView.Contain)
+    })
+  }
+
+  function pageStep() {
+    var current = list.currentItem
+    var rowHeight = current && current.height > 0 ? current.height + list.spacing : Style.space(36)
+    return Math.max(1, Math.floor(list.height / rowHeight))
+  }
+
+  function returnToTop() {
+    expandedIndex = -1
+    moveToIndex(0)
+    list.contentY = 0
+  }
+
+  function rowAt(index) {
+    return list.itemAtIndex(index)
+  }
+
+  function focusWatchSelectorOrNext() {
+    var current = rowAt(list.currentIndex)
+    if (current && current.row.watchable === true) {
+      if (expandedIndex !== list.currentIndex) expandedIndex = list.currentIndex
+      Qt.callLater(function() {
+        var expandedRow = rowAt(list.currentIndex)
+        if (expandedRow && expandedRow.watchSelector) expandedRow.watchSelector.forceActiveFocus()
+      })
+      return
+    }
+    if (nextFocusItem) nextFocusItem.forceActiveFocus()
   }
 }
