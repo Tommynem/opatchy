@@ -47,14 +47,14 @@ function groupsFor(values, archCoverage, kevCoverage) {
     var group = values[index]
     if (!validGroup(group) || !group.findings.every(function(finding) { return validFinding(finding, group.itemId) })) return null
     var rows = group.findings.map(function(finding) {
-      return findingRow(finding, archCoverage, kevCoverage)
+      return findingRow(finding, group.itemId, archCoverage, kevCoverage)
     }).sort(compareFindings)
     groups.push({ watchTarget: group.itemId, packageName: presentationText(group.itemId.slice(5)), findings: rows })
   }
   return groups.sort(compareGroups)
 }
 
-function findingRow(finding, archCoverage, kevCoverage) {
+function findingRow(finding, itemId, archCoverage, kevCoverage) {
   return {
     advisoryId: finding.id,
     cveIds: finding.cveIds.filter(canonicalCve),
@@ -69,6 +69,19 @@ function findingRow(finding, archCoverage, kevCoverage) {
     sourceCoverageText: archCoverage.text + ". " + kevCoverage.text,
     knownExploited: finding.knownExploited === true,
     hasFixedVersion: typeof finding.fixedVersion === "string" && finding.fixedVersion.length > 0,
+    watchRequest: securityWatchRequest(finding, itemId),
+  }
+}
+
+function securityWatchRequest(finding, itemId) {
+  if (!canonicalArchItem(itemId) || !canonicalAverage(finding.id) || !validFixedVersion(finding.fixedVersion)) return null
+  if (!Array.isArray(finding.cveIds) || finding.cveIds.length === 0 || finding.cveIds.length > 16) return null
+  if (!finding.cveIds.every(canonicalCve) || unique(finding.cveIds).length !== finding.cveIds.length) return null
+  return {
+    itemId: itemId,
+    securityAdvisory: finding.id,
+    fixedVersion: finding.fixedVersion,
+    cveIds: finding.cveIds.slice(),
   }
 }
 
@@ -144,6 +157,11 @@ function validFinding(finding, groupItemId) { return finding && finding.itemId =
 function canonicalArchItem(value) { return typeof value === "string" && value.length <= 128 && /^arch:[A-Za-z0-9@_+][A-Za-z0-9@._+-]*$/.test(value) }
 function canonicalAverage(value) { return typeof value === "string" && value.length <= 128 && /^AVG-[0-9]+$/.test(value) }
 function canonicalCve(value) { return typeof value === "string" && value.length <= 128 && /^CVE-[0-9]{4}-[0-9]{4,19}$/.test(value) }
+function validFixedVersion(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 256
+    && /^[\x20-\x7e]+$/.test(value)
+}
+function unique(values) { return values.filter(function(value, index) { return values.indexOf(value) === index }) }
 function presentationText(value) {
   var text = value === null || value === undefined ? "Not recorded" : String(value)
   text = text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")

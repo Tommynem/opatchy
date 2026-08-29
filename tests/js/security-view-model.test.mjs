@@ -120,6 +120,32 @@ test("keeps fixed and no-fix findings with installed, advisory, and canonical wa
   assert.equal(view.groups[0].findings[0].advisoryId, "AVG-20");
 });
 
+test("exposes only bounded canonical fixed-version watch request identity", () => {
+  const model = load(modelPath, "Todo 27 security view model must exist");
+  const currentTime = Date.parse("2026-08-26T00:02:00.000Z");
+  const qualified = model.securityView(snapshot([group("arch:openssl", [
+    finding("AVG-20", { cveIds: ["CVE-2026-1001", "CVE-2026-1000"] }),
+  ])]), currentTime).groups[0].findings[0];
+
+  assert.deepEqual(JSON.parse(JSON.stringify(qualified.watchRequest)), {
+    itemId: "arch:openssl",
+    securityAdvisory: "AVG-20",
+    fixedVersion: "3.1.2",
+    cveIds: ["CVE-2026-1001", "CVE-2026-1000"],
+  });
+
+  for (const overrides of [
+    { cveIds: [] },
+    { cveIds: ["CVE-2026-1000", "CVE-2026-1000"] },
+    { cveIds: Array.from({ length: 17 }, (_, index) => `CVE-2026-${1000 + index}`) },
+    { fixedVersion: "3.1.2\nnot-a-version" },
+    { fixedVersion: "x".repeat(257) },
+  ]) {
+    const row = model.securityView(snapshot([group("arch:openssl", [finding("AVG-21", overrides)])]), currentTime).groups[0].findings[0];
+    assert.equal(row.watchRequest, null, JSON.stringify(overrides));
+  }
+});
+
 test("retains multiple advisories and CVEs with exact KEV meanings", () => {
   const model = load(modelPath, "Todo 22 security view model must exist");
   const view = model.securityView(snapshot([group("arch:openssl", [
