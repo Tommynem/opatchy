@@ -106,8 +106,38 @@ test("retains a current inventory view when stale or incompatible results arrive
   const stale = { generationId: "generation-old", payload: { source: "arch", total: 1, items: [item("arch:old", "arch", "old")] } };
 
   assert.equal(model.inventoryState(stale, "arch", "generation-current").kind, "stale");
+  assert.equal(model.inventoryState(stale, "arch", "generation-current").rows[0].watchable, false);
   assert.equal(model.acceptInventory(current, stale, "arch", "generation-current").payload.items[0].id, "arch:current");
   assert.equal(model.inventoryState({ generationId: "generation-current", payload: { source: "aur", total: 0, items: [] } }, "arch", "generation-current").kind, "incompatible");
+});
+
+test("requires current aggregate and exact Flatpak scope evidence before starting a watch", () => {
+  const model = loadModel();
+  const document = snapshot([
+    item("flatpak:user:app", "flatpak", "User app"),
+    item("flatpak:system:runtime", "flatpak", "System runtime"),
+    item("flatpak:unknown:extension", "flatpak", "Malformed scope"),
+  ], {
+    payload: {
+      sources: [source("omarchy"), source("arch"), source("aur"), source("flatpak", {
+        scopes: [
+          { scope: "user", status: "ok", provenance: "live" },
+          { scope: "system", status: "stale", provenance: "last_good" },
+        ],
+      }), source("mise")],
+      items: [
+        item("flatpak:user:app", "flatpak", "User app"),
+        item("flatpak:system:runtime", "flatpak", "System runtime"),
+        item("flatpak:unknown:extension", "flatpak", "Malformed scope"),
+      ],
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(model.updateRows(document, "Flatpak").map((row) => [row.target, row.watchable]))), [
+    ["flatpak:user:app", true],
+    ["flatpak:system:runtime", false],
+    ["flatpak:unknown:extension", false],
+  ]);
 });
 
 test("builds only eligible fixed footer actions, including independently scoped Flatpak actions", () => {

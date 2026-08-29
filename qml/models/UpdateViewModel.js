@@ -8,9 +8,10 @@ function updateRows(snapshot, tab) {
   var source = sourceForTab(tab)
   if (source === null || !snapshot || !snapshot.payload || !Array.isArray(snapshot.payload.items)) return []
   var health = sourceHealth(snapshot, source)
+  var sources = Array.isArray(snapshot.payload.sources) ? snapshot.payload.sources : []
   return snapshot.payload.items.filter(function(item) {
     return validItem(item) && item.source === source && typeof item.candidate === "string" && item.candidate.length > 0
-  }).map(function(item) { return row(item, health) })
+  }).map(function(item) { return row(item, health, canStartWatch(item, sources)) })
 }
 
 function canBrowse(tab) { return inventorySourceForTab(tab) !== null }
@@ -36,9 +37,9 @@ function inventoryState(response, source, generationId) {
     return { kind: "incompatible", rows: [], total: 0, summaryText: "Cached inventory is incompatible with this source." }
   }
   if (response.generationId !== generationId) {
-    return { kind: "stale", rows: items.map(function(item) { return row(item, "Cached inventory (last known)") }), total: total, summaryText: "Cached inventory is stale; showing last known results." }
+    return { kind: "stale", rows: items.map(function(item) { return row(item, "Cached inventory (last known)", false) }), total: total, summaryText: "Cached inventory is stale; showing last known results." }
   }
-  return { kind: "ready", rows: items.map(function(item) { return row(item, "Cached inventory") }), total: total, summaryText: countText(total) }
+  return { kind: "ready", rows: items.map(function(item) { return row(item, "Cached inventory", true) }), total: total, summaryText: countText(total) }
 }
 
 function acceptInventory(current, received, source, generationId) {
@@ -87,7 +88,8 @@ function sourceHealth(snapshot, source) {
   return "Evidence: " + healthText(status)
 }
 
-function row(item, context) {
+function row(item, context, canStartWatch) {
+  var watchable = item.watchable === true && canStartWatch !== false
   return {
     target: item.id,
     id: presentationText(item.id),
@@ -96,9 +98,9 @@ function row(item, context) {
     source: presentationText(item.source),
     installed: presentationText(item.installed),
     candidate: presentationText(item.candidate),
-    watchText: item.watchable ? "Watch: " + presentationText(item.watchMode) : "Watch: unavailable",
+    watchText: watchable ? "Watch: " + presentationText(item.watchMode) : "Watch: unavailable",
     watchMode: item.watchMode,
-    watchable: item.watchable,
+    watchable: watchable,
     temporaryArmed: item.watchArmed === true,
     healthText: presentationText(context),
   }
@@ -124,10 +126,22 @@ function validItem(value) {
 function validCount(value) { return typeof value === "number" && isFinite(value) && value >= 0 && Math.floor(value) === value }
 function hasUpdate(items, sources, source) { return currentSource(sources, source) && items.some(function(item) { return validItem(item) && item.source === source && typeof item.candidate === "string" && item.candidate.length > 0 }) }
 function hasFlatpakUpdate(items, sources, scope) { return currentSource(sources, "flatpak") && currentScope(sources, scope) && items.some(function(item) { return validItem(item) && item.source === "flatpak" && item.id.indexOf("flatpak:" + scope + ":") === 0 && typeof item.candidate === "string" && item.candidate.length > 0 }) }
+function canStartWatch(item, sources) {
+  if (!currentSource(sources, item.source)) return false
+  if (item.source !== "flatpak") return true
+  var scope = flatpakScope(item.id)
+  return scope !== null && currentScope(sources, scope)
+}
 function currentSource(sources, source) { return sources.some(function(value) { return value && value.source === source && value.status === "ok" && value.provenance === "live" }) }
 function currentScope(sources, scope) {
   var flatpak = sources.filter(function(value) { return value && value.source === "flatpak" })[0]
   return flatpak && Array.isArray(flatpak.scopes) && flatpak.scopes.some(function(value) { return value && value.scope === scope && value.status === "ok" && value.provenance === "live" })
+}
+function flatpakScope(id) {
+  if (typeof id !== "string") return null
+  if (id.indexOf("flatpak:user:") === 0) return "user"
+  if (id.indexOf("flatpak:system:") === 0) return "system"
+  return null
 }
 function action(kind, text, enabled) { return { kind: kind, text: text, enabled: enabled } }
 function countText(value) { return value === 0 ? "No cached packages match this query." : value === 1 ? "1 cached result." : value + " cached results." }
