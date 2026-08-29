@@ -107,6 +107,50 @@ print(digest.hexdigest())
 PY
 }
 
+untracked_development_entry() {
+  case "$1" in
+    .venv|.venv/*|.omo|.omo/*|.codegraph|.codegraph/*|.playwright-mcp|.playwright-mcp/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+require_committed_plugin_source() {
+  local worktree entry
+  worktree="$(git -C "${plugin_source}" rev-parse --show-toplevel)" \
+    || fail "plugin source must be a Git worktree"
+  [[ "${worktree}" == "${plugin_source}" ]] \
+    || fail "plugin source must be the exact Git worktree root"
+  git -C "${plugin_source}" diff --quiet \
+    || fail "plugin source has uncommitted tracked changes"
+  git -C "${plugin_source}" diff --cached --quiet \
+    || fail "plugin source has staged but uncommitted changes"
+  while IFS= read -r -d '' entry; do
+    untracked_development_entry "${entry}" \
+      || fail "plugin source has untracked product entry: ${entry}"
+  done < <(git -C "${plugin_source}" ls-files --others --exclude-standard -z)
+}
+
+stage_committed_plugin_source() {
+  staged_plugin="${record_dir}/staged-plugin"
+  require_committed_plugin_source
+  mkdir "${staged_plugin}"
+  if ! git -C "${plugin_source}" archive --format=tar HEAD | tar -x -f - -C "${staged_plugin}"; then
+    fail "unable to archive committed plugin tree"
+  fi
+  require_no_symlink_components "${staged_plugin}"
+  [[ -f "${staged_plugin}/manifest.json" && ! -L "${staged_plugin}/manifest.json" ]] \
+    || fail "staged plugin has no regular manifest.json"
+  [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["id"])' "${staged_plugin}/manifest.json")" == "${plugin_id}" ]] \
+    || fail "staged plugin manifest id is not ${plugin_id}"
+  plugin_digest "${staged_plugin}" >/dev/null \
+    || fail "staged plugin directory is not deployment-safe"
+  omarchy plugin validate "${staged_plugin}" >/dev/null
+}
+
 config_contains_ids() {
   python3 -c '
 import json
@@ -284,19 +328,17 @@ require_no_symlink_components "${target_plugin}"
 [[ "$("${hostname_bin}")" == "${host}" ]] || fail "selected host does not match this machine"
 [[ -f "${shell_json}" && ! -L "${shell_json}" ]] || fail "shell.json must be a regular file"
 [[ -d "${plugin_parent}" ]] || fail "plugin directory is required before this QA run"
-[[ -f "${plugin_source}/manifest.json" && ! -L "${plugin_source}/manifest.json" ]] || fail "plugin source has no regular manifest.json"
-[[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["id"])' "${plugin_source}/manifest.json")" == "${plugin_id}" ]] || fail "plugin source manifest id is not ${plugin_id}"
-plugin_digest "${plugin_source}" >/dev/null || fail "plugin source contains an unsafe tree entry"
-plugin_digest "${target_plugin}" >/dev/null || fail "target plugin directory is not backup-safe"
 
+umask 077
+mkdir -m 700 "${record_dir}"
+stage_committed_plugin_source
+
+plugin_digest "${target_plugin}" >/dev/null || fail "target plugin directory is not backup-safe"
 shell_ping || fail "shell ping did not return ok"
-omarchy plugin validate "${plugin_source}" >/dev/null
 config_contains_ids "${retained_ids[@]}" || fail "retained plugin inventory prerequisite failed"
 original_helper_count="$(helper_count)"
 [[ "${original_helper_count}" -le 1 ]] || fail "more than one Opatchy helper observed before mutation"
 
-umask 077
-mkdir -m 700 "${record_dir}"
 trap restore EXIT ERR
 mkdir "${record_dir}/backup"
 cp -a "${shell_json}" "${record_dir}/backup/shell.json"
@@ -317,11 +359,6 @@ trap 'signal_status=129; exit 129' HUP
 trap 'signal_status=130; exit 130' INT
 trap 'signal_status=143; exit 143' TERM
 
-staged_plugin="${record_dir}/staged-plugin"
-cp -a "${plugin_source}" "${staged_plugin}"
-require_no_symlink_components "${staged_plugin}"
-plugin_digest "${staged_plugin}" >/dev/null || fail "staged plugin directory is not deployment-safe"
-omarchy plugin validate "${staged_plugin}" >/dev/null
 if config_contains_ids "${plugin_id}" 2>/dev/null; then
   omarchy plugin disable "${plugin_id}"
 fi

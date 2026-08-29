@@ -79,11 +79,26 @@ fake_bin="${fixture_root}/bin"
 command_log="${fixture_root}/command.log"
 fixture_runner="${fixture_root}/todo27-real-shell-window.sh"
 
+initialize_source_repository() {
+  GIT_MASTER=1 git -C "${source_plugin}" init -q
+  GIT_MASTER=1 git -C "${source_plugin}" add manifest.json Service.qml
+  GIT_MASTER=1 git -C "${source_plugin}" -c user.name='Todo 27 Fixture' -c user.email='todo27@example.invalid' \
+    commit -qm 'Fixture plugin source'
+}
+
+assert_no_shell_mutation() {
+  ! grep -Fq 'omarchy restart shell' "${command_log}"
+  ! grep -Fq 'omarchy plugin disable' "${command_log}"
+  ! grep -Fq 'omarchy plugin enable' "${command_log}"
+  ! grep -Fq 'omarchy bar move' "${command_log}"
+}
+
 setup_fixture() {
   rm -rf "${fixture_root}"
   mkdir -p "${home}/.config/omarchy/plugins" "${source_plugin}" "${fake_bin}"
   cp "${root}/manifest.json" "${source_plugin}/manifest.json"
   printf 'Item {}\n' >"${source_plugin}/Service.qml"
+  initialize_source_repository
   printf '{"version":1,"settings":{"preserve":"unchanged"},"bar":{"layout":{"left":[{"id":"clock"}],"right":[{"id":"akitaonrails.ai-usagebar","setting":"A"},{"id":"io.github.sirjul1337.lock-explorer"},{"id":"mirador"},{"id":"omaplug"},{"id":"jkoestinger.vpn"}]}}}\n' >"${home}/.config/omarchy/shell.json"
   cp "${home}/.config/omarchy/shell.json" "${fixture_root}/original-shell.json"
 
@@ -93,6 +108,18 @@ set -euo pipefail
 printf 'omarchy %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
 case "$1 $2" in
   "plugin validate")
+    if [[ "${ASSERT_STAGED_GIT_TREE:-0}" == 1 && "$3" == */staged-plugin ]]; then
+      for development_entry in .git .venv .omo .codegraph .playwright-mcp; do
+        [[ ! -e "$3/$development_entry" ]] || {
+          printf 'staged tree retained development state: %s\n' "$development_entry" >&2
+          exit 1
+        }
+      done
+      [[ -f "$3/manifest.json" && -f "$3/Service.qml" ]] || {
+        printf '%s\n' 'staged tree omitted committed plugin files' >&2
+        exit 1
+      }
+    fi
     if [[ "${FAIL_VALIDATE_TARGET:-0}" == 1 && "$3" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
       printf '%s\n' 'target validation failure' >&2
       exit 1
@@ -193,12 +220,6 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'cp %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
-if [[ "${FAIL_COPY_SOURCE:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" ]]; then
-  mkdir -p "$3"
-  printf 'partial install\n' >"$3/partial.txt"
-  printf '%s\n' 'partial install failure' >&2
-  exit 1
-fi
 if [[ "${FAIL_COPY_BACKUP:-0}" == 1 && "$2" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
   printf '%s\n' 'backup copy failure' >&2
   exit 1
@@ -209,13 +230,28 @@ if [[ "${DISALLOW_WATCHED_COPY:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" &&
 fi
 command -p cp "$@"
 EOF
-  cat >"${fake_bin}/mv" <<'EOF'
+cat >"${fake_bin}/mv" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'mv %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
+if [[ "${FAIL_MOVE_SOURCE:-0}" == 1 && "$1" == */staged-plugin && "$2" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+  mkdir -p "$2"
+  printf 'partial install\n' >"$2/partial.txt"
+  printf '%s\n' 'partial install failure' >&2
+  exit 1
+fi
 command -p mv "$@"
 EOF
-  chmod +x "${fake_bin}/omarchy" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp" "${fake_bin}/mv"
+  cat >"${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${MALFORMED_ARCHIVE:-0}" == 1 && " $* " == *' archive '* ]]; then
+  printf '%s\n' 'malformed fixture archive' >&2
+  exit 1
+fi
+command -p git "$@"
+EOF
+  chmod +x "${fake_bin}/omarchy" "${fake_bin}/pgrep" "${fake_bin}/hostname" "${fake_bin}/cp" "${fake_bin}/mv" "${fake_bin}/git"
   python3 - "${runner}" "${fixture_runner}" "${fake_bin}/hostname" <<'PY'
 import sys
 
@@ -265,6 +301,33 @@ assert_restored "${record_dir}" absent 0
 grep -Fxq 'approval=todo27:tomarchy' "${record_dir}/authorization.txt"
 
 setup_fixture
+mkdir -p "${source_plugin}/.venv/bin"
+ln -s "${fixture_root}/outside-python" "${source_plugin}/.venv/bin/python"
+mkdir -p "${source_plugin}/.omo" "${source_plugin}/.codegraph" "${source_plugin}/.playwright-mcp"
+printf 'draft\n' >"${source_plugin}/.omo/state"
+printf 'index\n' >"${source_plugin}/.codegraph/index"
+printf 'browser\n' >"${source_plugin}/.playwright-mcp/session"
+record_dir="${fixture_root}/untracked-development-symlink-record"
+printf 'RESTORE\n' | run_runner "${record_dir}" env ASSERT_STAGED_GIT_TREE=1
+assert_restored "${record_dir}" absent 0
+
+setup_fixture
+printf 'uncommitted product\n' >"${source_plugin}/UntrackedProduct.qml"
+expect_failure 'plugin source has untracked product entry: UntrackedProduct.qml' run_runner "${fixture_root}/untracked-product" env
+assert_no_shell_mutation
+
+setup_fixture
+printf 'modified tracked product\n' >"${source_plugin}/Service.qml"
+expect_failure 'plugin source has uncommitted tracked changes' run_runner "${fixture_root}/modified-product" env
+assert_no_shell_mutation
+
+setup_fixture
+mkdir "${source_plugin}/not-the-root"
+expect_failure 'plugin source must be the exact Git worktree root' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}/not-the-root" --record-dir "${fixture_root}/not-the-root" --execute
+assert_no_shell_mutation
+
+setup_fixture
 expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   bash "${fixture_runner}" --host tomarchy --plugin-source "${source_plugin}" --record-dir "${fixture_root}/missing-approval" --execute
 expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
@@ -277,13 +340,20 @@ expect_failure 'selected host does not match' env FAKE_HOST=gomarchy HOME="${hom
   bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/wrong-host" --execute
 
 ln -s "${fixture_root}/outside" "${source_plugin}/nested-link"
-expect_failure 'plugin source contains an unsafe tree entry' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
+GIT_MASTER=1 git -C "${source_plugin}" add nested-link
+GIT_MASTER=1 git -C "${source_plugin}" -c user.name='Todo 27 Fixture' -c user.email='todo27@example.invalid' \
+  commit -qm 'Add unsafe tracked link'
+expect_failure 'staged plugin directory is not deployment-safe' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/source-link" --execute
-rm "${source_plugin}/nested-link"
+assert_no_shell_mutation
 ln -s "${fixture_root}/outside" "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
 expect_failure 'symlink path component is not allowed' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/target-link" --execute
 rm "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+
+setup_fixture
+expect_failure 'unable to archive committed plugin tree' run_runner "${fixture_root}/malformed-archive" env MALFORMED_ARCHIVE=1
+assert_no_shell_mutation
 
 record_dir="${fixture_root}/absent-record"
 printf 'RESTORE\n' | run_runner "${record_dir}" env DISALLOW_WATCHED_COPY=1
@@ -355,7 +425,7 @@ mkdir -p "${target_plugin}/empty"
 printf 'prior state\n' >"${target_plugin}/retained.txt"
 existing_digest="$(tree_digest "${target_plugin}")"
 record_dir="${fixture_root}/partial-install-record"
-expect_failure 'partial install' run_runner "${record_dir}" env FAIL_COPY_SOURCE=1
+expect_failure 'partial install' run_runner "${record_dir}" env FAIL_MOVE_SOURCE=1
 assert_restored "${record_dir}" "${existing_digest}" 0
 
 setup_fixture
