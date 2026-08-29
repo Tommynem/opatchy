@@ -14,6 +14,7 @@ Item {
   property bool notifyPermanent: true
   property bool watchedOnly: false
   readonly property var view: presentation.view
+  readonly property alias listControl: updateList.listControl
   readonly property var displayedRows: watchedOnly ? StarViewModel.watchedRows(view.rows).map(function(watched) {
     return view.rows.filter(function(row) { return row.target === watched.target })[0]
   }) : view.rows
@@ -44,8 +45,10 @@ Item {
     }
 
     UpdateListView {
+      id: updateList
       width: parent.width
       rows: root.displayedRows
+      resultNoun: "matches"
       emptyTitle: root.watchedOnly ? "No watched cached items" : "No cached matches"
       emptyDetail: root.watchedOnly
         ? "No temporary or permanent watches match this cached source."
@@ -54,6 +57,7 @@ Item {
       notifyPermanent: root.notifyPermanent
       foreground: root.foreground
       fontFamily: root.fontFamily
+      nextFocusItem: previousButton
     }
 
     BoundedControlStack {
@@ -62,6 +66,7 @@ Item {
       spacing: Style.spacing.sm
 
       Button {
+        id: previousButton
         width: parent.width
         text: "Previous"
         tooltipText: "Show the previous 100 cached results"

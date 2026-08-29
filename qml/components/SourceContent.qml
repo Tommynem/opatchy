@@ -117,8 +117,12 @@ FocusScope {
             bordered: true
             Keys.priority: Keys.BeforeItem
             Keys.onTabPressed: function(event) {
-              const firstAction = footerActions.itemAt(0)
-              if (firstAction) firstAction.forceActiveFocus()
+              if (!root.browsing && updateList.visible && updateList.rows.length > 0) updateList.listControl.forceActiveFocus()
+              else if (root.browsing && inventoryView.visible && inventoryView.displayedRows.length > 0) inventoryView.listControl.forceActiveFocus()
+              else {
+                const firstAction = footerActions.itemAt(0)
+                if (firstAction) firstAction.forceActiveFocus()
+              }
               event.accepted = true
             }
             Keys.onBacktabPressed: function(event) {
@@ -130,6 +134,7 @@ FocusScope {
         }
 
         UpdateListView {
+          id: updateList
           visible: !root.browsing
           width: parent.width
           rows: root.displayedRows
@@ -141,9 +146,12 @@ FocusScope {
           notifyPermanent: root.notifyPermanent
           foreground: root.foreground
           fontFamily: root.fontFamily
+          previousFocusItem: watchedButton
+          nextFocusItem: footerActions.itemAt(0)
         }
 
         InventoryBrowseView {
+          id: inventoryView
           visible: root.browsing
           width: parent.width
           state: browseState
@@ -183,7 +191,8 @@ FocusScope {
                 event.accepted = true
               }
               Keys.onBacktabPressed: function(event) {
-                const previousAction = index > 0 ? footerActions.itemAt(index - 1) : watchedButton
+                const list = root.browsing ? inventoryView.listControl : updateList.listControl
+                const previousAction = index > 0 ? footerActions.itemAt(index - 1) : (list.visible ? list : watchedButton)
                 previousAction.forceActiveFocus()
                 event.accepted = true
               }
