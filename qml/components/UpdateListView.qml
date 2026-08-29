@@ -17,6 +17,7 @@ Item {
   property Item previousFocusItem: null
   property Item nextFocusItem: null
   property int expandedIndex: -1
+  property int pendingContainmentIndex: -1
   readonly property alias listControl: list
   readonly property alias verticalScrollBar: verticalScrollBar
   readonly property alias topControl: topButton
@@ -27,8 +28,6 @@ Item {
 
   implicitHeight: root.rows.length === 0 ? emptyContent.implicitHeight : listHeader.height + Style.spacing.xs + viewportHeight
   height: implicitHeight
-
-  onExpandedIndexChanged: positionCurrentRow()
 
   Column {
     id: emptyContent
@@ -133,12 +132,17 @@ Item {
     currentIndex: root.rows.length > 0 ? 0 : -1
 
     onCurrentIndexChanged: {
-      if (root.expandedIndex !== currentIndex) root.expandedIndex = -1
+      if (root.expandedIndex !== currentIndex) {
+        root.pendingContainmentIndex = -1
+        root.expandedIndex = -1
+      }
     }
     onContentHeightChanged: {
-      if (root.expandedIndex === currentIndex && currentIndex >= 0) root.positionCurrentRow()
+      if (root.pendingContainmentIndex === currentIndex && root.expandedIndex === currentIndex) {
+        root.positionRowAfterLayout(root.pendingContainmentIndex, true)
+      }
     }
-
+    onMovementStarted: root.pendingContainmentIndex = -1
     Keys.priority: Keys.BeforeItem
     Keys.onPressed: function(event) {
       switch (event.key) {
@@ -150,17 +154,17 @@ Item {
       case Qt.Key_End: root.moveToIndex(count - 1); break
       case Qt.Key_Return:
       case Qt.Key_Enter:
-      case Qt.Key_Space: root.toggleCurrentRow(); break
+      case Qt.Key_Space: root.activateRow(currentIndex); break
       default: return
       }
       event.accepted = true
     }
     Keys.onReturnPressed: function(event) {
-      root.toggleCurrentRow()
+      root.activateRow(currentIndex)
       event.accepted = true
     }
     Keys.onSpacePressed: function(event) {
-      root.toggleCurrentRow()
+      root.activateRow(currentIndex)
       event.accepted = true
     }
     Keys.onTabPressed: function(event) {
@@ -208,25 +212,32 @@ Item {
   function activateRow(index) {
     if (index < 0 || index >= rows.length) return
     if (list.currentIndex !== index) list.currentIndex = index
-    expandedIndex = expandedIndex === index ? -1 : index
-    positionCurrentRow()
-  }
-
-  function toggleCurrentRow() {
-    activateRow(list.currentIndex)
+    if (expandedIndex === index) {
+      pendingContainmentIndex = -1
+      expandedIndex = -1
+      positionRowAfterLayout(list.currentIndex, false)
+      return
+    }
+    expandRow(index)
   }
 
   function moveToIndex(index) {
     if (rows.length === 0) return
     list.currentIndex = Math.max(0, Math.min(rows.length - 1, index))
-    positionCurrentRow()
+    positionRowAfterLayout(list.currentIndex, false)
   }
 
-  function positionCurrentRow() {
+  function positionRowAfterLayout(index, requireExpansion) {
     Qt.callLater(function() {
+      if (requireExpansion && (pendingContainmentIndex !== index || expandedIndex !== index || list.currentIndex !== index)) return
       list.forceLayout()
-      list.positionViewAtIndex(list.currentIndex, ListView.Contain)
+      list.positionViewAtIndex(requireExpansion ? index : list.currentIndex, ListView.Contain)
     })
+  }
+
+  function expandRow(index) {
+    pendingContainmentIndex = index
+    expandedIndex = index
   }
 
   function pageStep() {
@@ -236,6 +247,7 @@ Item {
   }
 
   function returnToTop() {
+    pendingContainmentIndex = -1
     expandedIndex = -1
     moveToIndex(0)
     list.contentY = 0
@@ -247,12 +259,10 @@ Item {
 
   function focusWatchSelectorOrNext() {
     var current = rowAt(list.currentIndex)
+    if (current && current.canClearWatch) { current.watchTrigger.forceActiveFocus(); return }
     if (current && current.row.watchable === true) {
-      if (expandedIndex !== list.currentIndex) expandedIndex = list.currentIndex
-      Qt.callLater(function() {
-        var expandedRow = rowAt(list.currentIndex)
-        if (expandedRow && expandedRow.watchSelector) expandedRow.watchSelector.forceActiveFocus()
-      })
+      if (expandedIndex !== list.currentIndex) expandRow(list.currentIndex)
+      Qt.callLater(function() { var expandedRow = rowAt(list.currentIndex); if (expandedRow && expandedRow.watchSelector) expandedRow.watchSelector.forceActiveFocus() })
       return
     }
     if (nextFocusItem) nextFocusItem.forceActiveFocus()

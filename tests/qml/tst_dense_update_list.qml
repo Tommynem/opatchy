@@ -77,11 +77,23 @@ TestCase {
     return values
   }
 
+  function retainedPermanentRow() {
+    const value = row(1, false)
+    value.watchMode = "permanent"
+    return value
+  }
+
   function within(item, container, description) {
     const origin = item.mapToItem(container, 0, 0)
     verify(origin.x >= 0 && origin.y >= 0, description + " starts inside the viewport")
     verify(origin.x + item.width <= container.width, description + " stays within viewport width")
     verify(origin.y + item.height <= container.height, description + " stays within viewport height")
+  }
+
+  function fitsWithin(item, container) {
+    const origin = item.mapToItem(container, 0, 0)
+    return origin.x >= 0 && origin.y >= 0
+      && origin.x + item.width <= container.width && origin.y + item.height <= container.height
   }
 
   function createList(width, count) {
@@ -151,6 +163,17 @@ TestCase {
     view.destroy()
   }
 
+  function test_expanded_watch_row_keeps_a_manual_bottom_scroll_position() {
+    const view = createList(320, 150)
+    view.list.activateRow(0)
+    tryVerify(function() { return view.list.rowAt(0) !== null && view.list.rowAt(0).expanded }, 1000)
+
+    view.list.listControl.flick(0, -1)
+    view.list.listControl.contentY = view.list.listControl.contentHeight - view.list.listControl.height
+    tryVerify(function() { return view.list.listControl.atYEnd }, 1000)
+    view.destroy()
+  }
+
   function test_expanded_last_row_stays_visible_and_watch_modes_are_keyboard_reachable() {
     const view = createList(320, 150)
     view.requestActivate()
@@ -163,6 +186,7 @@ TestCase {
     compare(view.list.expandedIndex, 149)
     tryVerify(function() { return view.list.rowAt(149) !== null && view.list.rowAt(149).expanded }, 1000)
     verify(view.list.rowAt(149).height > Style.space(36), "expanded details increase only the selected row height")
+    tryVerify(function() { return fitsWithin(view.list.rowAt(149), view.list.listControl) }, 1000)
     within(view.list.rowAt(149), view.list.listControl, "the expanded final row")
 
     keyClick(Qt.Key_Home)
@@ -188,6 +212,40 @@ TestCase {
     view.list.listControl.forceActiveFocus()
     keyClick(Qt.Key_Tab)
     tryVerify(function() { return view.nextControl.activeFocus }, 1000)
+    view.destroy()
+  }
+
+  function test_retained_permanent_watch_routes_tab_to_compact_clear_control() {
+    const view = createList(320, 1)
+    view.list.rows = [retainedPermanentRow()]
+    tryVerify(function() { return view.list.listControl.count === 1 && view.list.rowAt(0) !== null }, 1000)
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
+    view.list.listControl.forceActiveFocus()
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return view.list.rowAt(0).watchTrigger.activeFocus }, 1000)
+    verify(!view.list.rowAt(0).watchSelector.visible)
+    keyClick(Qt.Key_Space)
+    compare(view.requests.length, 1)
+    compare(view.requests[0].itemId, "arch:item-1")
+    compare(view.requests[0].mode, "off")
+    view.destroy()
+  }
+
+  function test_retained_permanent_clear_control_respects_list_focus_boundaries() {
+    const view = createList(320, 1)
+    view.list.rows = [retainedPermanentRow()]
+    tryVerify(function() { return view.list.listControl.count === 1 && view.list.rowAt(0) !== null }, 1000)
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
+    view.list.listControl.forceActiveFocus()
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return view.list.rowAt(0).watchTrigger.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return view.nextControl.activeFocus }, 1000)
+    view.list.rowAt(0).watchTrigger.forceActiveFocus()
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return view.list.listControl.activeFocus }, 1000)
     view.destroy()
   }
 
