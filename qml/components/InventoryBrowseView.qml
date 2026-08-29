@@ -110,9 +110,16 @@ Item {
   }
 
   function pageText() {
-    if (!state || view.total === 0) return ""
+    if (!state) return ""
+    if (watchedOnly) return watchedPageText(displayedRows.length)
+    if (view.total === 0) return ""
     var first = state.offset + 1
     var last = Math.min(state.offset + view.rows.length, view.total)
     return "Showing " + first + "-" + last + " of " + view.total
+  }
+
+  function watchedPageText(count) {
+    if (count === 0) return "No watched items on this page."
+    return count === 1 ? "1 watched item on this page." : count + " watched items on this page."
   }
 }
