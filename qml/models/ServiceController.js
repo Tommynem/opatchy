@@ -1,8 +1,6 @@
 .pragma library
-
 var INITIAL_SCAN_DELAY_MS = 30 * 1000
 var POST_HANDOFF_SCAN_DELAY_MS = 10 * 60 * 1000
-
 function createController(options) {
   var controller = {}
   var queue = []
@@ -12,7 +10,6 @@ function createController(options) {
   var refreshQueued = false
   var schedules = { initial: null, periodic: null, retry: null, handoff: null }
   var state = emptyState()
-
   function now() { return options.now() }
   function publish() {
     state = copy(state)
@@ -49,9 +46,7 @@ function createController(options) {
     }
     return earliest
   }
-  function operation(kind, argv, expectedKind) {
-    return { id: nextId++, kind: kind, argv: argv, expectedKind: expectedKind }
-  }
+  function operation(kind, argv, expectedKind) { return { id: nextId++, kind: kind, argv: argv, expectedKind: expectedKind } }
   function enqueue(next) {
     queue.push(next)
     if (active) {
@@ -75,15 +70,10 @@ function createController(options) {
     publish()
     startNext()
   }
-  function setError(kind, message) {
-    state.lastFailureKind = kind
-    state.lastError = message
-  }
+  function setError(kind, message) { state.lastFailureKind = kind; state.lastError = message }
   function recordFailure(completed, kind, message) {
     setError(kind, message)
-    state.lastFailureOperation = completed ? {
-      id: completed.id, kind: completed.kind, itemId: completed.itemId, mode: completed.mode
-    } : null
+    state.lastFailureOperation = completed ? operationIdentity(completed) : null
   }
   function refresh() {
     if (!accepting || refreshQueued) return false
@@ -91,11 +81,7 @@ function createController(options) {
     enqueue(operation("scan", ["scan"], "snapshot"))
     return true
   }
-  function due(scheduleName, at) {
-    if (schedules[scheduleName] === null || schedules[scheduleName] > at) return false
-    schedules[scheduleName] = null
-    return true
-  }
+  function due(scheduleName, at) { if (schedules[scheduleName] === null || schedules[scheduleName] > at) return false; schedules[scheduleName] = null; return true }
   function configureSnapshotSchedule(response) {
     var retry = earliestSourceRetry(response.payload.sources, now())
     schedules.retry = retry
@@ -157,11 +143,24 @@ function createController(options) {
   }
   controller.setStar = function(request) {
     if (!validStarRequest(request)) return false
-    var next = operation("set-star", [
+    var argv = [
       "set-star", "--item-id", request.itemId, "--mode", request.mode
-    ], "star-result")
+    ]
+    if (hasSecurityWatchRequest(request)) {
+      argv = argv.concat([
+        "--security-advisory", request.securityAdvisory,
+        "--fixed-version", request.fixedVersion,
+        "--cve-ids", request.cveIds.join(",")
+      ])
+    }
+    var next = operation("set-star", argv, "star-result")
     next.itemId = request.itemId
     next.mode = request.mode
+    if (hasSecurityWatchRequest(request)) {
+      next.securityAdvisory = request.securityAdvisory
+      next.fixedVersion = request.fixedVersion
+      next.cveIds = request.cveIds.slice()
+    }
     enqueue(next)
     return true
   }
@@ -192,11 +191,15 @@ function createController(options) {
       recordFailure(completed, "timeout", "helper operation timed out")
     } else if (result.outputTooLarge === true) {
       recordFailure(completed, "output", "helper output exceeded the five MiB limit")
-    } else if (result.exitCode !== 0) {
-      recordFailure(completed, "command", "helper exited with status " + result.exitCode)
     } else {
       var parsed = options.parseResponse(result.stdout)
-      if (!parsed.ok) {
+      if (result.exitCode !== 0) {
+        if (parsed.ok && parsed.value.kind === "error") {
+          recordFailure(completed, "helper", parsed.value.error.code + ": " + parsed.value.error.message)
+        } else {
+          recordFailure(completed, "command", "helper exited with status " + result.exitCode)
+        }
+      } else if (!parsed.ok) {
         recordFailure(completed, "incompatible", parsed.error)
       } else if (parsed.value.kind === "error") {
         recordFailure(completed, "helper", parsed.value.error.code + ": " + parsed.value.error.message)
@@ -220,22 +223,27 @@ function createController(options) {
   controller.state = state
   return controller
 }
-
-function isObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-}
-
-function nonnegativeInteger(value) {
-  return typeof value === "number" && isFinite(value) && Math.floor(value) === value && value >= 0
-}
-
+function isObject(value) { return value !== null && typeof value === "object" && !Array.isArray(value) }
+function nonnegativeInteger(value) { return typeof value === "number" && isFinite(value) && Math.floor(value) === value && value >= 0 }
 function validInventoryRequest(value) {
-  return isObject(value) && ["arch", "aur", "flatpak", "mise"].indexOf(value.source) !== -1
-    && typeof value.query === "string" && value.query.length <= 128 && nonnegativeInteger(value.offset)
-    && value.offset <= 100000 && nonnegativeInteger(value.limit) && value.limit >= 1 && value.limit <= 100
+  return isObject(value) && ["arch", "aur", "flatpak", "mise"].indexOf(value.source) !== -1 && typeof value.query === "string" && value.query.length <= 128 && nonnegativeInteger(value.offset) && value.offset <= 100000 && nonnegativeInteger(value.limit) && value.limit >= 1 && value.limit <= 100
 }
-
 function validStarRequest(value) {
-  return isObject(value) && typeof value.itemId === "string" && value.itemId.length > 0 && value.itemId.length <= 128
-    && ["off", "temporary", "permanent"].indexOf(value.mode) !== -1
+  return isObject(value) && typeof value.itemId === "string" && value.itemId.length > 0 && value.itemId.length <= 128 && ["off", "temporary", "permanent"].indexOf(value.mode) !== -1 && validSecurityWatchRequest(value)
+}
+function operationIdentity(value) {
+  var identity = { id: value.id, kind: value.kind, itemId: value.itemId, mode: value.mode }
+  if (hasSecurityWatchRequest(value)) {
+    identity.securityAdvisory = value.securityAdvisory; identity.fixedVersion = value.fixedVersion; identity.cveIds = value.cveIds.slice()
+  }
+  return identity
+}
+function hasSecurityWatchRequest(value) { return value.securityAdvisory !== undefined }
+function validSecurityWatchRequest(value) {
+  var fields = ["securityAdvisory", "fixedVersion", "cveIds"], present = fields.filter(function(field) { return value[field] !== undefined }).length
+  if (present === 0) return true
+  if (present !== fields.length || value.mode !== "temporary" || !/^arch:[A-Za-z0-9@_+][A-Za-z0-9@._+-]{0,127}$/.test(value.itemId)) return false
+  if (typeof value.securityAdvisory !== "string" || !/^AVG-[0-9]{1,120}$/.test(value.securityAdvisory) || typeof value.fixedVersion !== "string" || !/^[\x20-\x7e]{1,256}$/.test(value.fixedVersion) || !Array.isArray(value.cveIds) || value.cveIds.length === 0 || value.cveIds.length > 16) return false
+  for (var index = 0; index < value.cveIds.length; index += 1) if (typeof value.cveIds[index] !== "string" || !/^CVE-[0-9]{4}-[0-9]{4,19}$/.test(value.cveIds[index]) || value.cveIds.indexOf(value.cveIds[index]) !== index) return false
+  return true
 }

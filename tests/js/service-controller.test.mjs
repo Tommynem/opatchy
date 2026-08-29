@@ -11,8 +11,9 @@ const strictJsonPath = resolve(repositoryRoot, "qml/models/StrictJson.js");
 const validatorPath = resolve(repositoryRoot, "qml/models/ProtocolValidator.js");
 
 function loadController() {
-  const source = readFileSync(controllerPath, "utf8").replace(".pragma library", "");
   const context = vm.createContext({ JSON, Math, Number, Object, String });
+  const source = readFileSync(controllerPath, "utf8")
+    .replace(".pragma library", "");
   vm.runInContext(source, context, { filename: controllerPath });
   return context.createController;
 }
@@ -146,6 +147,16 @@ function starResult(generationId) {
     generatedAt: "2026-08-26T00:00:00.000Z",
     generationId,
     payload: { itemId: "arch:demo", mode: "temporary", watchArmed: true },
+  });
+}
+
+function helperError(generationId) {
+  return JSON.stringify({
+    protocolVersion: 1,
+    kind: "error",
+    generatedAt: "2026-08-26T00:00:00.000Z",
+    generationId,
+    error: { code: "STATE_UNAVAILABLE", message: "validated state is unavailable" },
   });
 }
 
@@ -382,6 +393,55 @@ test("rejects helper requests outside the exact CLI bounds", () => {
   assert.equal(controller.setStar({ itemId: "arch:demo", mode: "unknown" }), false);
 });
 
+test("emits exact conditional temporary-watch argv and retains request identity", () => {
+  const { controller, starts } = fixture();
+  controller.start();
+  complete(controller, starts[0], snapshot("generation-1"));
+
+  assert.equal(controller.setStar({
+    itemId: "arch:demo",
+    mode: "temporary",
+    securityAdvisory: "AVG-20260001",
+    fixedVersion: "2.0-1",
+    cveIds: ["CVE-2026-1001", "CVE-2026-1000"],
+  }), true);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(starts[1])), {
+    id: starts[1].id,
+    kind: "set-star",
+    argv: [
+      "set-star", "--item-id", "arch:demo", "--mode", "temporary",
+      "--security-advisory", "AVG-20260001", "--fixed-version", "2.0-1",
+      "--cve-ids", "CVE-2026-1001,CVE-2026-1000",
+    ],
+    expectedKind: "star-result",
+    itemId: "arch:demo",
+    mode: "temporary",
+    securityAdvisory: "AVG-20260001",
+    fixedVersion: "2.0-1",
+    cveIds: ["CVE-2026-1001", "CVE-2026-1000"],
+  });
+});
+
+test("rejects malformed conditional watch combinations without changing ordinary stars", () => {
+  const { controller, starts } = fixture();
+  const invalid = [
+    { itemId: "aur:demo", mode: "temporary", securityAdvisory: "AVG-1", fixedVersion: "2.0", cveIds: ["CVE-2026-1000"] },
+    { itemId: "arch:demo", mode: "permanent", securityAdvisory: "AVG-1", fixedVersion: "2.0", cveIds: ["CVE-2026-1000"] },
+    { itemId: "arch:demo", mode: "temporary", securityAdvisory: "AVG-invalid", fixedVersion: "2.0", cveIds: ["CVE-2026-1000"] },
+    { itemId: "arch:demo", mode: "temporary", securityAdvisory: "AVG-1", fixedVersion: "2.0\n", cveIds: ["CVE-2026-1000"] },
+    { itemId: "arch:demo", mode: "temporary", securityAdvisory: "AVG-1", fixedVersion: "2.0", cveIds: [] },
+    { itemId: "arch:demo", mode: "temporary", securityAdvisory: "AVG-1", fixedVersion: "2.0", cveIds: ["CVE-2026-1000", "CVE-2026-1000"] },
+    { itemId: "arch:demo", mode: "temporary", securityAdvisory: "AVG-1", fixedVersion: "2.0", cveIds: Array.from({ length: 17 }, (_, index) => `CVE-2026-${1000 + index}`) },
+    { itemId: "arch:demo", mode: "temporary", securityAdvisory: "AVG-1", fixedVersion: "2.0" },
+  ];
+
+  for (const request of invalid) assert.equal(controller.setStar(request), false, JSON.stringify(request));
+  assert.equal(starts.length, 0);
+  assert.equal(controller.setStar({ itemId: "aur:demo", mode: "temporary" }), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(starts[0].argv)), ["set-star", "--item-id", "aur:demo", "--mode", "temporary"]);
+});
+
 test("correlates set-star failures to the requested canonical target and mode", () => {
   const { controller, starts } = fixture();
   controller.start();
@@ -395,6 +455,18 @@ test("correlates set-star failures to the requested canonical target and mode", 
     id: star.id, kind: "set-star", itemId: "arch:demo", mode: "temporary",
   });
   assert.equal(controller.state.lastStarResult, null);
+});
+
+test("surfaces a typed helper error even when the helper exits with status two", () => {
+  const { controller, starts } = fixture();
+  controller.start();
+  complete(controller, starts[0], snapshot("generation-1"));
+
+  controller.setStar({ itemId: "arch:demo", mode: "temporary" });
+  complete(controller, starts[1], helperError("star-error"), { exitCode: 2 });
+
+  assert.equal(controller.state.lastFailureKind, "helper");
+  assert.equal(controller.state.lastError, "STATE_UNAVAILABLE: validated state is unavailable");
 });
 
 test("schedules initial, earliest-source, and post-handoff scans deterministically", () => {
