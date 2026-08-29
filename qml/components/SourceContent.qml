@@ -117,12 +117,11 @@ FocusScope {
             bordered: true
             Keys.priority: Keys.BeforeItem
             Keys.onTabPressed: function(event) {
-              if (!root.browsing && updateList.visible && updateList.rows.length > 0) updateList.listControl.forceActiveFocus()
+              const firstAction = footerActions.itemAt(0)
+              if (firstAction) firstAction.forceActiveFocus()
+              else if (!root.browsing && updateList.visible && updateList.rows.length > 0) updateList.listControl.forceActiveFocus()
               else if (root.browsing && inventoryView.visible && inventoryView.displayedRows.length > 0) inventoryView.listControl.forceActiveFocus()
-              else {
-                const firstAction = footerActions.itemAt(0)
-                if (firstAction) firstAction.forceActiveFocus()
-              }
+              else return
               event.accepted = true
             }
             Keys.onBacktabPressed: function(event) {
@@ -130,6 +129,50 @@ FocusScope {
               event.accepted = true
             }
             onClicked: { root.watchedOnly = !root.watchedOnly; if (root.watchedOnly && !root.browsing) root.toggleBrowse() }
+          }
+        }
+
+        BoundedControlStack {
+          visible: root.actions.length > 0
+          width: parent.width
+          spacing: Style.spacing.sm
+
+          Repeater {
+            id: footerActions
+            model: root.actions
+
+            delegate: Button {
+              required property int index
+              required property var modelData
+              objectName: "source-update-action-" + modelData.kind
+              width: parent.width
+              text: modelData.text
+              tooltipText: modelData.text
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              fontSize: Style.font.bodySmall
+              focusable: true
+              bordered: true
+              KeyNavigation.tab: root.browsing ? inventoryView.listControl : updateList.listControl
+              enabled: modelData.enabled
+              Keys.priority: Keys.BeforeItem
+              Keys.onTabPressed: function(event) {
+                const nextAction = footerActions.itemAt(index + 1)
+                if (nextAction) nextAction.forceActiveFocus()
+                else {
+                  const list = root.browsing ? inventoryView.listControl : updateList.listControl
+                  if (!list) return
+                  Qt.callLater(function() { list.forceActiveFocus() })
+                }
+                event.accepted = true
+              }
+              Keys.onBacktabPressed: function(event) {
+                const previousAction = index > 0 ? footerActions.itemAt(index - 1) : watchedButton
+                previousAction.forceActiveFocus()
+                event.accepted = true
+              }
+              onClicked: root.dispatch(modelData.kind)
+            }
           }
         }
 
@@ -146,8 +189,7 @@ FocusScope {
           notifyPermanent: root.notifyPermanent
           foreground: root.foreground
           fontFamily: root.fontFamily
-          previousFocusItem: watchedButton
-          nextFocusItem: footerActions.itemAt(0)
+          previousFocusItem: footerActions.count > 0 ? footerActions.itemAt(footerActions.count - 1) : watchedButton
         }
 
         InventoryBrowseView {
@@ -162,44 +204,6 @@ FocusScope {
           fontFamily: root.fontFamily
         }
 
-        BoundedControlStack {
-          visible: root.actions.length > 0
-          width: parent.width
-          spacing: Style.spacing.sm
-
-          Repeater {
-            id: footerActions
-            model: root.actions
-
-            delegate: Button {
-              required property int index
-              required property var modelData
-              width: parent.width
-              text: modelData.text
-              tooltipText: modelData.text
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              fontSize: Style.font.bodySmall
-              focusable: true
-              bordered: true
-              enabled: modelData.enabled
-              Keys.priority: Keys.BeforeItem
-              Keys.onTabPressed: function(event) {
-                const nextAction = footerActions.itemAt(index + 1)
-                if (!nextAction) return
-                nextAction.forceActiveFocus()
-                event.accepted = true
-              }
-              Keys.onBacktabPressed: function(event) {
-                const list = root.browsing ? inventoryView.listControl : updateList.listControl
-                const previousAction = index > 0 ? footerActions.itemAt(index - 1) : (list.visible ? list : watchedButton)
-                previousAction.forceActiveFocus()
-                event.accepted = true
-              }
-              onClicked: root.dispatch(modelData.kind)
-            }
-          }
-        }
       }
     }
   }

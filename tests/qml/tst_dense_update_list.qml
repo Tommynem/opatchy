@@ -191,6 +191,39 @@ TestCase {
     view.destroy()
   }
 
+  function test_target_scoped_failure_is_bounded_in_the_row_and_preserves_list_navigation() {
+    const view = createList(320, 20)
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
+    view.list.listControl.forceActiveFocus()
+    tryVerify(function() { return view.list.listControl.activeFocus }, 1000)
+    keyClick(Qt.Key_Return)
+    tryVerify(function() { return view.list.rowAt(0).watchSelector.visible }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return view.list.rowAt(0).watchSelector.activeFocus }, 1000)
+    keyClick(Qt.Key_Right)
+    keyClick(Qt.Key_Return)
+    compare(view.requests.length, 1)
+
+    const row = view.list.rowAt(0)
+    view.stars.acceptFailure({ kind: "set-star", itemId: "arch:item-0", mode: "temporary" }, "STATE_UNAVAILABLE: " + "x".repeat(512))
+    compare(view.stars.errorTarget, "arch:item-0")
+    verify(view.stars.errorText !== "")
+    verify(row.failureText !== "")
+    tryVerify(function() { return row.failureFeedback.visible && row.failureFeedback.text !== "" }, 1000)
+    verify(row.failureFeedback.text.length <= 256, "failure feedback must be bounded before rendering")
+    verify(row.failureFeedback.width <= row.width, "failure feedback must stay within the row width")
+    const failureOrigin = row.failureFeedback.mapToItem(row, 0, 0)
+    verify(failureOrigin.y >= 0 && failureOrigin.y + row.failureFeedback.height <= row.height, "row height must contain visible failure feedback")
+    verify(row.failureFeedback.width > row.watchTrigger.width, "failure feedback must not be constrained to the compact watch button")
+
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return view.list.listControl.activeFocus }, 1000)
+    keyClick(Qt.Key_Down)
+    tryCompare(view.list, "currentIndex", 1, 1000)
+    view.destroy()
+  }
+
   function test_selector_wraps_without_overflow_at_a_narrow_component_width() {
     const view = createList(160, 1)
     view.list.activateRow(0)

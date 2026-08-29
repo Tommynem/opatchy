@@ -65,7 +65,7 @@ Panel {
     availableWidth: panel.availableCardWidth
     availableHeight: panel.availableCardHeight
     preferredWidth: Style.space(520)
-    preferredHeight: Style.space(360)
+    preferredHeight: Style.space(486)
   }
 
   KeyboardPanel {
@@ -98,6 +98,7 @@ Panel {
 
       Flickable {
         id: contentFlick
+        objectName: "opatchy-panel-content-viewport"
         anchors.fill: parent
         contentWidth: width
         contentHeight: contentColumn.implicitHeight

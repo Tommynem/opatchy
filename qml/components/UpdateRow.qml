@@ -14,10 +14,12 @@ Item {
   property bool expanded: false
   property Item listControl: null
   property Item nextFocusItem: null
+  readonly property string failureText: boundedFailureText(starState && starState.errorTarget === row.target ? starState.errorText : "")
   property alias packageLabel: packageLabel
   property alias versionLine: versionLine
   property alias watchTrigger: watchTrigger
   property alias watchSelector: watchSelector
+  property alias failureFeedback: failureFeedback
 
   signal activateRequested()
 
@@ -132,6 +134,26 @@ Item {
         nextFocusItem: root.nextFocusItem
       }
 
+      Item {
+        visible: root.failureText !== ""
+        width: parent.width
+        height: visible ? failureFeedback.implicitHeight : 0
+
+        Text {
+          id: failureFeedback
+          visible: root.failureText !== ""
+          width: parent.width
+          text: root.failureText
+          textFormat: Text.PlainText
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          wrapMode: Text.Wrap
+          maximumLineCount: 3
+          elide: Text.ElideRight
+        }
+      }
+
       Text {
         width: parent.width
         text: presentation.metaText
@@ -159,5 +181,11 @@ Item {
   UpdateRowPresentation {
     id: presentation
     row: root.row
+  }
+
+  function boundedFailureText(value) {
+    if (typeof value !== "string") return ""
+    var plainText = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+    return plainText.length > 256 ? plainText.slice(0, 253) + "..." : plainText
   }
 }

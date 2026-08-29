@@ -50,14 +50,4 @@ Button {
     NumberAnimation { target: root; property: "opacity"; to: 1; duration: root.starState ? root.starState.feedbackDuration / 2 : 50 }
   }
 
-
-  Text {
-    visible: root.view.errorText !== ""
-    anchors.top: parent.bottom
-    width: parent.width
-    text: root.view.errorText
-    textFormat: Text.PlainText
-    color: root.foreground
-    wrapMode: Text.Wrap
-  }
 }

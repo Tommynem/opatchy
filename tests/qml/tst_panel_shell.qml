@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Window 2.15
 import QtTest 1.3
+import qs.Commons
 import "../../qml/components"
 
 TestCase {
@@ -308,6 +309,66 @@ TestCase {
       { id: "flatpak:system:app/example", source: "flatpak", label: "System fixture", installed: "1", candidate: "2", watchMode: "off", watchArmed: false, watchable: true }
     ]
     return snapshot
+  }
+
+  function systemActionSnapshot() {
+    const snapshot = hostSummarySnapshot()
+    snapshot.payload.summary.totalUpdates = 1
+    snapshot.payload.items = [{
+      id: "arch:fixture-package",
+      source: "arch",
+      label: "Fixture package",
+      installed: "1",
+      candidate: "2",
+      watchMode: "off",
+      watchArmed: false,
+      watchable: true
+    }]
+    return snapshot
+  }
+
+  function test_eligible_source_action_starts_in_the_initial_production_viewport() {
+    serviceObject.lastSnapshot = systemActionSnapshot()
+    const view = emptyStatePanelComponent.createObject(root, { "service": serviceObject })
+    view.bar.hostCardHeight = Style.space(600)
+    const panel = openProductionPanel(view)
+    const tabs = named(panel, "opatchy-source-tabs")
+    verify(tabs !== null, "the production panel must expose its tab strip")
+    tabs.selected("System")
+    tryCompare(tabs, "selectedTab", "System", 1000)
+
+    const hostPanel = named(panel, "opatchy-host-keyboard-panel")
+    const viewport = named(panel, "opatchy-panel-content-viewport")
+    const action = named(panel, "source-update-action-omarchy")
+    const browse = named(panel, "browse-primary-control")
+    const watched = buttonWithText(panel, "Watched")
+    const list = named(panel, "opatchy-update-list")
+    verify(hostPanel !== null && viewport !== null && action !== null && browse !== null && watched !== null && list !== null, "the production panel must expose the source action, list, and viewport")
+    verify(action.enabled, "eligible source action must be actionable")
+    compare(Math.round(hostPanel.contentHeight), Style.space(486))
+    compare(Math.round(viewport.contentY), 0)
+    const origin = action.mapToItem(viewport, 0, 0)
+    verify(origin.y >= 0 && origin.y + action.height <= viewport.height, "eligible source action must start fully inside the initial content viewport")
+
+    view.requestActivate()
+    tryVerify(function() { return view.active }, 1000)
+    tabs.forceActiveFocus()
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return browse.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return watched.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return action.activeFocus }, 1000)
+    keyClick(Qt.Key_Tab)
+    tryVerify(function() { return list.activeFocus }, 1000)
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return action.activeFocus }, 1000)
+    keyClick(Qt.Key_Backtab, Qt.ShiftModifier)
+    tryVerify(function() { return watched.activeFocus }, 1000)
+
+    view.bar.hostCardHeight = Style.space(240)
+    tryCompare(hostPanel, "contentHeight", Style.space(240), 1000)
+    view.destroy()
   }
 
   function test_header_summary_and_actions_are_bounded_at_host_and_narrow_widths() {
