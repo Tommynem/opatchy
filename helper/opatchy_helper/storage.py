@@ -47,7 +47,8 @@ from .storage_types import (
 
 StateMutation: TypeAlias = Callable[[PersistentState], PersistentState]
 StateInventoryMutation: TypeAlias = Callable[
-    [PersistentState, tuple[InventoryResponse, ...]], PersistentState
+    [PersistentState, tuple[InventoryResponse, ...], SnapshotResponse | None],
+    PersistentState,
 ]
 
 
@@ -122,7 +123,11 @@ class Storage:
             loaded = self._load_state_locked(persist_pruning=False)
             if self._before_mutation is not None:
                 self._before_mutation()
-            updated = mutation(loaded.state, self._load_inventories_locked(sources))
+            updated = mutation(
+                loaded.state,
+                read_current_inventories(self._cache_access(), sources),
+                read_cached_snapshot(self._cache_access()),
+            )
             self._write_state_locked(updated)
             return StateLoad(updated, loaded.warning)
 
@@ -249,11 +254,6 @@ class Storage:
             self._load_generation_locked,
             self._write_generation_locked,
         )
-
-    def _load_inventories_locked(
-        self, sources: tuple[ItemSource, ...]
-    ) -> tuple[InventoryResponse, ...]:
-        return read_current_inventories(self._cache_access(), sources)
 
     def _discard(self, path: Path) -> None:
         path.unlink(missing_ok=True)

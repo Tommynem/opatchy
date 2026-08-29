@@ -298,7 +298,7 @@ def test_duplicate_save_preserves_unpruned_last_good_bytes(
     assert storage.state_path.read_bytes() == before
 
 
-def test_v0_state_migrates_deterministically_to_v1(storage: Storage) -> None:
+def test_v0_state_migrates_deterministically_to_v2(storage: Storage) -> None:
     storage.state_path.parent.mkdir(parents=True)
     _ = storage.state_path.write_bytes(
         b'{"schemaVersion":0,"watches":[{"itemId":"arch:demo","mode":"permanent"}]}'
@@ -309,7 +309,7 @@ def test_v0_state_migrates_deterministically_to_v1(storage: Storage) -> None:
     assert loaded.warning is None
     assert loaded.state == PersistentState((watch(),), (), ())
     storage.save_state(loaded.state)
-    assert b'"schemaVersion":1' in storage.state_path.read_bytes()
+    assert b'"schemaVersion":2' in storage.state_path.read_bytes()
 
 
 def test_v0_temporary_watch_migrates_conservatively_to_permanent(

@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta
 from typing import Final, NoReturn
 
@@ -15,10 +15,17 @@ from .storage_types import (
     SourceMetadata,
     StateCorruptError,
     StateSchemaIncompatible,
+    WatchRecord,
 )
-from .storage_watches import parse_v0_watch, parse_watch, validate_watch, watch_value
+from .storage_watches import (
+    parse_v0_watch,
+    parse_v1_watch,
+    parse_watch,
+    validate_watch,
+    watch_value,
+)
 
-STATE_SCHEMA_VERSION: Final = 1
+STATE_SCHEMA_VERSION: Final = 2
 MAX_INACTIVE_LEDGER_ENTRIES: Final = 5_000
 MAX_INACTIVE_LEDGER_AGE: Final = timedelta(days=180)
 
@@ -51,9 +58,11 @@ def decode_state(raw: bytes) -> PersistentState:
         raise StateSchemaIncompatible(version)
     if version == 0:
         return _migrate_v0(document)
+    if version == 1:
+        return _migrate_v1(document)
     if version != STATE_SCHEMA_VERSION:
         _corrupt("state.schemaVersion is unsupported")
-    return _parse_v1(document)
+    return _parse_v2(document)
 
 
 def validate_state(state: PersistentState) -> None:
@@ -107,9 +116,20 @@ def _migrate_v0(document: JsonObject) -> PersistentState:
     return state
 
 
-def _parse_v1(document: JsonObject) -> PersistentState:
+def _migrate_v1(document: JsonObject) -> PersistentState:
+    return _parse(document, parse_v1_watch)
+
+
+def _parse_v2(document: JsonObject) -> PersistentState:
+    return _parse(document, parse_watch)
+
+
+def _parse(
+    document: JsonObject, parse_watch_record: Callable[[JsonValue], WatchRecord]
+) -> PersistentState:
     watches = tuple(
-        parse_watch(value) for value in _array(_field(document, "watches"), "watches")
+        parse_watch_record(value)
+        for value in _array(_field(document, "watches"), "watches")
     )
     ledger = tuple(
         _parse_ledger(value) for value in _array(_field(document, "ledger"), "ledger")
