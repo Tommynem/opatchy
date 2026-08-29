@@ -14,7 +14,6 @@ readonly -a retained_ids=(
 )
 
 host=""
-window_id=""
 approval=""
 plugin_source=""
 record_dir=""
@@ -36,16 +35,14 @@ usage() {
   cat <<'EOF'
 Usage:
   todo27-real-shell-window.sh --host tomarchy|gomarchy \
-    --window-id YYYYMMDDTHHMMZ \
-    --approval todo27:<host>:<window-id> \
+    --approval todo27:<host> \
     --plugin-source /absolute/path/to/opatchy \
     --record-dir /absolute/private/path --execute
 
-This later-window runner changes only the local host selected by the user. It never
-opens an update handoff. Do not run it until that host has an explicit, scheduled
-approval window. The approval identifier is structurally bound to the exact host and
-scheduled UTC window, and the runner restores the prior shell config and target
-plugin state on every exit after a mutation begins.
+This runner changes only the local host selected by the user. It never opens an
+update handoff. An explicit approval identifier is structurally bound to the exact
+host, and the runner restores the prior shell config and target plugin state on every
+exit after a mutation begins.
 EOF
 }
 
@@ -259,7 +256,6 @@ restore() {
 while (( "$#" > 0 )); do
   case "$1" in
     --host) host="${2:-}"; shift 2 ;;
-    --window-id) window_id="${2:-}"; shift 2 ;;
     --approval) approval="${2:-}"; shift 2 ;;
     --plugin-source) plugin_source="${2:-}"; shift 2 ;;
     --record-dir) record_dir="${2:-}"; shift 2 ;;
@@ -270,8 +266,7 @@ while (( "$#" > 0 )); do
 done
 
 [[ "${host}" == "tomarchy" || "${host}" == "gomarchy" ]] || fail "host must be exactly tomarchy or gomarchy"
-[[ "${window_id}" =~ ^[0-9]{8}T[0-9]{4}Z$ ]] || fail "window id must be scheduled UTC as YYYYMMDDTHHMMZ"
-[[ "${approval}" == "todo27:${host}:${window_id}" ]] || fail "approval identifier must exactly bind the selected host and window"
+[[ "${approval}" == "todo27:${host}" ]] || fail "approval identifier must exactly bind the selected host"
 [[ "${execute}" == true ]] || fail "refusing to mutate without --execute"
 [[ "${plugin_source}" == /* && -d "${plugin_source}" ]] || fail "plugin source must be an absolute directory"
 [[ "${record_dir}" == /* && "${record_dir}" != / ]] || fail "record directory must be a non-root absolute private path"
@@ -288,7 +283,7 @@ require_no_symlink_components "${plugin_parent}"
 require_no_symlink_components "${target_plugin}"
 [[ "$("${hostname_bin}")" == "${host}" ]] || fail "selected host does not match this machine"
 [[ -f "${shell_json}" && ! -L "${shell_json}" ]] || fail "shell.json must be a regular file"
-[[ -d "${plugin_parent}" ]] || fail "plugin directory is required before this QA window"
+[[ -d "${plugin_parent}" ]] || fail "plugin directory is required before this QA run"
 [[ -f "${plugin_source}/manifest.json" && ! -L "${plugin_source}/manifest.json" ]] || fail "plugin source has no regular manifest.json"
 [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["id"])' "${plugin_source}/manifest.json")" == "${plugin_id}" ]] || fail "plugin source manifest id is not ${plugin_id}"
 plugin_digest "${plugin_source}" >/dev/null || fail "plugin source contains an unsafe tree entry"
@@ -315,7 +310,7 @@ write_record "shell.json.semantic.sha256" "${original_shell_digest}"
 write_record "shell.json.bytes.sha256" "${original_file_digest}"
 write_record "plugin.sha256" "${original_plugin_digest}"
 write_record "helper-count.before.txt" "${original_helper_count}"
-printf 'host=%s\nwindow_id=%s\napproval=%s\nmode=read-only-except-install-enable-restore\n' "${host}" "${window_id}" "${approval}" >"${record_dir}/window.txt"
+printf 'host=%s\napproval=%s\nmode=read-only-except-install-enable-restore\n' "${host}" "${approval}" >"${record_dir}/authorization.txt"
 backup_ready=true
 
 trap 'signal_status=129; exit 129' HUP

@@ -4,7 +4,6 @@ set -euo pipefail
 readonly root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly runner="${root}/scripts/qa/todo27-real-shell-window.sh"
 readonly temporary_root="$(mktemp -d)"
-readonly window_id="20260828T1200Z"
 
 cleanup() {
   rm -rf "${temporary_root}"
@@ -235,7 +234,7 @@ run_runner() {
   local record_dir="$1"
   shift
   HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" TODO27_SOURCE_PLUGIN="${source_plugin}" "$@" \
-    bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" \
+    bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' \
       --plugin-source "${source_plugin}" --record-dir "${record_dir}" --execute
 }
 
@@ -252,23 +251,38 @@ assert_restored() {
 
 setup_fixture
 expect_failure 'refusing to mutate without --execute' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
-  bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" --plugin-source "${source_plugin}" --record-dir "${fixture_root}/default-deny"
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/default-deny"
 [[ ! -e "${fixture_root}/default-deny" ]]
 ! grep -Fq 'omarchy restart shell' "${command_log}"
 
 setup_fixture
+record_dir="${fixture_root}/immediate-authorization-record"
+if ! printf 'RESTORE\n' | env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" TODO27_SOURCE_PLUGIN="${source_plugin}" \
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${record_dir}" --execute; then
+  fail 'immediate host-bound authorization must launch without extra metadata'
+fi
+assert_restored "${record_dir}" absent 0
+grep -Fxq 'approval=todo27:tomarchy' "${record_dir}/authorization.txt"
+
+setup_fixture
 expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
-  bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval 'todo27:tomarchy:20260828T1300Z' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/wrong-window" --execute
+  bash "${fixture_runner}" --host tomarchy --plugin-source "${source_plugin}" --record-dir "${fixture_root}/missing-approval" --execute
+expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy:extra' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/malformed-approval" --execute
+expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:gomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/tomarchy-with-gomarchy-approval" --execute
+expect_failure 'approval identifier must exactly bind' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
+  bash "${fixture_runner}" --host gomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/gomarchy-with-tomarchy-approval" --execute
 expect_failure 'selected host does not match' env FAKE_HOST=gomarchy HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
-  bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" --plugin-source "${source_plugin}" --record-dir "${fixture_root}/wrong-host" --execute
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/wrong-host" --execute
 
 ln -s "${fixture_root}/outside" "${source_plugin}/nested-link"
 expect_failure 'plugin source contains an unsafe tree entry' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
-  bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" --plugin-source "${source_plugin}" --record-dir "${fixture_root}/source-link" --execute
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/source-link" --execute
 rm "${source_plugin}/nested-link"
 ln -s "${fixture_root}/outside" "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
 expect_failure 'symlink path component is not allowed' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
-  bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" --plugin-source "${source_plugin}" --record-dir "${fixture_root}/target-link" --execute
+  bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/target-link" --execute
 rm "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
 
 record_dir="${fixture_root}/absent-record"
@@ -366,7 +380,7 @@ run_interrupted_case() {
   output="${fixture_root}/runner.out"
   mkfifo "${fifo}"
   HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" TODO27_SOURCE_PLUGIN="${source_plugin}" \
-    bash "${fixture_runner}" --host tomarchy --window-id "${window_id}" --approval "todo27:tomarchy:${window_id}" --plugin-source "${source_plugin}" --record-dir "${record_dir}" --execute <"${fifo}" >"${output}" 2>&1 &
+    bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${record_dir}" --execute <"${fifo}" >"${output}" 2>&1 &
   runner_pid="$!"
   exec 3>"${fifo}"
   for _ in {1..100}; do
