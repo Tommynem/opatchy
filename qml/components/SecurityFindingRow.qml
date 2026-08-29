@@ -7,10 +7,23 @@ Item {
 
   property var group: ({})
   property var finding: ({})
+  property var starState: null
+  property string confirmedMode: "off"
+  property bool watchable: false
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
+  readonly property var watchRequest: finding && finding.watchRequest ? finding.watchRequest : null
+  readonly property string effectiveMode: starState && watchRequest
+    ? starState.modeFor(watchRequest.itemId, confirmedMode)
+    : confirmedMode
+  readonly property bool canWatchForFixedVersion: watchRequest !== null && watchable
+    && (!starState || !starState.pending) && effectiveMode === "off"
+  readonly property Item primaryControl: fixedVersionWatch.visible ? fixedVersionWatch : null
+  property alias fixedVersionWatch: fixedVersionWatch
+  property alias watchUnavailable: watchUnavailable
 
   implicitHeight: details.implicitHeight + Style.spacing.controlPaddingY * 2
+  height: implicitHeight
 
   Column {
     id: details
@@ -26,6 +39,45 @@ Item {
       font.pixelSize: Style.font.body
       elide: Text.ElideRight
       maximumLineCount: 1
+    }
+
+    Button {
+      id: fixedVersionWatch
+      objectName: root.watchRequest ? "security-fixed-watch-" + root.watchRequest.itemId + "-" + root.watchRequest.securityAdvisory : ""
+      visible: root.canWatchForFixedVersion
+      width: Math.min(parent.width, implicitWidth)
+      text: root.watchRequest ? "Watch fixed " + root.watchRequest.fixedVersion : "Watch fixed version"
+      tooltipText: root.watchRequest
+        ? "Create a temporary watch for " + root.watchRequest.securityAdvisory + " evidence fixed in " + root.watchRequest.fixedVersion + "."
+        : "Fixed-version watch evidence is unavailable."
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
+      focusable: true
+      bordered: true
+      onClicked: if (root.starState) root.starState.requestSecurityCondition(root.watchRequest, root.confirmedMode, root.watchable)
+    }
+
+    Text {
+      id: watchUnavailable
+      visible: !root.canWatchForFixedVersion
+      width: parent.width
+      text: root.watchRequest === null
+        ? "Fixed-version watch unavailable: usable advisory, CVE, and fixed-version evidence is required."
+        : root.starState && root.starState.pending
+          ? "Fixed-version watch request is pending."
+          : root.effectiveMode === "temporary"
+            ? "Fixed-version watch unavailable: this package already has a temporary watch."
+            : root.effectiveMode === "permanent"
+              ? "Fixed-version watch unavailable: this package already has a permanent watch."
+              : "Fixed-version watch unavailable: a current unconfigured package watch is required."
+      textFormat: Text.PlainText
+      color: Qt.darker(root.foreground, 1.4)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.Wrap
+      maximumLineCount: 2
+      elide: Text.ElideRight
     }
 
     SafeExternalLink {
@@ -74,6 +126,7 @@ Item {
       maximumLineCount: 4
       elide: Text.ElideRight
     }
+
   }
 
   SecurityFindingPresentation {

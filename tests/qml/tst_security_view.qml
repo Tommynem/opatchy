@@ -70,6 +70,14 @@ TestCase {
     presentation.snapshot = snapshot([{ itemId: "arch:openssl", findings: [finding("AVG-1")] }])
     compare(presentation.view.kind, "findings")
     compare(presentation.view.groups[0].watchTarget, "arch:openssl")
+    compare(presentation.view.groups[0].findings[0].watchRequest.itemId, "arch:openssl")
+    compare(presentation.view.groups[0].findings[0].watchRequest.securityAdvisory, "AVG-1")
+    compare(presentation.view.groups[0].findings[0].watchRequest.fixedVersion, "3.1.2")
+    compare(presentation.view.groups[0].findings[0].watchRequest.cveIds.join(","), "CVE-2026-1000")
+    const unusable = snapshot([{ itemId: "arch:openssl", findings: [finding("AVG-2")] }])
+    unusable.payload.findings[0].findings[0].fixedVersion = "3.1.2\nunusable"
+    presentation.snapshot = unusable
+    compare(presentation.view.groups[0].findings[0].watchRequest, null)
     presentation.snapshot = snapshot([], "stale", "last_good")
     compare(presentation.view.kind, "last_known")
     presentation.snapshot = snapshot([], "offline", "live")

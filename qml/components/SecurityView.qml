@@ -14,9 +14,8 @@ Item {
   property bool notifyPermanent: true
   property Item previousFocusItem: null
   readonly property var view: presentation.view
-  readonly property Item primaryControl: groupRepeater.count > 0 && groupRepeater.itemAt(0)
-    ? groupRepeater.itemAt(0).primaryControl
-    : refreshButton
+  readonly property Item findingControl: firstFindingControl()
+  readonly property Item primaryControl: findingControl ? findingControl : refreshButton
   signal refreshRequested()
 
   implicitHeight: content.implicitHeight
@@ -58,7 +57,7 @@ Item {
     Button {
       id: refreshButton
       objectName: "security-refresh"
-      visible: root.view.groups.length === 0
+      visible: root.findingControl === null
       width: parent.width
       text: "Refresh security data"
       tooltipText: "Request a new source scan; results may remain unavailable."
@@ -89,32 +88,26 @@ Item {
 
       delegate: Item {
         required property var modelData
-        property alias primaryControl: watchButton
+        readonly property Item primaryControl: firstControl()
         width: parent.width
         implicitHeight: findings.implicitHeight
+        height: implicitHeight
+
+        function firstControl() {
+          for (var findingIndex = 0; findingIndex < findingRepeater.count; findingIndex += 1) {
+            var row = findingRepeater.itemAt(findingIndex)
+            if (row && row.primaryControl) return row.primaryControl
+          }
+          return null
+        }
 
         Column {
           id: findings
           width: parent.width
           spacing: Style.spacing.sm
 
-          StarButton {
-            id: watchButton
-            objectName: "security-watch-" + modelData.watchTarget
-            width: parent.width
-            starState: root.starState
-            target: modelData.watchTarget
-              confirmedMode: root.watchRow(modelData).watchMode
-              temporaryArmed: root.watchRow(modelData).watchArmed
-            watchable: root.watchRow(modelData).watchable
-            lastKnown: root.view.kind === "last_known"
-            notifyPermanent: root.notifyPermanent
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            fontSize: Style.font.bodySmall
-          }
-
           Repeater {
+            id: findingRepeater
             model: modelData.findings
 
             delegate: SecurityFindingRow {
@@ -122,6 +115,9 @@ Item {
               width: parent.width
               group: parent.parent.modelData
               finding: modelData
+              starState: root.starState
+              confirmedMode: root.watchRow(parent.parent.modelData).watchMode
+              watchable: root.watchRow(parent.parent.modelData).watchable
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -141,5 +137,13 @@ Item {
     var items = snapshot && snapshot.payload && Array.isArray(snapshot.payload.items) ? snapshot.payload.items : []
     var item = items.filter(function(candidate) { return candidate && candidate.id === group.watchTarget })[0]
     return item ? { watchMode: item.watchMode, watchArmed: item.watchArmed === true, watchable: item.watchable === true } : { watchMode: "off", watchArmed: false, watchable: false }
+  }
+
+  function firstFindingControl() {
+    for (var groupIndex = 0; groupIndex < groupRepeater.count; groupIndex += 1) {
+      var group = groupRepeater.itemAt(groupIndex)
+      if (group && group.primaryControl) return group.primaryControl
+    }
+    return null
   }
 }
