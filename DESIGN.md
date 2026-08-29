@@ -70,6 +70,33 @@ clipped or hidden behind a tooltip. It never horizontally clips a tab strip.
 - **Accessibility**: the title and detail remain plain text and fit the same
   bounded responsive column as populated rows.
 
+### Dense Update List
+- **Viewport**: update and cached-inventory results use one clipped `ListView`
+  viewport whose height is independent of delegate count. The viewport is the
+  sole scroll owner for result rows; it remains bounded at 320px and the host
+  `Style.space(520)` width for empty, one-row, 20-row, 100-row, and 150-row
+  evidence. The host panel never grows to fit result count.
+- **Extent and navigation**: a compact fixed list header names the total and
+  current position, keeps a persistent native vertical scrollbar visible, and
+  exposes a compact Top control after scrolling. Wheel/trackpad scrolling and
+  Up/Down, PageUp/PageDown, Home, End, Enter, and Space work on the focused
+  list without consuming the tab strip's Left/Right selection routing.
+- **Collapsed row anatomy**: one compact scan line contains package identity,
+  installed-to-candidate versions, source, and the selected watch-state
+  affordance. Package identity remains recoverable through plain-text elision
+  and selected-row detail; rows never use a full-width star action.
+- **Progressive disclosure**: only the current row expands, explicitly via
+  mouse selection or Enter/Space. Expansion reveals provenance, canonical
+  identity, and watch mode choices. Moving to another row or reactivating the
+  current row closes the prior detail predictably. Expanding the final row
+  scrolls it fully into the bounded viewport instead of enlarging the panel.
+- **Watch mode accessibility**: a watchable row has one compact trailing state
+  trigger and, when expanded, a labelled Off / Temporary / Permanent selector.
+  Arrow keys select a mode; Enter/Space applies it. A non-watchable row names
+  that watches are unavailable as plain text and presents no disabled or
+  failing watch action. Native focus, plain text, and the existing shared watch
+  pending/error semantics remain authoritative.
+
 ### Bar Status Indicator
 - **Structure**: `BarStatusPresentation` provides one Nerd Fonts MDI glyph,
   badge, tooltip, stale marker, and spinner projection for the host
