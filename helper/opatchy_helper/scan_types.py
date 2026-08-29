@@ -9,6 +9,7 @@ from .adapters.mise import MiseResult, collect_mise_updates
 from .adapters.omarchy import OmarchyAvailability, collect_omarchy_availability
 from .adapters.security import SecurityResult, collect_security
 from .models import GenerationId, SnapshotResponse
+from .notification_types import NotificationSettings
 from .runner import fetch_endpoint, run_command
 from .runner_types import CommandName, CommandResult, EndpointName, EndpointResult
 from .storage import Storage
@@ -36,6 +37,7 @@ class ScanRequest:
     generation_id: GenerationId
     generation_order: int
     force: bool
+    notification_settings: NotificationSettings = NotificationSettings()
 
 
 @dataclass(frozen=True, slots=True)

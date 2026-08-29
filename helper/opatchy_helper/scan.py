@@ -1,8 +1,10 @@
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
-from typing import final
+from typing import Protocol, final
 
-from .models import SourceName
+from .models import NotificationOutcome, SnapshotResponse, SourceName
+from .notifications import NotificationCoordinator
 from .scan_command_outcomes import (
     arch_outcome,
     aur_outcome,
@@ -22,6 +24,12 @@ from .storage_types import SourceMetadata
 __all__ = ("ScanCollector", "ScanCoordinator", "ScanRequest", "ScanResult")
 
 
+class NotificationDispatcher(Protocol):
+    def dispatch(
+        self, snapshot: SnapshotResponse
+    ) -> tuple[NotificationOutcome, ...]: ...
+
+
 @final
 class ScanCoordinator:
     def __init__(
@@ -29,10 +37,12 @@ class ScanCoordinator:
         storage: Storage,
         collector: ScanCollector,
         clock: Callable[[], datetime],
+        notifications: NotificationDispatcher | None = None,
     ) -> None:
         self._storage = storage
         self._collector = collector
         self._clock = clock
+        self._notifications = notifications
 
     def run(self, request: ScanRequest) -> ScanResult:
         now = self._clock()
@@ -72,7 +82,17 @@ class ScanCoordinator:
             now,
         )
         committed = self._storage.commit_generation(generation)
-        return ScanResult(committed, generation.snapshot)
+        if committed:
+            dispatcher = self._notifications or NotificationCoordinator(
+                self._storage, settings=request.notification_settings
+            )
+            outcomes = dispatcher.dispatch(generation.snapshot)
+            snapshot = replace(
+                generation.snapshot,
+                payload=replace(generation.snapshot.payload, notifications=outcomes),
+            )
+            return ScanResult(True, snapshot)
+        return ScanResult(False, generation.snapshot)
 
 
 def _due(
