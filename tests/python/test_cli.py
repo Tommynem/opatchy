@@ -1,6 +1,7 @@
 import subprocess
 from pathlib import Path
 
+from opatchy_helper.adapters.omarchy import OmarchyAvailability
 from opatchy_helper.models import (
     ErrorResponse,
     InventoryResponse,
@@ -8,6 +9,7 @@ from opatchy_helper.models import (
     ItemSource,
     ResponseKind,
     SourceName,
+    SourceStatus,
     StarResultResponse,
     WatchMode,
 )
@@ -25,12 +27,23 @@ from tests.python.cli_support import (
     storage,
     write_inventory,
 )
+from tests.python.scan_support import collector, run
 
 
 def error_code(result: subprocess.CompletedProcess[str]) -> str:
     match response(result):
         case ErrorResponse(error=error):
             return error.code.value
+        case InventoryResponse() | StarResultResponse():
+            raise AssertionError("expected an error response")
+        case _:
+            raise AssertionError("expected an error response")
+
+
+def error_message(result: subprocess.CompletedProcess[str]) -> str:
+    match response(result):
+        case ErrorResponse(error=error):
+            return error.message
         case InventoryResponse() | StarResultResponse():
             raise AssertionError("expected an error response")
         case _:
@@ -228,6 +241,71 @@ def test_set_star_rejects_identity_mode_and_future_state_without_overwrite(
         "STATE_UNAVAILABLE",
     )
     assert store.state_path.read_bytes() == future
+
+
+def test_set_star_reports_the_typed_transition_failure_reason(tmp_path: Path) -> None:
+    # Given: a durable temporary watch created from a current cached item.
+    store = storage(tmp_path)
+    write_inventory(store, ItemSource.ARCH, item("arch:demo", ItemSource.ARCH, "Demo"))
+    first = star_cli(tmp_path, "arch:demo", "temporary")
+
+    # When: stale client state repeats the already-consumed temporary request.
+    repeated = star_cli(tmp_path, "arch:demo", "temporary")
+
+    # Then: the protocol preserves actionable typed error detail, not only exit two.
+    assert first.returncode == 0
+    assert repeated.returncode == 2
+    assert error_code(repeated) == "STATE_UNAVAILABLE"
+    assert error_message(repeated) == "watch mode does not match the transition"
+
+
+def test_set_star_uses_only_current_omarchy_snapshot_evidence(tmp_path: Path) -> None:
+    # Given: a validated generation containing one current, watchable Omarchy row.
+    store = storage(tmp_path)
+    _ = run(store, collector(), 1)
+
+    # When: its complete star cycle executes through the production CLI boundary.
+    transitions = tuple(
+        star_cli(tmp_path, "omarchy:omarchy", mode)
+        for mode in ("temporary", "permanent", "off")
+    )
+    _ = run(
+        store,
+        collector(omarchy=OmarchyAvailability(SourceStatus.OK, (), None)),
+        2,
+        force=True,
+    )
+    absent = star_cli(tmp_path, "omarchy:omarchy", "temporary")
+    _ = run(store, collector(), 3, force=True)
+    _ = run(
+        store,
+        collector(omarchy=OmarchyAvailability(SourceStatus.ERROR, (), "offline")),
+        4,
+        force=True,
+    )
+    stale = star_cli(tmp_path, "omarchy:omarchy", "temporary")
+
+    # Then: only the current snapshot row can transition; replaced evidence cannot.
+    assert tuple(result.returncode for result in transitions) == (0, 0, 0)
+    modes: list[WatchMode] = []
+    for result in transitions:
+        match response(result):
+            case StarResultResponse(payload=payload):
+                modes.append(payload.mode)
+            case ErrorResponse() | InventoryResponse():
+                raise AssertionError("expected a star-result response")
+            case _:
+                raise AssertionError("expected a star-result response")
+    assert tuple(modes) == (
+        WatchMode.TEMPORARY,
+        WatchMode.PERMANENT,
+        WatchMode.OFF,
+    )
+    assert (absent.returncode, stale.returncode) == (2, 2)
+    assert (error_message(absent), error_message(stale)) == (
+        "item is not a cached watchable item",
+        "item is not a cached watchable item",
+    )
 
 
 def test_two_concurrent_set_star_mutations_preserve_both_watches(

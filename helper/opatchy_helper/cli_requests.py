@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from typing import Final, assert_never, override
 
-from .models import ItemId, ItemSource, WatchMode
+from .models import ItemId, ItemSource, Severity, WatchMode
+from .notification_types import NotificationSettings
+from .storage_types import SecurityFixCondition, StateCorruptError
+from .storage_watches import security_fix_condition
 
 MAX_OFFSET: Final = 100_000
 MAX_QUERY_LENGTH: Final = 128
@@ -28,6 +31,7 @@ class CliUnavailableError(Exception):
 @dataclass(frozen=True, slots=True)
 class ScanCommand:
     force: bool
+    notification_settings: NotificationSettings = NotificationSettings()
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +51,7 @@ class InventoryCommand:
 class SetStarCommand:
     item_id: ItemId
     mode: WatchMode
+    condition: SecurityFixCondition | None = None
 
 
 type CliCommand = ScanCommand | SnapshotCommand | InventoryCommand | SetStarCommand
@@ -58,6 +63,37 @@ def parse_command(arguments: tuple[str, ...]) -> CliCommand:
             return ScanCommand(False)
         case ("scan", "--force"):
             return ScanCommand(True)
+        case (
+            "scan",
+            "--notify-permanent",
+            notify_permanent,
+            "--notify-security",
+            notify_security,
+            "--security-minimum-severity",
+            minimum_severity,
+        ):
+            return ScanCommand(
+                False,
+                _notification_settings(
+                    notify_permanent, notify_security, minimum_severity
+                ),
+            )
+        case (
+            "scan",
+            "--force",
+            "--notify-permanent",
+            notify_permanent,
+            "--notify-security",
+            notify_security,
+            "--security-minimum-severity",
+            minimum_severity,
+        ):
+            return ScanCommand(
+                True,
+                _notification_settings(
+                    notify_permanent, notify_security, minimum_severity
+                ),
+            )
         case ("snapshot",):
             return SnapshotCommand()
         case (
@@ -76,6 +112,24 @@ def parse_command(arguments: tuple[str, ...]) -> CliCommand:
             )
         case ("set-star", "--item-id", item_id, "--mode", mode):
             return SetStarCommand(_item_id(item_id), _watch_mode(mode))
+        case (
+            "set-star",
+            "--item-id",
+            item_id,
+            "--mode",
+            "temporary",
+            "--security-advisory",
+            advisory_id,
+            "--fixed-version",
+            fixed_version,
+            "--cve-ids",
+            cve_ids,
+        ):
+            return SetStarCommand(
+                _arch_item_id(item_id),
+                WatchMode.TEMPORARY,
+                _security_condition(advisory_id, cve_ids, fixed_version),
+            )
         case _:
             raise CliUsageError("unsupported helper command or arguments")
 
@@ -130,3 +184,50 @@ def _watch_mode(value: str) -> WatchMode:
         return WatchMode(value)
     except ValueError as error:
         raise CliUsageError("watch mode is invalid") from error
+
+
+def _notification_settings(
+    notify_permanent: str, notify_security: str, minimum_severity: str
+) -> NotificationSettings:
+    return NotificationSettings(
+        _boolean(notify_permanent),
+        _boolean(notify_security),
+        _notification_severity(minimum_severity),
+    )
+
+
+def _boolean(value: str) -> bool:
+    match value:
+        case "true":
+            return True
+        case "false":
+            return False
+        case _:
+            raise CliUsageError("notification setting is invalid")
+
+
+def _notification_severity(value: str) -> Severity:
+    match value:
+        case "high":
+            return Severity.HIGH
+        case "critical":
+            return Severity.CRITICAL
+        case _:
+            raise CliUsageError("notification severity is invalid")
+
+
+def _arch_item_id(value: str) -> ItemId:
+    item_id = _item_id(value)
+    if not str(item_id).startswith("arch:"):
+        raise CliUsageError("conditional watch item ID must be canonical Arch")
+    return item_id
+
+
+def _security_condition(
+    advisory_id: str, cve_ids: str, fixed_version: str
+) -> SecurityFixCondition:
+    values = tuple(cve_ids.split(","))
+    try:
+        return security_fix_condition(advisory_id, values, fixed_version)
+    except StateCorruptError as error:
+        raise CliUsageError("conditional watch evidence is invalid") from error
