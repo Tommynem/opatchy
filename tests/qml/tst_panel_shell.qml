@@ -182,13 +182,13 @@ TestCase {
       readonly property var widget: widgetLoader.item
       property var service: null
       property var manifest: ({
-        "id": "io.github.tomge.opatchy",
+        "id": "io.github.tommynem.opatchy",
         "__sourceDir": Qt.resolvedUrl("../..").toString()
       })
 
       QtObject {
         id: registry
-        property var installedPlugins: ({ "io.github.tomge.opatchy": host.manifest })
+        property var installedPlugins: ({ "io.github.tommynem.opatchy": host.manifest })
       }
 
       QtObject {

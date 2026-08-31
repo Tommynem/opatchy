@@ -59,12 +59,12 @@ ShellRoot {
 
     function begin() {
       var component = Qt.createComponent("file://" + sourceDir + "/Service.qml")
-      service = component.createObject(root, { manifest: { id: "io.github.tomge.opatchy", __sourceDir: sourceDir }, handoffTransport: fakeLauncher })
+      service = component.createObject(root, { manifest: { id: "io.github.tommynem.opatchy", __sourceDir: sourceDir }, handoffTransport: fakeLauncher })
       if (!check(service !== null, "Service.qml did not instantiate")) return
       var operation = service.activeOperation
       service._controller.complete(operation.id, { exitCode: 0, stdout: JSON.stringify(snapshot()), stderr: "", timedOut: false, outputTooLarge: false })
       if (!check(service.canUpdateAll, "completion-capable fake must enable update-all")) return
-      var incompleteService = component.createObject(root, { manifest: { id: "io.github.tomge.opatchy", __sourceDir: sourceDir }, handoffTransport: incompleteLauncher })
+      var incompleteService = component.createObject(root, { manifest: { id: "io.github.tommynem.opatchy", __sourceDir: sourceDir }, handoffTransport: incompleteLauncher })
       if (!check(incompleteService !== null, "incomplete transport fixture did not instantiate")) return
       var incompleteOperation = incompleteService.activeOperation
       incompleteService._controller.complete(incompleteOperation.id, { exitCode: 0, stdout: JSON.stringify(snapshot()), stderr: "", timedOut: false, outputTooLarge: false })
