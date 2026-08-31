@@ -76,6 +76,7 @@ ignore = [
 "helper/opatchy.py" = ["INP001"]
 "scripts/**/*.py" = ["INP001", "T201"]
 "scripts/release_readiness.py" = ["INP001", "T201", "S603", "S607"]
+"scripts/publish_repository.py" = ["INP001", "T201", "S603"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
