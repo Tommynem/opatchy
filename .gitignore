@@ -11,3 +11,6 @@ htmlcov/
 
 # Local execution evidence
 .omo/evidence/
+
+# Local release dry-run artifacts
+dist/
