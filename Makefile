@@ -28,7 +28,7 @@ security-check:
 ci:
 	uv lock --check
 	uv sync --group dev --locked --check
-	/usr/bin/python3 scripts/ci_policy.py --repository .
+	uv run --locked --no-sync python scripts/ci_policy.py --repository .
 	uv run --locked --no-sync ruff format --check .
 	uv run --locked --no-sync ruff check .
 	uv run --locked --no-sync basedpyright
