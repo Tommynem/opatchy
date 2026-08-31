@@ -74,6 +74,7 @@ ignore = [
 "tests/fixtures/factories.py" = ["S603"]
 "helper/opatchy.py" = ["INP001"]
 "scripts/**/*.py" = ["INP001", "T201"]
+"scripts/release_readiness.py" = ["INP001", "T201", "S603", "S607"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
