@@ -1,4 +1,4 @@
-from scripts.publication_verifier_service import CommandResult
+from scripts.publication_verifier_runner import CommandResult
 
 SHA = "a" * 40
 

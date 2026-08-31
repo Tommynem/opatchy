@@ -10,7 +10,8 @@ if __package__ is None:
 
 from scripts.publication_model import BacklogError, parse_backlog
 from scripts.publication_verifier_model import APPROVED_PLUGIN_ID, VerifierError
-from scripts.publication_verifier_service import CommandResult, PublicationVerifier
+from scripts.publication_verifier_runner import CommandResult
+from scripts.publication_verifier_service import PublicationVerifier
 
 
 @dataclass(frozen=True, slots=True)

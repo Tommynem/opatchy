@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
 
 from scripts.publication_model import (
     BacklogError,
@@ -12,27 +11,19 @@ from scripts.publication_model import (
 from scripts.publication_verifier_model import (
     APPROVED_PLUGIN_ID,
     APPROVED_REPOSITORY,
-    MARKETPLACE_REPOSITORY,
     VerifierError,
     parse_array,
-    parse_default_branch,
-    parse_marketplace_registry,
     parse_published_repository,
     parse_target,
     require_sha,
     require_successful_ci,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class CommandResult:
-    returncode: int
-    stdout: str
-    stderr: str
-
-
-class CommandRunner(Protocol):
-    def run(self, arguments: tuple[str, ...]) -> CommandResult: ...
+from scripts.publication_verifier_marketplace import require_marketplace_absent
+from scripts.publication_verifier_runner import (
+    CommandResult,
+    CommandRunner,
+    require_result,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +42,7 @@ class PublicationVerifier:
         self.require_owner()
         self.require_empty_target()
         return VerificationReport(
-            "pre-publication", "", self.require_marketplace_absent()
+            "pre-publication", "", require_marketplace_absent(self.runner)
         )
 
     def verify_published(
@@ -83,7 +74,7 @@ class PublicationVerifier:
         self.require_validate_success(remote_sha, branch)
         self.require_no_tags_or_releases()
         return VerificationReport(
-            "published", remote_sha, self.require_marketplace_absent()
+            "published", remote_sha, require_marketplace_absent(self.runner)
         )
 
     def require_plugin_id(self, plugin_id: str) -> None:
@@ -120,6 +111,7 @@ class PublicationVerifier:
         if origin not in {
             "git@github.com:Tommynem/opatchy.git",
             "https://github.com/Tommynem/opatchy.git",
+            "https://github.com/Tommynem/opatchy",
         }:
             raise VerifierError("origin does not identify the approved repository")
 
@@ -217,54 +209,5 @@ class PublicationVerifier:
                 "published repository unexpectedly has tags or releases"
             )
 
-    def require_marketplace_absent(self) -> str:
-        branch = parse_default_branch(
-            self.run(
-                (
-                    "gh",
-                    "repo",
-                    "view",
-                    MARKETPLACE_REPOSITORY,
-                    "--json",
-                    "defaultBranchRef",
-                ),
-                "marketplace branch lookup",
-            ).stdout,
-            "marketplace repository",
-        )
-        sha = require_sha(
-            self.run(
-                (
-                    "gh",
-                    "api",
-                    f"repos/{MARKETPLACE_REPOSITORY}/commits/{branch}",
-                    "--jq",
-                    ".sha",
-                ),
-                "marketplace SHA lookup",
-            ).stdout,
-            "marketplace SHA",
-        )
-        registry = self.run(
-            (
-                "gh",
-                "api",
-                f"repos/{MARKETPLACE_REPOSITORY}/contents/registry.json?ref={sha}",
-                "-H",
-                "Accept: application/vnd.github.raw+json",
-            ),
-            "marketplace registry lookup",
-        )
-        parsed = parse_marketplace_registry(registry.stdout)
-        if (
-            APPROVED_PLUGIN_ID in parsed.active_plugin_ids
-            or APPROVED_PLUGIN_ID in parsed.retired_plugin_ids
-        ):
-            raise VerifierError("marketplace collision for the permanent plugin ID")
-        return sha
-
     def run(self, arguments: tuple[str, ...], operation: str) -> CommandResult:
-        result = self.runner.run(arguments)
-        if result.returncode != 0:
-            raise VerifierError(f"{operation} failed")
-        return result
+        return require_result(self.runner, arguments, operation)
