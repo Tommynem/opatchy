@@ -62,10 +62,6 @@ def read_yaml(path: Path) -> Node | None:
         return None
 
 
-def read_permissions(node: Node | None) -> bool:
-    return mapping(node) == {"contents": ScalarNode("tag:yaml.org,2002:str", "read")}
-
-
 def workflow_violations(path: Path) -> tuple[PolicyViolation, ...]:
     document = read_yaml(path)
     document_map = mapping(document)
