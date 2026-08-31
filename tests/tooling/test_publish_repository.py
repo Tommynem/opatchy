@@ -1,8 +1,14 @@
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from scripts.publication_model import parse_backlog
 from scripts.publish_repository import CommandResult, PublicationError, Publisher
 from tests.tooling.test_publication_model import BACKLOG
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 class FakeRunner:
@@ -76,3 +82,15 @@ def test_seed_rejects_command_failure_before_issue_creation() -> None:
     with pytest.raises(PublicationError):
         publisher.seed(parse_backlog(BACKLOG), dry_run=False)
     assert len(runner.calls) == 2
+
+
+def test_cli_reports_usage_when_script_is_launched_directly() -> None:
+    # Given: the tracked publisher launched as its documented script path.
+    command = (sys.executable, str(REPOSITORY_ROOT / "scripts/publish_repository.py"))
+
+    # When: it receives an invalid command shape before any GitHub request.
+    result = subprocess.run(command, capture_output=True, check=False, text=True)
+
+    # Then: its own fail-closed usage error is observable rather than an import error.
+    assert result.returncode != 0
+    assert "usage: publish_repository.py" in result.stderr

@@ -6,14 +6,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, override
 
-from scripts.publication_model import (
-    BacklogError,
-    ExistingIssue,
-    RoadmapItem,
-    compare_issue_sets,
-    parse_backlog,
-    parse_existing_issues,
-)
+if __package__:
+    from .publication_model import (
+        BacklogError,
+        ExistingIssue,
+        RoadmapItem,
+        compare_issue_sets,
+        parse_backlog,
+        parse_existing_issues,
+    )
+else:
+    from publication_model import (
+        BacklogError,
+        ExistingIssue,
+        RoadmapItem,
+        compare_issue_sets,
+        parse_backlog,
+        parse_existing_issues,
+    )
 
 
 @dataclass(frozen=True, slots=True)
