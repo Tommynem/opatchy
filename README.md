@@ -1,7 +1,7 @@
 # Opatchy
 
 Opatchy is a read-mostly update and security-intelligence plugin for Omarchy.
-Its permanent plugin ID is `io.github.tomge.opatchy`, and this release is
+Its permanent plugin ID is `io.github.tommynem.opatchy`, and this release is
 `0.1.0`. It is MIT licensed.
 
 Opatchy collects update status, keeps local watch choices, shows current or
@@ -11,31 +11,25 @@ has no runtime telemetry.
 
 ## Install, enable, disable, remove
 
-Opatchy targets Omarchy 4 with plugin manifest schema v1. Install it from a
-reviewed Git remote, not a curl-to-shell command. This checkout has no published
-Opatchy remote, so there is no supported `omarchy plugin add` command to run
-today. The previously planned `https://github.com/tomge/opatchy` URL is not a
-published repository. Do not replace the missing remote with a guessed URL.
-
-When a reviewed Opatchy Git remote is published, install it with the URL shown
-by that release:
+Opatchy targets Omarchy 4 with plugin manifest schema v1. Install it from the
+published Git remote, not a curl-to-shell command:
 
 ```sh
-omarchy plugin add <reviewed-git-url> --enable
+omarchy plugin add https://github.com/Tommynem/opatchy --enable
 omarchy plugin list
 ```
 
 If you install without `--enable`, review the checkout first, then enable it:
 
 ```sh
-omarchy plugin enable io.github.tomge.opatchy
+omarchy plugin enable io.github.tommynem.opatchy
 ```
 
 Disable or remove it with Omarchy's plugin lifecycle commands:
 
 ```sh
-omarchy plugin disable io.github.tomge.opatchy
-omarchy plugin remove io.github.tomge.opatchy
+omarchy plugin disable io.github.tommynem.opatchy
+omarchy plugin remove io.github.tommynem.opatchy
 ```
 
 Omarchy stores third-party plugins in `~/.config/omarchy/plugins/` and their

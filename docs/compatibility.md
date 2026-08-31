@@ -1,7 +1,7 @@
 # Compatibility
 
 Opatchy targets Omarchy 4 and plugin manifest schema v1. Its permanent plugin
-ID is `io.github.tomge.opatchy` and its version is `0.1.0`. The manifest declares
+ID is `io.github.tommynem.opatchy` and its version is `0.1.0`. The manifest declares
 a combined `service` and `bar-widget` plugin, with the widget placed in the
 right section by default and only one instance allowed.
 

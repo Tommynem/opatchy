@@ -7,7 +7,7 @@ review. Start by reading the README, [architecture](docs/architecture.md), and
 ## Before you start
 
 Opatchy is an Omarchy 4/schema v1 plugin with permanent ID
-`io.github.tomge.opatchy`. Preserve its read-mostly boundary. Don't add an
+`io.github.tommynem.opatchy`. Preserve its read-mostly boundary. Don't add an
 installer, curl-to-shell instruction, package mutation, privilege escalation,
 telemetry, arbitrary-command execution, or security assurance.
 
