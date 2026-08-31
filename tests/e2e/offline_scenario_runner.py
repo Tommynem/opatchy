@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from shutil import which
@@ -10,7 +11,7 @@ from opatchy_helper.protocol import encode_response
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PRESENTATION_RUNNER = _ROOT / "tests" / "e2e" / "offline_presentation.mjs"
-node_path = which("node")
+node_path = which("node", path=os.defpath)
 if node_path is None:
     raise RuntimeError("node is required for offline presentation tests")
 _NODE: Final = node_path
