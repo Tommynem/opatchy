@@ -15,7 +15,7 @@ if [[ ! -x "${qt6_qmltestrunner}" ]]; then
     exit 127
 fi
 
-runner_help="$("${qt6_qmltestrunner}" -help 2>&1 || true)"
+runner_help="$(QT_QPA_PLATFORM=offscreen "${qt6_qmltestrunner}" -help 2>&1 || true)"
 if [[ "${runner_help}" != *"-repeat n"* ]]; then
     printf 'ERROR(required capability): Qt 6 qmltestrunner is unavailable at %s\n' "${qt6_qmltestrunner}" >&2
     exit 127

@@ -104,6 +104,47 @@ def test_offscreen_qml_gate_selects_qt6_runner_over_qt5_path_runner() -> None:
     assert selected_runner == "qt6"
 
 
+def test_offscreen_qml_gate_sets_offscreen_before_runner_capability_help() -> None:
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        fake_bin, runner_log = prepare_qml_test(repository.root)
+        qt6_runner = repository.path("qt6-qmltestrunner")
+        _ = qt6_runner.write_text(
+            "\n".join(
+                (
+                    "#!/usr/bin/bash",
+                    'if [[ "${1:-}" == "-help" ]]; then',
+                    '    printf "help:%s\\n" "${QT_QPA_PLATFORM:-}" > "${OPATCHY_QML_RUNNER_LOG}"',
+                    '    [[ "${QT_QPA_PLATFORM:-}" == "offscreen" ]] || exit 31',
+                    '    printf "%s\\n" "-repeat n"',
+                    "    exit 0",
+                    "fi",
+                    'printf "suite:%s\\n" "${QT_QPA_PLATFORM:-}" >> "${OPATCHY_QML_RUNNER_LOG}"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        qt6_runner.chmod(0o755)
+        environment = os.environ.copy()
+        environment["PATH"] = str(fake_bin)
+        environment["OPATCHY_QMLTESTRUNNER"] = str(qt6_runner)
+        environment["OPATCHY_QML_RUNNER_LOG"] = str(runner_log)
+
+        result = subprocess.run(
+            ["/usr/bin/bash", str(repository.path("scripts/qml_offscreen.sh"))],
+            capture_output=True,
+            check=False,
+            cwd=repository.root,
+            env=environment,
+            text=True,
+        )
+
+        runner_invocations = runner_log.read_text(encoding="utf-8")
+
+    assert result.returncode == 0
+    assert runner_invocations == "help:offscreen\nsuite:offscreen\n"
+
+
 def test_offscreen_qml_gate_uses_the_system_qt6_runner_when_path_has_qt5() -> None:
     with temporary_repository(REPOSITORY_ROOT) as repository:
         fake_bin, runner_log = prepare_qml_test(repository.root)
