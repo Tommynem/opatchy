@@ -12,13 +12,13 @@ Item {
   property var currentService: null
   property string sourceDir: Quickshell.env("OPATCHY_TEST_ROOT")
   property var manifest: ({
-    "id": "io.github.tomge.opatchy",
+    "id": "io.github.tommynem.opatchy",
     "__sourceDir": sourceDir
   })
 
   QtObject {
     id: registry
-    property var installedPlugins: ({ "io.github.tomge.opatchy": root.manifest })
+    property var installedPlugins: ({ "io.github.tommynem.opatchy": root.manifest })
   }
 
   QtObject {

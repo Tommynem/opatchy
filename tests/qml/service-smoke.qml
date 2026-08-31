@@ -30,7 +30,7 @@ Item {
       return
     }
     service = component.createObject(root, {
-      "manifest": { "id": "io.github.tomge.opatchy", "__sourceDir": sourceDir }
+      "manifest": { "id": "io.github.tommynem.opatchy", "__sourceDir": sourceDir }
     })
     if (service === null) {
       fail("Service.qml did not instantiate")

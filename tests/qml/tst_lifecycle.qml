@@ -12,13 +12,13 @@ TestCase {
   property var serviceObject: null
   property var currentService: null
   property var manifest: ({
-    "id": "io.github.tomge.opatchy",
+    "id": "io.github.tommynem.opatchy",
     "__sourceDir": Qt.resolvedUrl("../..").toString()
   })
 
   QtObject {
     id: registry
-    property var installedPlugins: ({ "io.github.tomge.opatchy": root.manifest })
+    property var installedPlugins: ({ "io.github.tommynem.opatchy": root.manifest })
   }
 
   QtObject {
