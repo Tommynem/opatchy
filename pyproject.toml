@@ -11,6 +11,7 @@ dev = [
     "basedpyright>=1.36.1",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "PyYAML==6.0.3",
     # Pin stable lint and formatter behavior to avoid release-to-release churn.
     "ruff==0.15.1",
 ]

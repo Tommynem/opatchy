@@ -89,3 +89,85 @@ def test_ci_policy_rejects_write_permission() -> None:
     # Then: the policy gate fails closed.
     assert result.returncode != 0
     assert "permissions must be exactly contents: read" in result.stderr
+
+
+def test_ci_policy_rejects_job_level_write_override() -> None:
+    # Given: a read-only workflow with one escalating job override.
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        write_workflow(
+            repository.root,
+            valid_workflow().replace(
+                "    runs-on: ubuntu-24.04",
+                "    permissions:\n      contents: write\n    runs-on: ubuntu-24.04",
+            ),
+        )
+
+        # When: the policy gate parses the nested permission map.
+        result = run_policy(repository.root)
+
+    # Then: the job cannot escalate the workflow-level read grant.
+    assert result.returncode != 0
+    assert "permissions must be exactly contents: read" in result.stderr
+
+
+def test_ci_policy_rejects_malformed_yaml() -> None:
+    # Given: a workflow with unclosed YAML sequences.
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        write_workflow(
+            repository.root,
+            valid_workflow()
+            .replace("on: [push]", "on: [push")
+            .replace("jobs:", "jobs: ["),
+        )
+
+        # When: the policy gate parses the document.
+        result = run_policy(repository.root)
+
+    # Then: invalid YAML cannot receive a successful policy result.
+    assert result.returncode != 0
+    assert "invalid YAML" in result.stderr
+
+
+def test_ci_policy_rejects_mutable_reusable_workflow() -> None:
+    # Given: a job that calls a reusable workflow through a mutable branch.
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        write_workflow(
+            repository.root,
+            "\n".join(
+                (
+                    "name: CI",
+                    "on: [push]",
+                    "permissions:",
+                    "  contents: read",
+                    "jobs:",
+                    "  validate:",
+                    "    uses: example/repo/.github/workflows/ci.yml@main",
+                    "",
+                )
+            ),
+        )
+
+        # When: the policy gate validates the reusable workflow job.
+        result = run_policy(repository.root)
+
+    # Then: a branch reference cannot execute as a workflow dependency.
+    assert result.returncode != 0
+    assert "reusable workflow must use an immutable action reference" in result.stderr
+
+
+def test_ci_policy_rejects_scalar_step() -> None:
+    # Given: a job containing a scalar rather than a step mapping.
+    with temporary_repository(REPOSITORY_ROOT) as repository:
+        write_workflow(
+            repository.root,
+            valid_workflow().replace(
+                "      - uses:", "      - 'run: echo invalid scalar'\n      # uses:"
+            ),
+        )
+
+        # When: the policy gate validates every step shape.
+        result = run_policy(repository.root)
+
+    # Then: malformed steps cannot be ignored.
+    assert result.returncode != 0
+    assert "step must be a mapping" in result.stderr
