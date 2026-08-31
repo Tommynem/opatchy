@@ -11,7 +11,19 @@ from opatchy_helper.protocol import encode_response
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PRESENTATION_RUNNER = _ROOT / "tests" / "e2e" / "offline_presentation.mjs"
-node_path = which("node", path=os.defpath)
+
+
+def resolve_node_path(repository_root: Path, executable_path: str) -> str | None:
+    root = repository_root.resolve()
+    host_path = os.pathsep.join(
+        directory
+        for directory in executable_path.split(os.pathsep)
+        if not Path(directory).resolve().is_relative_to(root)
+    )
+    return which("node", path=host_path)
+
+
+node_path = resolve_node_path(_ROOT, os.pathsep.join(os.get_exec_path()))
 if node_path is None:
     raise RuntimeError("node is required for offline presentation tests")
 _NODE: Final = node_path
