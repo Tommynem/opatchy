@@ -5,7 +5,7 @@ import "qml/components"
 
 BarWidget {
   id: root
-  moduleName: "io.github.tomge.opatchy"
+  moduleName: "io.github.tommynem.opatchy"
 
   readonly property var shell: bar ? bar.shell : null
   readonly property var manifest: shell && shell.pluginRegistry

@@ -6,7 +6,7 @@ import "qml/models/TabModel.js" as TabModel
 
 Panel {
   id: root
-  moduleName: "io.github.tomge.opatchy"
+  moduleName: "io.github.tommynem.opatchy"
   manageIpc: false
 
   property var shell: null
