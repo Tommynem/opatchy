@@ -1,7 +1,8 @@
 import pytest
 
 from scripts.publication_verifier_model import APPROVED_PLUGIN_ID, VerifierError
-from scripts.publication_verifier_service import CommandResult, PublicationVerifier
+from scripts.publication_verifier_runner import CommandResult
+from scripts.publication_verifier_service import PublicationVerifier
 from tests.tooling.publication_verifier_fixtures import (
     FakeRunner,
     marketplace,

@@ -8,6 +8,7 @@ from scripts.publication_model import (
     compare_issue_sets,
     parse_existing_issues,
 )
+from scripts.publication_verifier_marketplace import require_marketplace_absent
 from scripts.publication_verifier_model import (
     APPROVED_PLUGIN_ID,
     APPROVED_REPOSITORY,
@@ -18,7 +19,6 @@ from scripts.publication_verifier_model import (
     require_sha,
     require_successful_ci,
 )
-from scripts.publication_verifier_marketplace import require_marketplace_absent
 from scripts.publication_verifier_runner import (
     CommandResult,
     CommandRunner,
