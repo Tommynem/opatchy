@@ -16,10 +16,11 @@ REQUIRED_FILES: Final = (
     "docs/architecture.md",
     "docs/threat-model.md",
     "docs/compatibility.md",
+    "docs/backlog.md",
 )
-PLUGIN_ID: Final = "io.github.tomge.opatchy"
+PLUGIN_ID: Final = "io.github.tommynem.opatchy"
 VERSION: Final = "0.1.0"
-PUBLIC_URL: Final = "https://github.com/tomge/opatchy"
+PUBLIC_URL: Final = "https://github.com/Tommynem/opatchy"
 PROHIBITED_ASSURANCE_PHRASES: Final = (
     "machine is safe",
     "machine is secure",
@@ -110,7 +111,7 @@ class RepositoryContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             manifest_path = Path(temporary_directory) / "manifest.json"
             _ = manifest_path.write_text(
-                '{"schemaVersion": true, "id": "io.github.tomge.opatchy", "name": "Opatchy", "version": "0.1.0"}',
+                '{"schemaVersion": true, "id": "io.github.tommynem.opatchy", "name": "Opatchy", "version": "0.1.0"}',
                 encoding="utf-8",
             )
 
@@ -123,7 +124,7 @@ class RepositoryContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             manifest_path = Path(temporary_directory) / "manifest.json"
             _ = manifest_path.write_text(
-                '{"schemaVersion": 1, "id": "io.github.tomge.opatchy", "name": "Opatchy", "version": "0.1.0"} trailing text',
+                '{"schemaVersion": 1, "id": "io.github.tommynem.opatchy", "name": "Opatchy", "version": "0.1.0"} trailing text',
                 encoding="utf-8",
             )
 

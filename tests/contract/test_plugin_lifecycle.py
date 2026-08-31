@@ -11,7 +11,7 @@ from tests.fixtures.factories import isolated_copy_ignore
 
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[2]
 MANIFEST_PATH: Final = REPOSITORY_ROOT / "manifest.json"
-PLUGIN_ID: Final = "io.github.tomge.opatchy"
+PLUGIN_ID: Final = "io.github.tommynem.opatchy"
 REQUIRED_PRODUCT_FILES: Final = (
     "manifest.json",
     "Service.qml",

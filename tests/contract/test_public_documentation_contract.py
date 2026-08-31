@@ -115,7 +115,7 @@ class PublicDocumentationContractTests(unittest.TestCase):
         public_text = self.public_text()
 
         for required in (
-            "io.github.tomge.opatchy",
+            "io.github.tommynem.opatchy",
             "0.1.0",
             "xdg_state_home",
             "xdg_cache_home",
