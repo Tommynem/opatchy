@@ -1,9 +1,13 @@
+import sys
+from pathlib import Path
+
 import pytest
 
-from scripts.publication_model import parse_backlog
+import scripts.publication_verifier as verifier_cli
+from scripts.publication_model import RoadmapItem, parse_backlog
 from scripts.publication_verifier import parse_arguments
 from scripts.publication_verifier_model import APPROVED_PLUGIN_ID, VerifierError
-from scripts.publication_verifier_service import PublicationVerifier
+from scripts.publication_verifier_service import PublicationVerifier, VerificationReport
 from tests.tooling.publication_verifier_fixtures import (
     FakeRunner,
     issue,
@@ -151,6 +155,71 @@ def test_cli_parses_exact_published_arguments() -> None:
 
     assert arguments.mode == "published"
     assert arguments.plugin_id == APPROVED_PLUGIN_ID
+
+
+def test_cli_main_dispatches_approved_published_arguments(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    backlog = tmp_path / "backlog.md"
+    _ = backlog.write_text(BACKLOG, encoding="utf-8")
+    calls: list[tuple[tuple[RoadmapItem, ...], str]] = []
+
+    class RecordingVerifier:
+        def __init__(self, _: verifier_cli.SubprocessRunner) -> None:
+            _ = _
+
+        def verify_published(
+            self, items: tuple[RoadmapItem, ...], plugin_id: str
+        ) -> VerificationReport:
+            _ = calls.append((items, plugin_id))
+            return VerificationReport("published", "a" * 40, "b" * 40)
+
+    monkeypatch.setattr(verifier_cli, "PublicationVerifier", RecordingVerifier)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "verifier",
+            "--mode",
+            "published",
+            "--repository",
+            "Tommynem/opatchy",
+            "--plugin-id",
+            APPROVED_PLUGIN_ID,
+            "--backlog",
+            str(backlog),
+        ],
+    )
+
+    assert verifier_cli.main() == 0
+    assert len(calls) == 1
+    assert calls[0][1] == APPROVED_PLUGIN_ID
+    assert "PASS(publication-verifier): mode=published" in capsys.readouterr().out
+
+
+def test_cli_main_rejects_wrong_plugin_before_verifier_construction(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def forbidden(_: object) -> None:
+        raise AssertionError("verifier must not be constructed")
+
+    monkeypatch.setattr(verifier_cli, "PublicationVerifier", forbidden)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "verifier",
+            "--mode",
+            "pre-publication",
+            "--repository",
+            "Tommynem/opatchy",
+            "--plugin-id",
+            "wrong.plugin",
+        ],
+    )
+
+    assert verifier_cli.main() == 1
+    assert "approved mode or plugin ID" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
