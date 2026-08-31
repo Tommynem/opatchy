@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly plugin_id="io.github.tomge.opatchy"
+readonly plugin_id="io.github.tommynem.opatchy"
 readonly hostname_bin="/usr/bin/hostname"
 readonly discovery_attempts=50
 readonly discovery_poll_seconds=0.1

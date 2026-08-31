@@ -120,7 +120,7 @@ case "$1 $2" in
         exit 1
       }
     fi
-    if [[ "${FAIL_VALIDATE_TARGET:-0}" == 1 && "$3" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+    if [[ "${FAIL_VALIDATE_TARGET:-0}" == 1 && "$3" == "$HOME/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]; then
       printf '%s\n' 'target validation failure' >&2
       exit 1
     fi
@@ -153,7 +153,7 @@ PY
     fi
     if [[ "${PERSIST_HELPER_AFTER_RESTORE:-0}" == 1 ]]; then
       touch "$HOME/helper-running"
-    elif grep -Fq 'io.github.tomge.opatchy' "$HOME/.config/omarchy/shell.json" && [[ -d "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+    elif grep -Fq 'io.github.tommynem.opatchy' "$HOME/.config/omarchy/shell.json" && [[ -d "$HOME/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]; then
       touch "$HOME/helper-running"
     else
       rm -f "$HOME/helper-running"
@@ -173,7 +173,7 @@ PY
           fi
         fi
         if [[ "${DELAY_PLUGIN_DISCOVERY:-0}" != 1 || -f "$HOME/plugin-known" ]]; then
-          printf '%s\n' '[{"id":"io.github.tomge.opatchy"}]'
+          printf '%s\n' '[{"id":"io.github.tommynem.opatchy"}]'
         else
           printf '%s\n' '[]'
         fi
@@ -187,7 +187,7 @@ PY
       reloadConfig)
         if [[ "${PERSIST_HELPER_AFTER_RESTORE:-0}" == 1 ]]; then
           touch "$HOME/helper-running"
-        elif grep -Fq 'io.github.tomge.opatchy' "$HOME/.config/omarchy/shell.json" && [[ -d "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+        elif grep -Fq 'io.github.tommynem.opatchy' "$HOME/.config/omarchy/shell.json" && [[ -d "$HOME/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]; then
           touch "$HOME/helper-running"
         else
           rm -f "$HOME/helper-running"
@@ -202,7 +202,7 @@ EOF
   cat >"${fake_bin}/pgrep" <<'EOF'
 #!/usr/bin/env bash
 if [[ -f "$HOME/helper-running" ]]; then
-  printf '%s\n' "123 $HOME/.config/omarchy/plugins/io.github.tomge.opatchy/helper/opatchy.py"
+  printf '%s\n' "123 $HOME/.config/omarchy/plugins/io.github.tommynem.opatchy/helper/opatchy.py"
   exit 0
 fi
 exit 1
@@ -220,11 +220,11 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'cp %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
-if [[ "${FAIL_COPY_BACKUP:-0}" == 1 && "$2" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+if [[ "${FAIL_COPY_BACKUP:-0}" == 1 && "$2" == "$HOME/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]; then
   printf '%s\n' 'backup copy failure' >&2
   exit 1
 fi
-if [[ "${DISALLOW_WATCHED_COPY:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" && "$3" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+if [[ "${DISALLOW_WATCHED_COPY:-0}" == 1 && "$2" == "${TODO27_SOURCE_PLUGIN}" && "$3" == "$HOME/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]; then
   printf '%s\n' 'source copy must not write directly into the watched plugin directory' >&2
   exit 1
 fi
@@ -234,7 +234,7 @@ cat >"${fake_bin}/mv" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'mv %s\n' "$*" >>"${TODO27_COMMAND_LOG}"
-if [[ "${FAIL_MOVE_SOURCE:-0}" == 1 && "$1" == */staged-plugin && "$2" == "$HOME/.config/omarchy/plugins/io.github.tomge.opatchy" ]]; then
+if [[ "${FAIL_MOVE_SOURCE:-0}" == 1 && "$1" == */staged-plugin && "$2" == "$HOME/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]; then
   mkdir -p "$2"
   printf 'partial install\n' >"$2/partial.txt"
   printf '%s\n' 'partial install failure' >&2
@@ -277,7 +277,7 @@ run_runner() {
 assert_restored() {
   local record_dir="$1" expected_plugin="$2" expected_helpers="$3"
   cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
-  [[ "$(tree_digest "${home}/.config/omarchy/plugins/io.github.tomge.opatchy")" == "${expected_plugin}" ]] || fail "plugin tree was not restored"
+  [[ "$(tree_digest "${home}/.config/omarchy/plugins/io.github.tommynem.opatchy")" == "${expected_plugin}" ]] || fail "plugin tree was not restored"
   grep -Fxq 'restoration_status=0' "${record_dir}/restoration.status"
   [[ "$(<"${record_dir}/helper-count.before.txt")" == "${expected_helpers}" ]]
   [[ "$(<"${record_dir}/helper-count.after.txt")" == "${expected_helpers}" ]]
@@ -346,10 +346,10 @@ GIT_MASTER=1 git -C "${source_plugin}" -c user.name='Todo 27 Fixture' -c user.em
 expect_failure 'staged plugin directory is not deployment-safe' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/source-link" --execute
 assert_no_shell_mutation
-ln -s "${fixture_root}/outside" "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+ln -s "${fixture_root}/outside" "${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 expect_failure 'symlink path component is not allowed' env HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   bash "${fixture_runner}" --host tomarchy --approval 'todo27:tomarchy' --plugin-source "${source_plugin}" --record-dir "${fixture_root}/target-link" --execute
-rm "${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+rm "${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 
 setup_fixture
 expect_failure 'unable to archive committed plugin tree' run_runner "${fixture_root}/malformed-archive" env MALFORMED_ARCHIVE=1
@@ -362,9 +362,9 @@ assert_restored "${record_dir}" absent 0
 [[ "$(<"${record_dir}/helper-monitor.status")" == stopped ]]
 assert_log_sequence \
   "cp -a ${home}/.config/omarchy/shell.json ${record_dir}/backup/shell.json" \
-  "mv ${record_dir}/staged-plugin ${home}/.config/omarchy/plugins/io.github.tomge.opatchy" \
+  "mv ${record_dir}/staged-plugin ${home}/.config/omarchy/plugins/io.github.tommynem.opatchy" \
   'omarchy restart shell' \
-  'omarchy plugin enable io.github.tomge.opatchy' \
+  'omarchy plugin enable io.github.tommynem.opatchy' \
   "cp -a ${record_dir}/backup/shell.json ${home}/.config/omarchy/shell.json" \
   'omarchy restart shell'
 [[ "$(grep -Fxc 'omarchy restart shell' "${command_log}")" == 2 ]]
@@ -372,8 +372,8 @@ assert_log_sequence \
 setup_fixture
 HOME="${home}" PATH="${fake_bin}:${PATH}" TODO27_COMMAND_LOG="${command_log}" \
   DELAY_PLUGIN_DISCOVERY=1 omarchy shell shell rescanPlugins
-expect_failure "plugin 'io.github.tomge.opatchy' is not known" env HOME="${home}" PATH="${fake_bin}:${PATH}" \
-  TODO27_COMMAND_LOG="${command_log}" DELAY_PLUGIN_DISCOVERY=1 omarchy plugin enable io.github.tomge.opatchy
+expect_failure "plugin 'io.github.tommynem.opatchy' is not known" env HOME="${home}" PATH="${fake_bin}:${PATH}" \
+  TODO27_COMMAND_LOG="${command_log}" DELAY_PLUGIN_DISCOVERY=1 omarchy plugin enable io.github.tommynem.opatchy
 
 setup_fixture
 record_dir="${fixture_root}/delayed-discovery-record"
@@ -389,7 +389,7 @@ assert_restored "${record_dir}" absent 0
 ! grep -Fq 'plugin enable' "${command_log}"
 
 setup_fixture
-target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+target_plugin="${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 mkdir -p "${target_plugin}/empty" "${target_plugin}/nested"
 printf 'prior state\n' >"${target_plugin}/nested/retained.txt"
 chmod 700 "${target_plugin}/nested/retained.txt"
@@ -400,7 +400,7 @@ assert_restored "${record_dir}" "${existing_digest}" 0
 [[ -d "${target_plugin}/empty" && -x "${target_plugin}/nested/retained.txt" ]]
 
 setup_fixture
-target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+target_plugin="${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 mkdir -p "${target_plugin}/empty"
 printf 'prior state\n' >"${target_plugin}/retained.txt"
 existing_digest="$(tree_digest "${target_plugin}")"
@@ -412,7 +412,7 @@ setup_fixture
 record_dir="${fixture_root}/restart-failure-record"
 expect_failure 'restart failure' run_runner "${record_dir}" env FAIL_RESTART=1
 cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
-[[ ! -e "${home}/.config/omarchy/plugins/io.github.tomge.opatchy" ]]
+[[ ! -e "${home}/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]
 grep -Fxq 'restoration_status=1' "${record_dir}/restoration.status"
 assert_log_sequence \
   'omarchy restart shell' \
@@ -420,7 +420,7 @@ assert_log_sequence \
   'omarchy restart shell'
 
 setup_fixture
-target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+target_plugin="${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 mkdir -p "${target_plugin}/empty"
 printf 'prior state\n' >"${target_plugin}/retained.txt"
 existing_digest="$(tree_digest "${target_plugin}")"
@@ -429,7 +429,7 @@ expect_failure 'partial install' run_runner "${record_dir}" env FAIL_MOVE_SOURCE
 assert_restored "${record_dir}" "${existing_digest}" 0
 
 setup_fixture
-target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+target_plugin="${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 mkdir -p "${target_plugin}"
 printf 'prior state\n' >"${target_plugin}/retained.txt"
 record_dir="${fixture_root}/partial-backup-record"
@@ -441,7 +441,7 @@ cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
 run_interrupted_case() {
   local signal="$1" record_dir fifo output runner_pid expected_plugin
   setup_fixture
-  target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+  target_plugin="${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
   mkdir -p "${target_plugin}/empty"
   printf 'prior state\n' >"${target_plugin}/retained.txt"
   expected_plugin="$(tree_digest "${target_plugin}")"
@@ -470,7 +470,7 @@ run_interrupted_case INT
 run_interrupted_case TERM
 
 setup_fixture
-target_plugin="${home}/.config/omarchy/plugins/io.github.tomge.opatchy"
+target_plugin="${home}/.config/omarchy/plugins/io.github.tommynem.opatchy"
 mkdir -p "${target_plugin}"
 printf 'prior state\n' >"${target_plugin}/retained.txt"
 python3 - "${home}/.config/omarchy/shell.json" <<'PY'
@@ -479,7 +479,7 @@ import sys
 
 path = sys.argv[1]
 document = json.load(open(path, encoding="utf-8"))
-document["bar"]["layout"]["right"].append({"id": "io.github.tomge.opatchy"})
+document["bar"]["layout"]["right"].append({"id": "io.github.tommynem.opatchy"})
 open(path, "w", encoding="utf-8").write(json.dumps(document))
 PY
 cp "${home}/.config/omarchy/shell.json" "${fixture_root}/original-shell.json"
@@ -496,7 +496,7 @@ if printf 'RESTORE\n' | run_runner "${record_dir}" env PERSIST_HELPER_AFTER_REST
   fail 'expected persistent helper restoration to fail'
 fi
 cmp "${fixture_root}/original-shell.json" "${home}/.config/omarchy/shell.json"
-[[ ! -e "${home}/.config/omarchy/plugins/io.github.tomge.opatchy" ]]
+[[ ! -e "${home}/.config/omarchy/plugins/io.github.tommynem.opatchy" ]]
 grep -Fxq 'restoration_status=1' "${record_dir}/restoration.status"
 [[ "$(<"${record_dir}/helper-count.before.txt")" == 0 ]]
 [[ "$(<"${record_dir}/helper-count.after.txt")" == 1 ]]
