@@ -1,4 +1,4 @@
-.PHONY: sync format lint type test js test-e2e security-check ci validate release-dry-run
+.PHONY: sync format lint type test js test-e2e security-check ci ci-portable validate release-dry-run
 
 sync:
 	uv sync --group dev
@@ -38,6 +38,19 @@ ci:
 	/usr/bin/python3 -m unittest discover -s tests/contract -p 'test_*.py'
 	./scripts/runtime_without_venv.sh
 	/usr/bin/python3 scripts/security_check.py
+	git diff --check
+
+ci-portable:
+	uv lock --check
+	uv sync --group dev --locked --check
+	uv run --locked --no-sync python scripts/ci_policy.py --repository .
+	uv run --locked --no-sync ruff format --check .
+	uv run --locked --no-sync ruff check .
+	uv run --locked --no-sync basedpyright
+	uv run --locked --no-sync pytest -q --ignore=tests/tooling/test_controlled_runner_lifecycle.py --ignore=tests/tooling/test_qml_offscreen_capability.py --ignore=tests/tooling/test_validation_cleanup.py --ignore=tests/tooling/test_validation_exit_status.py --ignore=tests/tooling/test_validation_gates.py --deselect=tests/contract/test_plugin_lifecycle.py::PluginLifecycleContractTests::test_host_validator_rejects_hostile_fixture_copies
+	uv run --locked --no-sync pytest -q --ignore=tests/tooling/test_controlled_runner_lifecycle.py --ignore=tests/tooling/test_qml_offscreen_capability.py --ignore=tests/tooling/test_validation_cleanup.py --ignore=tests/tooling/test_validation_exit_status.py --ignore=tests/tooling/test_validation_gates.py --deselect=tests/contract/test_plugin_lifecycle.py::PluginLifecycleContractTests::test_host_validator_rejects_hostile_fixture_copies --cov=helper/opatchy_helper --cov-report=term-missing
+	node --test tests/js/*.test.mjs
+	uv run --locked --no-sync python scripts/security_check.py
 	git diff --check
 
 validate:
