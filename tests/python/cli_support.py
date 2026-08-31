@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, assert_never
@@ -73,7 +74,7 @@ def environment(tmp_path: Path) -> dict[str, str]:
 
 def run_cli(tmp_path: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["/usr/bin/python3", str(ENTRYPOINT), *arguments],
+        [sys.executable, str(ENTRYPOINT), *arguments],
         check=False,
         capture_output=True,
         cwd=REPOSITORY_ROOT,
@@ -110,7 +111,7 @@ def concurrent_star(
 ) -> tuple[subprocess.CompletedProcess[str], subprocess.CompletedProcess[str]]:
     first = subprocess.Popen(
         [
-            "/usr/bin/python3",
+            sys.executable,
             str(ENTRYPOINT),
             "set-star",
             "--item-id",
@@ -126,7 +127,7 @@ def concurrent_star(
     )
     second = subprocess.Popen(
         [
-            "/usr/bin/python3",
+            sys.executable,
             str(ENTRYPOINT),
             "set-star",
             "--item-id",
