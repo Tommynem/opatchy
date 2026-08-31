@@ -16,7 +16,7 @@ test:
 	uv run --locked --no-sync pytest -q
 
 js:
-	node --test tests/js/*.test.mjs
+	OPATCHY_TEST_PYTHON="$$(uv run --locked --no-sync python -c 'import sys; print(sys.executable)')" node --test tests/js/*.test.mjs
 
 test-e2e:
 	uv run --locked --no-sync pytest -q tests/e2e tests/python/test_runner.py tests/python/test_storage.py tests/tooling/test_controlled_runner_lifecycle.py
@@ -34,7 +34,7 @@ ci:
 	uv run --locked --no-sync basedpyright
 	uv run --locked --no-sync pytest -q --ignore=tests/tooling/test_controlled_runner_lifecycle.py
 	uv run --locked --no-sync pytest -q --ignore=tests/tooling/test_controlled_runner_lifecycle.py --cov=helper/opatchy_helper --cov-report=term-missing
-	node --test tests/js/*.test.mjs
+	OPATCHY_TEST_PYTHON="$$(uv run --locked --no-sync python -c 'import sys; print(sys.executable)')" node --test tests/js/*.test.mjs
 	/usr/bin/python3 -m unittest discover -s tests/contract -p 'test_*.py'
 	./scripts/runtime_without_venv.sh
 	/usr/bin/python3 scripts/security_check.py
@@ -49,7 +49,7 @@ ci-portable:
 	uv run --locked --no-sync basedpyright
 	uv run --locked --no-sync pytest -q --ignore=tests/tooling/test_controlled_runner_lifecycle.py --ignore=tests/tooling/test_qml_offscreen_capability.py --ignore=tests/tooling/test_validation_cleanup.py --ignore=tests/tooling/test_validation_exit_status.py --ignore=tests/tooling/test_validation_gates.py --deselect=tests/contract/test_plugin_lifecycle.py::PluginLifecycleContractTests::test_host_validator_rejects_hostile_fixture_copies
 	uv run --locked --no-sync pytest -q --ignore=tests/tooling/test_controlled_runner_lifecycle.py --ignore=tests/tooling/test_qml_offscreen_capability.py --ignore=tests/tooling/test_validation_cleanup.py --ignore=tests/tooling/test_validation_exit_status.py --ignore=tests/tooling/test_validation_gates.py --deselect=tests/contract/test_plugin_lifecycle.py::PluginLifecycleContractTests::test_host_validator_rejects_hostile_fixture_copies --cov=helper/opatchy_helper --cov-report=term-missing
-	node --test tests/js/*.test.mjs
+	OPATCHY_TEST_PYTHON="$$(uv run --locked --no-sync python -c 'import sys; print(sys.executable)')" node --test tests/js/*.test.mjs
 	uv run --locked --no-sync python scripts/security_check.py
 	git diff --check
 

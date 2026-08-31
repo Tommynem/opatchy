@@ -41,7 +41,8 @@ function loadValidator() {
 }
 
 function pythonAccepts(raw) {
-  const result = spawnSync("/usr/bin/python3", ["-c", [
+  const python = process.env.OPATCHY_TEST_PYTHON || "/usr/bin/python3";
+  const result = spawnSync(python, ["-c", [
     "import sys",
     "from opatchy_helper.models import ProtocolError",
     "from opatchy_helper.protocol import decode_response",
