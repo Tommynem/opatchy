@@ -23,4 +23,8 @@ Button {
   topPadding: Style.spacing.controlPaddingY
   bottomPadding: Style.spacing.controlPaddingY
   activeFocusOnTab: focusable
+  Keys.enabled: focusable
+  Keys.onReturnPressed: if (focusable) root.clicked()
+  Keys.onEnterPressed: if (focusable) root.clicked()
+  Keys.onSpacePressed: if (focusable) root.clicked()
 }

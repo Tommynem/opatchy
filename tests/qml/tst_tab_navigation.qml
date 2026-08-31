@@ -1,6 +1,6 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15 as Controls
 import QtTest 1.3
+import qs.Ui
 import "../../qml/components"
 
 TestCase {
@@ -34,14 +34,14 @@ TestCase {
         }
       }
 
-      Controls.Button {
+      Button {
         id: target
         activeFocusOnTab: true
         KeyNavigation.tab: nextTarget
         onClicked: route.childActivations += 1
       }
 
-      Controls.Button {
+      Button {
         id: nextTarget
         x: target.width + 1
         activeFocusOnTab: true
@@ -88,7 +88,7 @@ TestCase {
     state.destroy()
   }
 
-  function test_focused_button_receives_enter_before_global_navigation() {
+  function test_focused_host_button_receives_return_enter_and_space_before_global_navigation() {
     const route = focusRouteComponent.createObject(root)
     route.target.forceActiveFocus()
     verify(route.target.activeFocus)
@@ -97,8 +97,12 @@ TestCase {
     compare(route.childActivations, 1)
     compare(route.globalNavigationEvents, 0)
     route.target.forceActiveFocus()
-    keyClick(Qt.Key_Space)
+    keyClick(Qt.Key_Enter)
     compare(route.childActivations, 2)
+    compare(route.globalNavigationEvents, 0)
+    route.target.forceActiveFocus()
+    keyClick(Qt.Key_Space)
+    compare(route.childActivations, 3)
     compare(route.globalNavigationEvents, 0)
     route.target.forceActiveFocus()
     keyClick(Qt.Key_Tab)
