@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import override
+from typing import Final, override
 
 from helper.opatchy_helper.json_value import JsonValue, decode_json
 from helper.opatchy_helper.models import ProtocolError
+
+APPROVED_PLUGIN_ID: Final = "io.github.tommynem.opatchy"
+APPROVED_REPOSITORY: Final = "Tommynem/opatchy"
+MARKETPLACE_REPOSITORY: Final = "omacom/omarchy-plugin-marketplace"
 
 
 @dataclass(slots=True)
@@ -46,17 +50,33 @@ def parse_array(document: str, description: str) -> list[JsonValue]:
             raise VerifierError(f"{description} must be a JSON array")
 
 
-def parse_target(document: str, repository: str) -> None:
+def parse_target(document: str) -> None:
     match parse_object(document, "target repository"):
         case {
             "nameWithOwner": str(name),
             "isEmpty": bool(is_empty),
             "viewerPermission": "ADMIN",
-        } if name == repository and is_empty:
+        } if name == APPROVED_REPOSITORY and is_empty:
             return
         case _:
             raise VerifierError(
                 "target repository is unavailable, unauthorized, or nonempty"
+            )
+
+
+def parse_published_repository(document: str) -> str:
+    match parse_object(document, "published repository"):
+        case {
+            "nameWithOwner": str(name),
+            "visibility": "PUBLIC",
+            "url": "https://github.com/Tommynem/opatchy",
+            "hasIssuesEnabled": True,
+            "defaultBranchRef": {"name": str(branch)},
+        } if name == APPROVED_REPOSITORY and branch:
+            return branch
+        case _:
+            raise VerifierError(
+                "published repository does not match approved invariants"
             )
 
 
@@ -91,6 +111,8 @@ def parse_active_plugin_ids(sources: list[JsonValue]) -> frozenset[str]:
                             "marketplace registry has malformed plugin maps"
                         )
                     active.add(plugin_id)
+            case {"plugins": _}:
+                raise VerifierError("marketplace registry has malformed plugin maps")
             case dict():
                 continue
             case _:
