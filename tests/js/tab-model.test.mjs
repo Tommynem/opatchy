@@ -138,12 +138,12 @@ test("persists only a valid UI tab selection through the host inline settings pa
     },
   };
 
-  assert.equal(model.persistSelection(shell, "io.github.tomge.opatchy", { notifySecurity: true }, "AUR"), true);
+  assert.equal(model.persistSelection(shell, "io.github.tommynem.opatchy", { notifySecurity: true }, "AUR"), true);
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{
-    moduleName: "io.github.tomge.opatchy",
+    moduleName: "io.github.tommynem.opatchy",
     settings: { notifySecurity: true, lastSelectedTab: "AUR" },
   }]);
-  assert.equal(model.persistSelection(shell, "io.github.tomge.opatchy", {}, "future-tab"), false);
+  assert.equal(model.persistSelection(shell, "io.github.tommynem.opatchy", {}, "future-tab"), false);
   assert.equal(calls.length, 1);
 });
 

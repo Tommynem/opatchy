@@ -35,7 +35,7 @@ ShellRoot {
   Component.onCompleted: {
     const sourceDir = Quickshell.env("OPATCHY_HOST_CONTRACT_ROOT")
     const manifest = {
-      "id": "io.github.tomge.opatchy",
+      "id": "io.github.tommynem.opatchy",
       "kinds": ["service", "bar-widget"],
       "entryPoints": { "service": "Service.qml", "barWidget": "BarWidget.qml" },
       "__sourceDir": sourceDir
@@ -66,7 +66,7 @@ ShellRoot {
     interval: 0
     repeat: false
     onTriggered: {
-      const registeredService = root.serviceFor("io.github.tomge.opatchy")
+      const registeredService = root.serviceFor("io.github.tommynem.opatchy")
       if (registeredService === null || registeredService._controller === null) {
         root.fail("enabled combined manifest did not initialize its service after host-order injection")
         return

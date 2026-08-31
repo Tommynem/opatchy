@@ -598,7 +598,7 @@ def test_dynamic_argument_policies_pass_hostile_literals_and_reject_invalid_valu
     )
     notify = runner.CommandSpec(
         executable,
-        ("-a", "io.github.tomge.opatchy", "-u", "normal"),
+        ("-a", "io.github.tommynem.opatchy", "-u", "normal"),
         runner.ArgumentPolicy.NOTIFICATION_TEXT,
         1,
         1024,
