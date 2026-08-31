@@ -135,6 +135,7 @@ fi
 
 run_gate lock uv lock --check
 run_gate environment uv sync --group dev --locked --check
+run_gate ci-policy /usr/bin/python3 scripts/ci_policy.py --repository "${repository_root}"
 run_gate format uv run --locked --no-sync ruff format --check .
 run_gate lint uv run --locked --no-sync ruff check .
 run_gate type uv run --locked --no-sync basedpyright
