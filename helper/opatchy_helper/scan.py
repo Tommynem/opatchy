@@ -16,7 +16,7 @@ from .scan_normalize import (
     omarchy_outcome,
     security_outcomes,
 )
-from .scan_outcomes import SourceOutcome
+from .scan_outcomes import SourceOutcome, not_applicable
 from .scan_types import ScanCollector, ScanRequest, ScanResult
 from .storage import Storage
 from .storage_types import SourceMetadata
@@ -63,7 +63,9 @@ class ScanCoordinator:
         aur = aur_outcome(self._collector.collect_aur()) if aur_due else None
         flatpak_user, flatpak_system = _flatpak(self._collector, flatpak_due)
         mise = mise_outcome(self._collector.collect_mise()) if mise_due else None
-        security, cisa_kev = _security(self._collector, security_due or cisa_due)
+        security, cisa_kev = _security(
+            self._collector, security_due, cisa_due, request.enable_cisa_kev
+        )
         generation = build_generation(
             request.generation_id,
             request.generation_order,
@@ -115,8 +117,16 @@ def _flatpak(
 
 
 def _security(
-    collector: ScanCollector, is_due: bool
+    collector: ScanCollector,
+    security_due: bool,
+    cisa_due: bool,
+    enable_cisa_kev: bool,
 ) -> tuple[SourceOutcome | None, SourceOutcome | None]:
-    if not is_due:
+    if not enable_cisa_kev:
+        if not security_due:
+            return None, not_applicable(SourceName.CISA_KEV)
+        security, _ = security_outcomes(collector.collect_security(False))
+        return security, not_applicable(SourceName.CISA_KEV)
+    if not security_due and not cisa_due:
         return None, None
-    return security_outcomes(collector.collect_security())
+    return security_outcomes(collector.collect_security(True))

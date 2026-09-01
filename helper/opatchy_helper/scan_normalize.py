@@ -9,7 +9,7 @@ from .adapters.security import (
     SecurityCollected,
     SecurityResult,
 )
-from .adapters.security_kev import KevCatalog, KevUnavailable
+from .adapters.security_kev import KevCatalog, KevDisabled, KevUnavailable
 from .models import SourceName, SourceScope, SourceStatus
 from .scan_outcomes import SourceOutcome, current, failure, from_status, not_applicable
 
@@ -42,6 +42,8 @@ def security_outcomes(result: SecurityResult) -> tuple[SourceOutcome, SourceOutc
             match kev:
                 case KevCatalog(provenance=kev_provenance):
                     return security, current(SourceName.CISA_KEV, (), kev_provenance)
+                case KevDisabled():
+                    return security, not_applicable(SourceName.CISA_KEV)
                 case KevUnavailable(diagnostic=diagnostic):
                     return security, failure(
                         SourceName.CISA_KEV,

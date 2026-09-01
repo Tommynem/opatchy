@@ -29,7 +29,7 @@ class ScanCollector(Protocol):
 
     def collect_mise(self) -> MiseResult: ...
 
-    def collect_security(self) -> SecurityResult: ...
+    def collect_security(self, enable_cisa_kev: bool = True) -> SecurityResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +38,7 @@ class ScanRequest:
     generation_order: int
     force: bool
     notification_settings: NotificationSettings = NotificationSettings()
+    enable_cisa_kev: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +70,10 @@ class RuntimeScanCollector:
     def collect_mise(self) -> MiseResult:
         return collect_mise_updates(self._run_with_default)
 
-    def collect_security(self) -> SecurityResult:
-        return collect_security(self._run_with_default, self._fetch, self.storage)
+    def collect_security(self, enable_cisa_kev: bool = True) -> SecurityResult:
+        return collect_security(
+            self._run_with_default, self._fetch, self.storage, enable_cisa_kev
+        )
 
     def _run_with_default(
         self, name: CommandName, arguments: tuple[str, ...] = ()

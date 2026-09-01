@@ -21,7 +21,7 @@ from opatchy_helper.adapters.mise import (
 )
 from opatchy_helper.adapters.omarchy import OmarchyAvailability
 from opatchy_helper.adapters.security import SecurityArchUnavailable, SecurityCollected
-from opatchy_helper.adapters.security_kev import KevUnavailable
+from opatchy_helper.adapters.security_kev import KevDisabled, KevUnavailable
 from opatchy_helper.models import (
     FindingId,
     ItemId,
@@ -174,6 +174,43 @@ def test_scan_is_partial_when_cisa_enrichment_is_unavailable(tmp_path: Path) -> 
     )
     assert generated.snapshot.payload.scan_state is ScanState.PARTIAL
     assert cisa.status is SourceStatus.ERROR
+    assert generated.snapshot.payload.findings == (group,)
+
+
+def test_scan_reports_disabled_cisa_as_not_applicable_without_losing_arch_findings(
+    tmp_path: Path,
+) -> None:
+    # Given: Arch security findings with explicitly disabled KEV enrichment.
+    base = collector()
+    finding = SecurityFinding(
+        FindingId("AVG-20260001"),
+        ItemId("arch:linux"),
+        "AVG-20260001",
+        (),
+        Severity.HIGH,
+        "2",
+        False,
+        Provenance.LIVE,
+    )
+    group = SecurityFindingGroup(finding.item_id, (finding,))
+    source = FakeCollector(
+        base.omarchy,
+        base.arch,
+        SecurityCollected((group,), Provenance.LIVE, KevDisabled()),
+    )
+
+    # When: the coordinator normalizes the scan generation.
+    generated = run(store(tmp_path), source, 1)
+
+    # Then: disabled coverage is not an outage or a fresh empty KEV result.
+    cisa = next(
+        health
+        for health in generated.snapshot.payload.sources
+        if health.source is SourceName.CISA_KEV
+    )
+    assert generated.snapshot.payload.scan_state is ScanState.COMPLETE
+    assert cisa.status is SourceStatus.NOT_APPLICABLE
+    assert cisa.cause is None
     assert generated.snapshot.payload.findings == (group,)
 
 
