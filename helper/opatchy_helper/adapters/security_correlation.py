@@ -24,7 +24,7 @@ from .arch import (
     compare_versions,
 )
 from .security_arch import ArchAdvisory, ArchFeedInvalid
-from .security_kev import KevCatalog, KevUnavailable
+from .security_kev import KevCatalog, KevDisabled, KevUnavailable
 
 _CVE: Final = re.compile(r"CVE-[0-9]{4}-[0-9]{4,19}")
 
@@ -86,7 +86,8 @@ def correlate_arch(
 
 
 def enrich_kev(
-    groups: tuple[SecurityFindingGroup, ...], kev: KevCatalog | KevUnavailable
+    groups: tuple[SecurityFindingGroup, ...],
+    kev: KevCatalog | KevDisabled | KevUnavailable,
 ) -> tuple[SecurityFindingGroup, ...]:
     """Join only validated CVE identifiers while retaining Arch findings on KEV failure."""
     match kev:
@@ -105,7 +106,7 @@ def enrich_kev(
                 )
                 for group in groups
             )
-        case KevUnavailable():
+        case KevDisabled() | KevUnavailable():
             return groups
 
 

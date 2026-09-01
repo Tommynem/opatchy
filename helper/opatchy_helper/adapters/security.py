@@ -32,7 +32,13 @@ from .security_correlation import (
     correlate_arch,
     enrich_kev,
 )
-from .security_kev import KevCatalog, KevFeedInvalid, KevUnavailable, parse_kev
+from .security_kev import (
+    KevCatalog,
+    KevDisabled,
+    KevFeedInvalid,
+    KevUnavailable,
+    parse_kev,
+)
 
 
 class EndpointFetcher(Protocol):
@@ -61,7 +67,7 @@ class SemanticFeedStore(Protocol):
 class SecurityCollected:
     groups: tuple[SecurityFindingGroup, ...]
     arch_provenance: Provenance
-    kev: KevCatalog | KevUnavailable
+    kev: KevCatalog | KevDisabled | KevUnavailable
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +82,7 @@ def collect_security(
     run: CommandRunner,
     fetch: EndpointFetcher,
     store: SemanticFeedStore | None = None,
+    enable_cisa_kev: bool = True,
 ) -> SecurityResult:
     """Collect current Arch findings; unavailable evidence never becomes empty success."""
     inventory_result = collect_official_inventory(run)
@@ -100,7 +107,7 @@ def collect_security(
         case ArchCorrelationFailure(diagnostic=diagnostic):
             return SecurityArchUnavailable(diagnostic)
         case ArchFindings(groups=groups):
-            kev = _kev(fetch, store)
+            kev = _kev(fetch, store) if enable_cisa_kev else KevDisabled()
             return SecurityCollected(enrich_kev(groups, kev), provenance, kev)
     assert_never(correlated)
 

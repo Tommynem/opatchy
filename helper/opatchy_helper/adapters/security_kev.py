@@ -43,6 +43,11 @@ class KevUnavailable:
     diagnostic: str
 
 
+@dataclass(frozen=True, slots=True)
+class KevDisabled:
+    pass
+
+
 def parse_kev(
     raw: bytes, provenance: Provenance = Provenance.LIVE
 ) -> KevCatalog | KevFeedInvalid:

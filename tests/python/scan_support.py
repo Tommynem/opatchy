@@ -95,7 +95,10 @@ class FakeCollector(ScanCollector):
         return self.mise
 
     @override
-    def collect_security(self) -> SecurityCollected | SecurityArchUnavailable:
+    def collect_security(
+        self, enable_cisa_kev: bool = True
+    ) -> SecurityCollected | SecurityArchUnavailable:
+        _ = enable_cisa_kev
         return self.security
 
 

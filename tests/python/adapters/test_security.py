@@ -19,7 +19,12 @@ from opatchy_helper.adapters.security import (
     collect_security,
 )
 from opatchy_helper.adapters.security_arch import parse_tracker
-from opatchy_helper.adapters.security_kev import KevCatalog, KevUnavailable, parse_kev
+from opatchy_helper.adapters.security_kev import (
+    KevCatalog,
+    KevDisabled,
+    KevUnavailable,
+    parse_kev,
+)
 from opatchy_helper.models import Provenance
 from opatchy_helper.runner_types import (
     CommandName,
@@ -104,6 +109,37 @@ def test_primary_success_uses_fresh_inventory_without_tracker_and_enriches_kev(
         (CommandName.ARCH_AUDIT, ()),
         (CommandName.VERCMP, ("1:6.12.2-1", "1:6.12.3-1")),
     ]
+
+
+def test_disabled_kev_preserves_arch_findings_without_endpoint_or_cache_access(
+    tmp_path: Path,
+) -> None:
+    # Given: valid Arch evidence and isolated storage that could otherwise hold KEV data.
+    run, _ = _command_runner(
+        (
+            CommandSucceeded(b"linux 1:6.12.2-1\nopenssl 3.0-1\n", b""),
+            CommandSucceeded(_fixture("arch-audit.json"), b""),
+            CommandSucceeded(b"-1\n", b""),
+        )
+    )
+    fetch, endpoint_requests = _fetcher(())
+    storage = Storage(
+        tmp_path / "state.json",
+        tmp_path / "cache",
+        lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+        SystemAtomicOperations(),
+    )
+
+    # When: CISA KEV enrichment is disabled for the scan.
+    result = collect_security(run, fetch, storage, enable_cisa_kev=False)
+
+    # Then: Arch findings remain, while no CISA request or semantic feed access occurs.
+    assert isinstance(result, SecurityCollected)
+    assert isinstance(result.kev, KevDisabled)
+    assert result.groups
+    assert endpoint_requests == []
+    assert result.groups[0].findings[0].kev_status.value == "unavailable"
+    assert result.groups[0].findings[0].kev_provenance is None
 
 
 def test_primary_failure_uses_tracker_but_both_unavailable_never_becomes_clean() -> (
