@@ -18,7 +18,7 @@ not assurance or exploitability conclusions.
 | Stored data | State and cache records are locked, validated, and atomically replaced. Anyone able to alter the user's files or process can still affect their environment. |
 | Presentation | Stale, unavailable, invalid, and not-applicable evidence is labeled rather than treated as clean. Displayed data can still be incomplete or become outdated. |
 | Update actions | The UI launches only fixed native Omarchy or Flatpak update argv after eligibility checks. A handoff does not confirm package mutation or update success. |
-| Notifications | The helper's notification content is bounded and escaped for `notify-send`, but production dispatch is not wired in this release. Desktop notification privacy is controlled by the host session if dispatch is added. |
+| Notifications | Eligible notifications dispatch after committed scans only. Manifest `notifyPermanent`, `notifySecurity`, and `securityMinimumSeverity` settings gate dispatch. Delivery doesn't clear watches, failed delivery remains retryable, and desktop notification privacy remains controlled by the host session. Opatchy doesn't inspect Do Not Disturb state or replay notifications. |
 
 ## Explicit non-goals
 
@@ -30,5 +30,6 @@ not a complete inventory of risk.
 
 ## Reporting
 
-Report suspected issues under [SECURITY.md](../SECURITY.md). Avoid including
-private inventories, tokens, or personal state files in a public report.
+Report suspected issues through the private reporting path in
+[SECURITY.md](../SECURITY.md). Avoid including private inventories, tokens, or
+personal state files in a public report.

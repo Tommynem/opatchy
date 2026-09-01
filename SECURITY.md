@@ -8,10 +8,10 @@ handoffs. It is not a privilege boundary and does not perform package mutation.
 
 ## Report a suspected issue
 
-Use GitHub's private security-advisory reporting for the published repository
-when that path is available. This checkout has no published Opatchy repository
-or alternate private reporting channel. Do not send details through a public
-issue, a guessed repository URL, or an unverified contact address.
+Use the published repository's [private vulnerability reporting and security
+advisory path](https://github.com/Tommynem/opatchy/security/advisories/new).
+This is the intended reporting channel. Don't send details through a public
+issue or an unverified contact address.
 
 Include the affected revision, Omarchy version, clear reproduction steps,
 observed impact, and minimal relevant logs. Don't publish a proof of concept,

@@ -20,17 +20,20 @@ yourself if you also want to discard its retained local data.
 
 ## Network requests
 
-Opatchy fetches only the public Arch security and CISA Known Exploited
-Vulnerabilities feeds. Requests reveal ordinary network metadata to those
-services, such as the user's network address, request timing, and the
-`Opatchy/1` User-Agent. The manifest's CISA setting is not currently connected
-to collection, so it does not suppress that request. See [data
-sources](data-sources.md) for exact endpoints.
+Opatchy fetches the public Arch security feed and, when `enableCisaKev=true`,
+the CISA Known Exploited Vulnerabilities feed. Requests reveal ordinary network
+metadata to those services, such as the user's network address, request timing,
+and the `Opatchy/1` User-Agent. When `enableCisaKev=false`, Opatchy does not
+access the CISA endpoint or either KEV cache path. It reports CISA KEV source
+health as `not_applicable` while preserving Arch security findings. Disabled
+CISA KEV coverage doesn't mean there are no exploited vulnerabilities. See
+[data sources](data-sources.md) for exact endpoints.
 
 ## Notifications
 
-The helper contains a local notification adapter, but the production scan path
-does not currently dispatch it. Opatchy does not inspect Do Not Disturb state or
-replay notifications. If notification dispatch is wired in a future release,
-notification content and history will be subject to the desktop environment's
-own behavior and settings.
+Eligible notifications dispatch only after a scan is committed. Manifest
+`notifyPermanent`, `notifySecurity`, and `securityMinimumSeverity` settings
+control the dispatch gates. Delivery doesn't clear watches, and a failed
+delivery remains retryable. Opatchy doesn't inspect Do Not Disturb state or
+replay notifications. Desktop notification privacy, content, history, and
+delivery behavior remain controlled by the host session.
