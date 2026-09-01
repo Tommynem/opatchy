@@ -602,7 +602,7 @@ def test_scan_operation_passes_explicit_notification_settings(
 ) -> None:
     # Given: manifest-derived settings and a recording production-coordinator seam.
     store = scan_store(tmp_path)
-    captured: list[NotificationSettings] = []
+    captured: list[tuple[NotificationSettings, bool]] = []
 
     @final
     class CapturingCoordinator:
@@ -621,7 +621,7 @@ def test_scan_operation_passes_explicit_notification_settings(
             self.clock = clock
 
         def run(self, request: ScanRequest) -> ScanResult:
-            captured.append(request.notification_settings)
+            captured.append((request.notification_settings, request.enable_cisa_kev))
             return run(
                 self.storage,
                 self.source,
@@ -633,7 +633,7 @@ def test_scan_operation_passes_explicit_notification_settings(
     monkeypatch.setattr(cli_operations, "ScanCoordinator", CapturingCoordinator)
 
     # When: the CLI operation receives parsed notification configuration.
-    _ = cli_operations.scan(store, True, expected)
+    _ = cli_operations.scan(store, True, expected, False)
 
     # Then: that setting reaches the concrete scan request rather than defaults.
-    assert captured == [expected]
+    assert captured == [(expected, False)]

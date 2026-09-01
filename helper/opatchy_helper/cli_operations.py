@@ -47,8 +47,8 @@ _DEFAULT_NOTIFICATION_SETTINGS: Final = NotificationSettings()
 def execute(command: CliCommand) -> Response:
     storage = Storage.from_environment(clock=utc_now)
     match command:
-        case ScanCommand(force=force, notification_settings=notification_settings):
-            return scan(storage, force, notification_settings)
+        case ScanCommand(force, notification_settings, enable_cisa_kev):
+            return scan(storage, force, notification_settings, enable_cisa_kev)
         case SnapshotCommand():
             return snapshot(storage)
         case InventoryCommand() as inventory:
@@ -62,11 +62,16 @@ def scan(
     storage: Storage,
     force: bool,
     notification_settings: NotificationSettings = _DEFAULT_NOTIFICATION_SETTINGS,
+    enable_cisa_kev: bool = True,
 ) -> SnapshotResponse:
     previous = storage.load_generation()
     order = 0 if previous is None else previous.order + 1
     request = ScanRequest(
-        GenerationId(f"scan-{uuid4().hex}"), order, force, notification_settings
+        GenerationId(f"scan-{uuid4().hex}"),
+        order,
+        force,
+        notification_settings,
+        enable_cisa_kev,
     )
     result = (
         ScanCoordinator(storage, RuntimeScanCollector(storage), utc_now)

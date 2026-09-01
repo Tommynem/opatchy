@@ -32,6 +32,7 @@ class CliUnavailableError(Exception):
 class ScanCommand:
     force: bool
     notification_settings: NotificationSettings = NotificationSettings()
+    enable_cisa_kev: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,41 +60,8 @@ type CliCommand = ScanCommand | SnapshotCommand | InventoryCommand | SetStarComm
 
 def parse_command(arguments: tuple[str, ...]) -> CliCommand:
     match arguments:
-        case ("scan",):
-            return ScanCommand(False)
-        case ("scan", "--force"):
-            return ScanCommand(True)
-        case (
-            "scan",
-            "--notify-permanent",
-            notify_permanent,
-            "--notify-security",
-            notify_security,
-            "--security-minimum-severity",
-            minimum_severity,
-        ):
-            return ScanCommand(
-                False,
-                _notification_settings(
-                    notify_permanent, notify_security, minimum_severity
-                ),
-            )
-        case (
-            "scan",
-            "--force",
-            "--notify-permanent",
-            notify_permanent,
-            "--notify-security",
-            notify_security,
-            "--security-minimum-severity",
-            minimum_severity,
-        ):
-            return ScanCommand(
-                True,
-                _notification_settings(
-                    notify_permanent, notify_security, minimum_severity
-                ),
-            )
+        case ("scan", *_):
+            return _scan_command(arguments)
         case ("snapshot",):
             return SnapshotCommand()
         case (
@@ -129,6 +97,47 @@ def parse_command(arguments: tuple[str, ...]) -> CliCommand:
                 _arch_item_id(item_id),
                 WatchMode.TEMPORARY,
                 _security_condition(advisory_id, cve_ids, fixed_version),
+            )
+        case _:
+            raise CliUsageError("unsupported helper command or arguments")
+
+
+def _scan_command(arguments: tuple[str, ...]) -> ScanCommand:
+    force = arguments[1:2] == ("--force",)
+    settings = arguments[2:] if force else arguments[1:]
+    if not settings:
+        return ScanCommand(force)
+    match settings:
+        case (
+            "--notify-permanent",
+            notify_permanent,
+            "--notify-security",
+            notify_security,
+            "--security-minimum-severity",
+            minimum_severity,
+        ):
+            return ScanCommand(
+                force,
+                _notification_settings(
+                    notify_permanent, notify_security, minimum_severity
+                ),
+            )
+        case (
+            "--notify-permanent",
+            notify_permanent,
+            "--notify-security",
+            notify_security,
+            "--security-minimum-severity",
+            minimum_severity,
+            "--enable-cisa-kev",
+            enable_cisa_kev,
+        ):
+            return ScanCommand(
+                force,
+                _notification_settings(
+                    notify_permanent, notify_security, minimum_severity
+                ),
+                _boolean(enable_cisa_kev),
             )
         case _:
             raise CliUsageError("unsupported helper command or arguments")
