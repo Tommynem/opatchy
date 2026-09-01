@@ -131,3 +131,39 @@ def test_fixture_only_runtime_adapters_reach_storage_protocol_and_qml_models(
         is SourceStatus.STALE
     )
     assert_qml_presentation(partial)
+
+
+def test_runtime_scan_skips_cisa_collection_and_reports_disabled_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Given: a production runtime collector with CISA collection prohibited.
+    store = _store(tmp_path)
+    endpoint_requests: list[EndpointName] = []
+
+    def fetch(name: EndpointName, _cache: EndpointCache) -> EndpointResult:
+        endpoint_requests.append(name)
+        raise AssertionError(f"unexpected endpoint: {name}")
+
+    import opatchy_helper.scan_types as scan_types
+
+    monkeypatch.setattr(scan_types, "fetch_endpoint", fetch)
+
+    # When: a forced runtime scan disables CISA KEV enrichment.
+    result = ScanCoordinator(
+        store, RuntimeScanCollector(store, _run_fixture()), lambda: NOW
+    ).run(
+        ScanRequest(
+            GenerationId("fixture-cisa-disabled"), 0, True, enable_cisa_kev=False
+        )
+    )
+
+    # Then: Arch findings remain while CISA is explicitly not applicable.
+    cisa = next(
+        source
+        for source in result.snapshot.payload.sources
+        if source.source.value == "cisa-kev"
+    )
+    assert endpoint_requests == []
+    assert result.snapshot.payload.findings
+    assert cisa.status is SourceStatus.NOT_APPLICABLE
+    assert cisa.cause is None

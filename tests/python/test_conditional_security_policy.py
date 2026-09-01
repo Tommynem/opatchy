@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 import pytest
-from opatchy_helper.cli_requests import ScanCommand, parse_command
+from opatchy_helper.cli_requests import CliUsageError, ScanCommand, parse_command
 from opatchy_helper.models import (
     ArchStatus,
     FindingId,
@@ -168,11 +168,33 @@ def test_scan_command_parses_typed_notification_settings() -> None:
             "true",
             "--security-minimum-severity",
             "critical",
+            "--enable-cisa-kev",
+            "false",
         )
     )
     assert command == ScanCommand(
-        False, NotificationSettings(False, True, Severity.CRITICAL)
+        False, NotificationSettings(False, True, Severity.CRITICAL), False
     )
+
+
+def test_scan_command_rejects_malformed_cisa_kev_toggle() -> None:
+    # Given: otherwise complete scan settings with an invalid closed boolean.
+    arguments = (
+        "scan",
+        "--notify-permanent",
+        "true",
+        "--notify-security",
+        "true",
+        "--security-minimum-severity",
+        "high",
+        "--enable-cisa-kev",
+        "disabled",
+    )
+
+    # When: the CLI boundary parses the setting.
+    # Then: it rejects the malformed flag through the established usage error.
+    with pytest.raises(CliUsageError):
+        _ = parse_command(arguments)
 
 
 @pytest.mark.parametrize("arch_stale,security_stale", ((True, False), (False, True)))
