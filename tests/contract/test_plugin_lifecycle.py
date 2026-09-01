@@ -212,6 +212,7 @@ class PluginLifecycleContractTests(unittest.TestCase):
         self.assertIn("lifecycleState.service", widget_source)
         self.assertIn("lifecycleState.service", panel_source)
         self.assertIn("panel.settings = root.settings", widget_source)
+        self.assertIn("sharedService.settings = root.settings", widget_source)
         self.assertIn("panel.injectedService = root.service", widget_source)
         self.assertIn("panelState.loaderRequested", widget_source)
         self.assertIn("Loader.Error", widget_source)

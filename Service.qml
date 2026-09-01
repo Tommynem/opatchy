@@ -2,6 +2,7 @@ import QtQuick
 import "qml/models/ActionPolicy.js" as ActionPolicy
 import "qml/models/ServiceController.js" as ServiceController
 import "qml/models/ProtocolValidator.js" as ProtocolValidator
+import "qml/models/ScanSettings.js" as ScanSettings
 import "qml/models" as Models
 
 Item {
@@ -9,6 +10,7 @@ Item {
 
   property var shell: null
   property var manifest: null
+  property var settings: ({})
   property int helperTimeoutMs: 120000
   readonly property string sourceDir: manifest && typeof manifest.__sourceDir === "string"
     ? manifest.__sourceDir
@@ -73,8 +75,9 @@ Item {
   signal handoffStarted(double handoffAt)
 
   function localPath(value) {
-    if (value.indexOf("file://") !== 0) return value
-    return decodeURIComponent(value.substring(7))
+    return value.indexOf("file://") !== 0
+      ? value
+      : decodeURIComponent(value.substring(7))
   }
 
   function requestRefresh() {
@@ -210,6 +213,9 @@ Item {
       now: function() { return Date.now() },
       random: function() { return Math.random() },
       refreshIntervalMs: 21600 * 1000,
+      scanArguments: function() {
+        return ScanSettings.scanArguments(root.settings)
+      },
       onStart: function(operation) { return root.startOperation(operation) },
       onState: function(state) { root.applyState(state) },
       onResponse: function(operation, response) { root.applyResponse(operation, response) },

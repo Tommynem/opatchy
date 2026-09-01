@@ -51,6 +51,14 @@ BarWidget {
     panel.injectedService = root.service
   }
 
+  function synchronizeServiceSettings() {
+    const sharedService = shell && manifest && typeof shell.serviceFor === "function"
+      ? shell.serviceFor(manifest.id)
+      : null
+    if (sharedService && "settings" in sharedService)
+      sharedService.settings = root.settings
+  }
+
   function open() {
     panelState.open()
   }
@@ -76,9 +84,19 @@ BarWidget {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  onBarChanged: injectPanel()
-  onSettingsChanged: injectPanel()
-  onServiceChanged: injectPanel()
+  onBarChanged: {
+    synchronizeServiceSettings()
+    injectPanel()
+  }
+  onSettingsChanged: {
+    synchronizeServiceSettings()
+    injectPanel()
+  }
+  onServiceChanged: {
+    synchronizeServiceSettings()
+    injectPanel()
+  }
+  Component.onCompleted: Qt.callLater(synchronizeServiceSettings)
   onPanelChanged: {
     injectPanel()
   }

@@ -10,6 +10,8 @@ Item {
   property var secondWidget: null
   property var serviceObject: null
   property var currentService: null
+  property var initialSettings: ({ "enableCisaKev": true })
+  property var updatedSettings: ({ "enableCisaKev": false })
   property string sourceDir: Quickshell.env("OPATCHY_TEST_ROOT")
   property var manifest: ({
     "id": "io.github.tommynem.opatchy",
@@ -81,7 +83,7 @@ Item {
       finish()
       return
     }
-    firstWidget = widgetComponent.createObject(root, { "bar": bar })
+    firstWidget = widgetComponent.createObject(root, { "bar": bar, "settings": initialSettings })
     secondWidget = widgetComponent.createObject(root, { "bar": bar })
     check(firstWidget !== null && secondWidget !== null, "widgets did not instantiate")
     if (failures > 0) {
@@ -100,13 +102,22 @@ Item {
         root.check(root.firstWidget.panel !== null && root.secondWidget.panel !== null, "panel facades did not load")
         root.check(root.firstWidget.service === root.serviceObject, "first widget did not resolve the shared service")
         root.check(root.secondWidget.panel.service === root.serviceObject, "second panel did not resolve the shared service")
-        root.currentService = null
+        root.check(root.serviceObject.settings === root.initialSettings, "widget settings did not reach the shared service")
+        root.firstWidget.settings = root.updatedSettings
         root.phase = 1
         lifecycleTimer.start()
         return
       }
 
       if (root.phase === 1) {
+        root.check(root.serviceObject.settings === root.updatedSettings, "changed widget settings did not reach the shared service")
+        root.currentService = null
+        root.phase = 2
+        lifecycleTimer.start()
+        return
+      }
+
+      if (root.phase === 2) {
         root.check(!root.firstWidget.serviceAvailable, "absent service stayed available")
         root.check(root.firstWidget.statusText === "Service unavailable", "widget did not render unavailable state")
         root.check(root.secondWidget.panel.statusText === "Service unavailable", "panel did not render unavailable state")
@@ -117,7 +128,7 @@ Item {
         root.currentService = replacement
         root.serviceObject.destroy()
         root.serviceObject = replacement
-        root.phase = 2
+        root.phase = 3
         lifecycleTimer.start()
         return
       }
