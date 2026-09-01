@@ -81,14 +81,19 @@ function createController(options) {
     setError(kind, message)
     state.lastFailureOperation = completed ? RequestValidation.operationIdentity(completed) : null
   }
+  function scanArguments() {
+    var provider = options.scanArguments
+    var arguments = typeof provider === "function" ? provider() : provider
+    return Array.isArray(arguments) ? arguments.slice() : []
+  }
   function refresh(force) {
     if (!accepting) return false
     if (refreshQueued) {
       if (force && queuedRefresh.argv.indexOf("--force") === -1) queuedRefresh.argv.push("--force")
       return false
     }
-    var next = operation("scan", ["scan"], "snapshot")
-    if (force) next.argv.push("--force")
+    var arguments = scanArguments()
+    var next = operation("scan", force ? ["scan", "--force"].concat(arguments) : ["scan"].concat(arguments), "snapshot")
     refreshQueued = true
     queuedRefresh = next
     enqueue(next)

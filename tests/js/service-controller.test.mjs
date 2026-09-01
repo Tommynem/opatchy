@@ -171,10 +171,10 @@ function helperError(generationId) {
   });
 }
 
-function fixture(now = 0) {
+function fixture(now = 0, scanArguments) {
   const starts = [];
   const states = [];
-  const controller = loadController()({
+  const options = {
     now: () => now,
     random: () => 0,
     refreshIntervalMs: 60_000,
@@ -182,9 +182,75 @@ function fixture(now = 0) {
     onState: (state) => states.push(state),
     onResponse: () => {},
     parseResponse: loadValidator(),
-  });
+  };
+  if (scanArguments !== undefined) options.scanArguments = scanArguments;
+  const controller = loadController()(options);
   return { controller, starts, states };
 }
+
+test("includes Service scan settings in forced and scheduled helper argv", () => {
+  const settings = [
+    "--notify-permanent", "false",
+    "--notify-security", "false",
+    "--security-minimum-severity", "critical",
+    "--enable-cisa-kev", "false",
+  ];
+  const { controller, starts } = fixture(0, settings);
+  controller.start();
+  complete(controller, starts[0], snapshot("settings"));
+
+  controller.requestRefresh();
+  const forced = starts[1];
+  complete(controller, forced, snapshot("settings-forced"));
+  controller.wake(60_000);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(starts.slice(1).map((operation) => operation.argv))), [
+    ["scan", "--force", ...settings],
+    ["scan", ...settings],
+  ]);
+});
+
+test("resolves scan settings when each scan is queued", () => {
+  let settings = ["--enable-cisa-kev", "true"];
+  const { controller, starts } = fixture(0, () => settings);
+  controller.start();
+  complete(controller, starts[0], snapshot("initial"));
+
+  settings = ["--enable-cisa-kev", "false"];
+  controller.requestRefresh();
+  settings[1] = "true";
+
+  assert.deepEqual(JSON.parse(JSON.stringify(starts[1].argv)), [
+    "scan", "--force", "--enable-cisa-kev", "false",
+  ]);
+});
+
+test("uses copied array scan settings for the enqueued operation", () => {
+  const settings = ["--enable-cisa-kev", "false"];
+  const { controller, starts } = fixture(0, settings);
+  controller.start();
+  complete(controller, starts[0], snapshot("array-settings"));
+
+  controller.requestRefresh();
+  settings[1] = "true";
+
+  assert.deepEqual(JSON.parse(JSON.stringify(starts[1].argv)), [
+    "scan", "--force", "--enable-cisa-kev", "false",
+  ]);
+});
+
+test("uses legacy scan argv when settings are absent or invalid", () => {
+  const providers = [undefined, null, "invalid", () => "invalid"];
+
+  for (const provider of providers) {
+    const { controller, starts } = fixture(0, provider);
+    controller.start();
+    complete(controller, starts[0], snapshot("legacy"));
+    controller.requestRefresh();
+
+    assert.deepEqual(JSON.parse(JSON.stringify(starts[1].argv)), ["scan", "--force"]);
+  }
+});
 
 function complete(controller, operation, stdout, result = {}) {
   controller.complete(operation.id, {
