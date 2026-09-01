@@ -49,7 +49,7 @@ not a current result. An unknown result is not a clean result.
 The helper accepts only these operations from the UI:
 
 ```text
-scan [--force] [--notify-permanent {true|false} --notify-security {true|false} --security-minimum-severity {high|critical}]
+scan [--force] [--notify-permanent {true|false} --notify-security {true|false} --security-minimum-severity {high|critical} --enable-cisa-kev {true|false}]
 snapshot
 inventory --source {arch|aur|flatpak|mise} --query TEXT --limit 1..100 --offset 0..100000
 set-star --item-id ID --mode {off|temporary|permanent}
@@ -71,9 +71,17 @@ does not inspect Do Not Disturb state or replay notifications.
 
 The manifest exposes refresh interval, watch notifications, reduced motion,
 security notifications, minimum security severity, CISA KEV inclusion, and last
-selected tab. The helper scan contract accepts typed values for
-`notifyPermanent`, `notifySecurity`, and `securityMinimumSeverity`; those values
-gate post-commit notification dispatch rather than collection or watch state.
+selected tab. Its typed `notifyPermanent`, `notifySecurity`,
+`securityMinimumSeverity`, and `enableCisaKev` settings propagate to the helper
+as `--notify-permanent`, `--notify-security`, `--security-minimum-severity`, and
+`--enable-cisa-kev`. The notification settings and severity threshold gate
+eligible post-commit dispatch, not collection or watch state.
+
+`enableCisaKev=false` disables CISA KEV collection. In that mode Opatchy does
+not access the CISA endpoint or either KEV cache path, reports CISA KEV source
+health as `not_applicable`, and preserves Arch security findings. This means
+CISA KEV coverage is unavailable by choice, not that no known exploited
+vulnerabilities exist.
 
 ## Update handoffs
 
