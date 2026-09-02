@@ -24,7 +24,7 @@ not accept user-supplied commands or source URLs.
 | Local command | `arch-audit` | `/usr/bin/arch-audit --json` | Read local Arch advisory matches. |
 | Local command | `notify` | `/usr/bin/notify-send -a Opatchy -u normal <title> <body>` | Dispatch after a committed validated scan only; normal urgency, ledger-deduplicated, retryable after command-missing, nonzero, timeout, or output-limit failures, and never evidence of installation or remediation. |
 | Remote endpoint | `arch-security` | `https://security.archlinux.org/all.json` | Fetch Arch advisory enrichment over HTTPS. |
-| Remote endpoint | `cisa-kev` | `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json` | Fetch CISA KEV enrichment over HTTPS; the declared setting does not currently disable collection. |
+| Remote endpoint | `cisa-kev` | `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json` | Fetch CISA KEV enrichment over HTTPS. `enableCisaKev=false` disables CISA KEV collection: it does not access the CISA endpoint or either KEV cache path, reports source health as `not_applicable`, and preserves Arch security findings. |
 | UI helper | `helper-process` | `/usr/bin/python3 helper/opatchy.py` plus the validated UI operations in the README | Produce versioned helper responses; no arbitrary helper argv is accepted. |
 | Handoff probe | `terminal-probe` | `/usr/bin/test -x` for the fixed handoff executables listed below | Check fixed handoff prerequisites only. |
 | Update handoff | `omarchy-handoff` | `/usr/bin/omarchy-launch-floating-terminal-with-presentation /usr/bin/omarchy-update` | Open the fixed native Omarchy workflow only for current eligible evidence. |

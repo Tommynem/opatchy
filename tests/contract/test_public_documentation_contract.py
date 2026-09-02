@@ -111,6 +111,19 @@ class PublicDocumentationContractTests(unittest.TestCase):
         self.assertIn("180 days", architecture)
         self.assertIn("5,000", architecture)
 
+    def test_cisa_kev_disabled_contract_matches_runtime_behavior(self) -> None:
+        cisa_row = next(
+            row for row in self.data_source_rows() if "| `cisa-kev` |" in row
+        )
+
+        self.assertIn("`enableCisaKev=false` disables CISA KEV collection", cisa_row)
+        self.assertIn(
+            "does not access the CISA endpoint or either KEV cache path", cisa_row
+        )
+        self.assertIn("source health as `not_applicable`", cisa_row)
+        self.assertIn("preserves Arch security findings", cisa_row)
+        self.assertNotIn("does not currently disable collection", cisa_row)
+
     def test_public_docs_keep_identity_paths_and_operating_limits(self) -> None:
         public_text = self.public_text()
 
